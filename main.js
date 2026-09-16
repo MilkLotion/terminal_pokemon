@@ -1,11 +1,13 @@
 // 펫 오버레이 메인 프로세스 — 테두리 없음 · 배경 투명 · 항상 위
 // 앵커 앱(VS Code 등) 창을 따라다니고, 그 앱이 앞에 없거나 내 터미널 탭이 아닐 때는 숨는다
 // 설정·경로는 전부 config.js 에서 온다
-const { app, BrowserWindow, globalShortcut, ipcMain } = require("electron");
-const { execFile } = require("child_process");
+const { app, BrowserWindow, globalShortcut, ipcMain, screen } = require("electron");
+const { execFile, execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const settings = require("./config");
+// 판정 로직은 진단 도구(bin/pkmon-status)와 같은 것을 쓴다 — 두 벌이 되면 진단이 거짓말을 한다
+const pkstate = require("./lib/state");
 
 const { PATHS } = settings;
 // User-Agent 가 없으면 Showdown 이 403 으로 막는다
@@ -15,21 +17,36 @@ const GIF_MAX = { w: 480, h: 420 }; // 창이 지나치게 커지지 않도록
 const CELL = { w: 192, h: 208 }; // 팩 스프라이트시트의 한 칸
 const STATE_POLL_MS = 500;
 const ANCHOR_POLL_MS = process.platform === "darwin" ? 400 : 1000;
-const STALE_SEC = 600; // 작업 중·기다림이 이만큼 갱신 없으면 대기로 — Esc 중단 시 Stop 훅이 안 옴
-const ACTIVE_STALE_SEC = 120; // 활성 터미널 기록이 이만큼 멈춰 있으면 확장이 없는 것으로 본다
 const STACK_RATIO = 0.8; // 여러 마리를 나란히 둘 때 창 너비 대비 간격
 const DRAG_GRACE_MS = 2000; // 이 시간 안에 내 창이 움직였으면 드래그 중으로 본다
-// 펫 창이 맨 앞일 때 쓰이는 이름 — 단, 내 창이 방금 움직였을 때만 예외를 적용한다
-const SELF_APP_NAMES = new Set(["Electron", "terminal_pkmon"]);
+const VISIBLE_CONFIRM = 2; // 표시 전환은 이만큼 연속 같은 판정일 때만 — 한 번의 경합이 깜빡임이 되지 않게
+const CAPTURE_CONFIRM = 2; // 앵커 창을 확정하기까지 연속 일치 횟수
+const ANCHOR_MISS_LIMIT = 8; // 내 창이 이만큼 연속으로 안 보이면 앵커를 풀고 다시 찾는다
+const CAPTURE_MIN = { w: 600, h: 400 }; // 분리된 DevTools 같은 보조 창을 앵커로 잡지 않도록
+const SCREEN_SLACK = 64; // 화면 경계 판정 여유
+const OWN_PID_CHECK_MS = 5000; // 터미널이 죽었는지 확인하는 주기
 
 const config = settings.load();
-const { debug, termPid, matchCwd, index, anchorApp, activeTerminalFile } = config.runtime;
+const { debug, termPid, matchCwd, index, anchorApp, windowsDir } = config.runtime;
 let win = null;
 let art = null; // { kind: "gif" | "sheet", dataUrl, w, h, scale, from }
 let lastState = null;
-let lastTarget = null; // 마지막으로 찾은 앵커 창 위치
-let anchoring = false; // 프로그램이 옮기는 중 — 사용자의 드래그와 구분
+let lastTarget = null; // 마지막으로 따라간 창의 위치·크기
+let anchorId = null; // 확정된 내 창 ID — 정해지면 이 창만 따라간다
+let anchorMiss = 0;
+let captureId = null; // 확정 직전의 후보
+let captureHits = 0;
+let commanded = null; // 프로그램이 마지막으로 지시한 좌표 — 여기 그대로 있으면 사용자가 옮긴 게 아니다
 let lastUserMoveAt = 0; // 사용자가 내 창을 마지막으로 움직인 시각
+let visible = false;
+let wantLast = null;
+let wantStreak = 0;
+let sawExtension = false; // 확장 기록을 한 번이라도 봤으면, 잃었을 때 닫는 쪽으로 간다
+let userHidden = false; // Cmd+Alt+H 로 직접 숨김
+let helperFails = 0;
+
+// 기동 시 한 번만 구한다 — 래퍼가 먼저 끝나면 부모 관계가 끊긴다
+const myPids = pkstate.myPidsFor(termPid);
 
 function windowSize() {
   if (art && art.kind === "gif") {
@@ -128,72 +145,12 @@ async function loadArt() {
   }
 }
 
-// 이 상태 기록이 내 터미널의 세션 것인지
-// 1순위: 훅이 남긴 조상 프로세스 목록에 내 터미널 셸 번호가 있는가 (터미널 단위로 정확)
-// 2순위: 작업 디렉토리 (조상 정보가 없는 Windows·구버전 기록용)
-function stateIsMine(record) {
-  if (termPid && Array.isArray(record.ancestors) && record.ancestors.length) {
-    return record.ancestors.includes(termPid);
-  }
-  if (matchCwd && record.cwd) return record.cwd === matchCwd;
-  return true;
-}
+// 훅(pkmon-state.cjs)이 남긴 세션 상태 중 내 터미널 것
+const currentState = () => pkstate.sessionState(PATHS.state, myPids, matchCwd);
 
-// 훅(pkmon-state.cjs)이 남긴 세션 상태 파일 중 내 터미널 것
-function currentState() {
-  try {
-    const files = fs
-      .readdirSync(PATHS.state)
-      .filter((f) => f.endsWith(".json"))
-      .map((f) => path.join(PATHS.state, f))
-      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-
-    for (const file of files) {
-      const record = JSON.parse(fs.readFileSync(file, "utf8"));
-      if (!stateIsMine(record)) continue;
-
-      const age = Date.now() / 1000 - (record.at || 0);
-      let state = record.state || "idle";
-      if (record.hold != null && age >= record.hold) state = record.then || "idle";
-      if ((state === "running" || state === "waiting") && age > STALE_SEC) return "idle";
-      return state;
-    }
-    return "idle";
-  } catch {
-    return "idle";
-  }
-}
-
-// 지금 보고 있는 터미널 탭이 내 탭인지 — 확장(pkmon-active-terminal)이 알려준다
-// "mine"(내 탭) · "other"(다른 탭) · "unknown"(확장이 없거나 기록이 멈춤)
-function terminalTab() {
-  if (!termPid) return "unknown"; // 터미널 번호를 모름 (래퍼 없이 실행)
-
-  // 기본은 새 경로. 경로를 직접 지정했으면(테스트) 그 파일만 쓴다
-  const readRecord = (file) => {
-    try {
-      return JSON.parse(fs.readFileSync(file, "utf8"));
-    } catch {
-      return null;
-    }
-  };
-  const fresh = (rec) => rec && Date.now() / 1000 - (rec.at || 0) <= ACTIVE_STALE_SEC;
-
-  let record = readRecord(activeTerminalFile);
-  // 확장을 새로 불러오기 전에는 구버전이 옛 경로에 적는다 — 새 경로가 비었거나 멈췄을 때만 본다
-  if (!process.env.PKMON_ACTIVE_FILE && !fresh(record)) {
-    record = readRecord(PATHS.activeTerminalLegacy) || record;
-  }
-
-  if (!record) return "unknown"; // 확장 미설치
-  // 기록이 오래 멈춰 있으면 확장이 없는 것으로 본다 — 안 그러면 모든 펫이 영영 숨는다
-  if (Date.now() / 1000 - (record.at || 0) > ACTIVE_STALE_SEC) return "unknown";
-  if (record.pid == null) return "unknown"; // 활성 터미널 없음
-  if (Number(record.pid) === termPid) return "mine";
-  // 창이 여러 개면 각 창의 확장이 같은 파일에 쓴다 — 내 터미널이 없는 기록은 남의 창 것이다
-  if (Array.isArray(record.terminals) && !record.terminals.includes(termPid)) return "other-window";
-  return "other";
-}
+const readWindowRecords = () => pkstate.readWindowRecords(windowsDir);
+const myRecord = (records) => pkstate.myRecord(records, myPids);
+const tabAxis = (rec) => pkstate.tabAxis(rec, myPids);
 
 // 앵커 앱의 창 위치를 읽는 헬퍼 — mac 은 컴파일된 Swift, Windows 는 PowerShell
 // PKMON_WINBOUNDS 로 다른 실행 파일을 가리킬 수 있다 (테스트가 실제 헬퍼를 건드리지 않도록)
@@ -235,80 +192,165 @@ function setVisible(visible) {
   if (!visible && win.isVisible()) win.hide();
 }
 
-// 표시 여부 — 탭 정보가 살아 있으면 그것만으로 정한다
-// 내 탭이면 크롬 등 다른 앱을 보고 있어도 남고, 다른 탭으로 옮기면 숨는다
-// 탭 정보가 없을 때(확장 미설치 등)만 앱 기준으로 넘어간다
-function shouldShow(frontmost) {
-  const tab = terminalTab();
-  if (tab === "mine") return true;
-  if (tab === "other") return false;
-  // 다른 VS Code 창의 기록 — 내 창과 무관하므로 그대로 둔다 (창을 오갈 때 펫이 꺼지지 않게)
-  if (tab === "other-window") return true;
-  if (!frontmost) return true;
-  return config.keepVisible || frontmost === anchorApp || SELF_APP_NAMES.has(frontmost);
+// Space 전환 애니메이션 중에는 다른 Space 의 창이 가상 스트립 좌표로 섞여 들어온다
+// (보고값 = 실좌표 + Space인덱스 × (디스플레이폭 + 64)). 좌표도 순서도 믿을 수 없으므로 표본을 통째로 버린다
+function offScreen(windows) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const d of screen.getAllDisplays()) {
+    minX = Math.min(minX, d.bounds.x);
+    minY = Math.min(minY, d.bounds.y);
+    maxX = Math.max(maxX, d.bounds.x + d.bounds.width);
+    maxY = Math.max(maxY, d.bounds.y + d.bounds.height);
+  }
+  if (!Number.isFinite(minX)) return false;
+  return windows.some(
+    (w) =>
+      w.x < minX - SCREEN_SLACK ||
+      w.y < minY - SCREEN_SLACK ||
+      w.x + w.w > maxX + SCREEN_SLACK ||
+      w.y + w.h > maxY + SCREEN_SLACK,
+  );
+}
+
+// 표시 전환은 같은 판정이 연속으로 나올 때만 반영한다
+function applyVisible(want) {
+  if (want === wantLast) wantStreak += 1;
+  else {
+    wantLast = want;
+    wantStreak = 1;
+  }
+  if (wantStreak < VISIBLE_CONFIRM) return;
+  visible = want;
+  setVisible(want);
 }
 
 function pollAnchor() {
-  const helper = helperCommand();
   if (!win) return;
+  const helper = helperCommand();
   if (!helper) {
-    setVisible(shouldShow(null));
+    // 창을 추적할 수단이 없다 — 탭 축만으로 정한다
+    const rec = myRecord(readWindowRecords());
+    const tab = tabAxis(rec);
+    if (rec) sawExtension = true;
+    let want = tab === null ? !sawExtension : tab && rec.focused === true;
+    if (config.keepVisible) want = true;
+    if (userHidden) want = false;
+    applyVisible(want);
     return;
   }
 
   execFile(helper.cmd, helper.args, { timeout: 2000 }, (err, stdout) => {
-    if (err || !win) return;
+    if (!win) return;
+    if (err) {
+      // 헬퍼가 계속 실패하면 안전한 쪽으로 — 아무 앱 위에나 영영 떠 있는 것을 막는다
+      helperFails += 1;
+      if (helperFails === 3) process.stderr.write("창 추적 헬퍼가 응답하지 않음 — 펫을 숨긴다\n");
+      if (helperFails >= 3) applyVisible(false);
+      return;
+    }
+    helperFails = 0;
+
     let info;
     try {
       info = JSON.parse(stdout);
     } catch {
       return;
     }
+    const windows = (info.windows || []).filter((w) => w && typeof w.id === "number");
+    if (offScreen(windows)) return; // Space 전환 중
 
-    // 펫 창이 맨 앞 = 사용자가 펫을 만지는 중. 이때도 앵커 앱이 뒤로 갔다고 보지 않는다.
-    // 어느 터미널의 펫인지는 활성 터미널 기록으로만 가리므로, 다른 터미널 펫은 그대로 숨어 있다.
-    const selfFront = SELF_APP_NAMES.has(info.frontmost);
-    // 내 창이 방금 움직였으면 = 내가 끌리는 중. 이때는 자리를 되돌리지 않는다
-    const beingDragged = selfFront && Date.now() - lastUserMoveAt < DRAG_GRACE_MS;
-    // 내 창을 계속 따라간다 — 맨 앞 창이 아니라, 지난번에 따라가던 창과 가장 가까운 창을 고른다
-    // (창이 여러 개일 때 다른 창을 보더라도 펫이 그쪽으로 끌려가지 않는다)
-    const windows = info.windows || [];
-    const distance = (w) =>
-      Math.abs(w.x - lastTarget.x) + Math.abs(w.y - lastTarget.y) + Math.abs(w.w - lastTarget.w) + Math.abs(w.h - lastTarget.h);
-    const target = lastTarget
-      ? windows.reduce((best, w) => (!best || distance(w) < distance(best) ? w : best), null)
-      : windows[0];
-    const visible = shouldShow(info.frontmost);
+    const records = readWindowRecords();
+    const rec = myRecord(records);
+    if (rec) sawExtension = true;
+    const tab = tabAxis(rec);
 
-    if (!target || !visible) {
-      setVisible(false);
-      if (debug) {
-        console.log(JSON.stringify({ hidden: true, tab: terminalTab(), beingDragged, frontmost: info.frontmost }));
+    // ── 앵커 — 한 번 확정하면 그 창 ID 만 따라간다
+    let target = null;
+    if (anchorId != null) {
+      target = windows.find((w) => w.id === anchorId) || null;
+      if (target) anchorMiss = 0;
+      else if ((anchorMiss += 1) >= ANCHOR_MISS_LIMIT) {
+        anchorId = null; // 창이 닫혔거나 오래 안 보임 — 다시 찾는다
+        anchorMiss = 0;
       }
-      return;
+    }
+    if (anchorId == null) {
+      const head = windows[0] || null;
+      // 내 창이 지금 포커스이고 내 탭이 활성인 순간에만 확정한다 — 그때 맨 앞 창은 반드시 내 창이다
+      const sure =
+        !!head &&
+        tab === true &&
+        rec.focused === true &&
+        head.w >= CAPTURE_MIN.w &&
+        head.h >= CAPTURE_MIN.h &&
+        !records.some((r) => r !== rec && r.focused === true);
+      if (sure && head.id === captureId) {
+        if ((captureHits += 1) >= CAPTURE_CONFIRM) {
+          anchorId = head.id;
+          captureHits = 0;
+        }
+      } else {
+        captureId = sure ? head.id : null;
+        captureHits = sure ? 1 : 0;
+      }
+      target = head; // 확정 전에는 맨 앞 창을 임시로 따라간다
     }
 
-    setVisible(true);
-    if (beingDragged) {
-      if (debug) console.log(JSON.stringify({ dragging: true, frontmost: info.frontmost }));
-      return;
-    }
-    lastTarget = target;
+    // ── 창 축 — 내 창이 이 앱 창들 중 맨 앞인가
+    // 목록은 앵커 앱으로 걸러져 있으므로, 크롬을 보고 있어도 이 앱 창들끼리의 순서는 그대로다
+    const front = !!(target && windows[0] && windows[0].id === target.id);
 
-    const { w, h } = windowSize();
-    const spot = clampToWindow(
-      target.x + target.w - w + config.window.dx - stackShift(),
-      target.y + target.h - h + config.window.dy,
-      w,
-      h,
-      target,
-    );
-    const { x, y } = spot;
-    anchoring = true;
-    win.setPosition(x, y);
-    anchoring = false;
+    let want;
+    if (tab === null) {
+      // 확장 기록이 없다. 한 번이라도 본 적 있으면 잃은 것이므로 닫는 쪽으로 간다
+      want = sawExtension ? false : front;
+    } else if (anchorId == null) {
+      // 아직 내 창을 특정하지 못했다 — 확장이 알려주는 포커스로 판단한다
+      want = tab && rec.focused === true;
+    } else {
+      want = tab && front;
+    }
+    if (config.keepVisible) want = true;
+    if (userHidden) want = false;
+    // 펫을 잡으면 IDE 가 뒤로 간다 — 드래그 중에는 판정을 보류하고 직전 상태를 유지한다
+    const dragging = Date.now() - lastUserMoveAt < DRAG_GRACE_MS;
+    if (dragging) want = visible;
+
+    if (target && !dragging) {
+      lastTarget = target;
+      const { w, h } = windowSize();
+      const { x, y } = clampToWindow(
+        target.x + target.w - w + config.window.dx - stackShift(),
+        target.y + target.h - h + config.window.dy,
+        w,
+        h,
+        target,
+      );
+      const [curX, curY] = win.getPosition();
+      if (curX !== x || curY !== y) {
+        commanded = { x, y };
+        win.setPosition(x, y);
+      }
+    }
+
+    applyVisible(want);
+
     if (debug) {
-      console.log(JSON.stringify({ anchor: { x, y, w, h }, target, frontmost: info.frontmost, state: currentState() }));
+      console.log(
+        JSON.stringify({
+          want,
+          visible,
+          tab,
+          front,
+          anchorId,
+          target: target ? target.id : null,
+          head: windows[0] ? windows[0].id : null,
+          state: currentState(),
+        }),
+      );
     }
   });
 }
@@ -342,7 +384,9 @@ function createWindow() {
   });
 
   win.setAlwaysOnTop(true, "floating");
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // 첫 인자 false — Space(데스크탑) 를 전환해도 펫이 따라오지 않고 자기 창이 있는 Space 에 남는다
+  // visibleOnFullScreen 은 별개 속성이라 풀스크린 창 위 표시는 그대로 유지된다
+  win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true });
   win.loadFile("index.html", {
     query: {
       fps: String(config.fps),
@@ -365,24 +409,30 @@ function createWindow() {
     pollAnchor();
   });
 
-  // 드래그 판정용 — 내 창이 사용자 손에 움직이는 동안 계속 갱신된다
+  // 드래그 판정 — 시간이 아니라 좌표로 가린다.
+  // move 이벤트는 비동기라 언제 올지 모른다. 지금 자리가 우리가 지시한 그 자리면 사용자가 옮긴 게 아니다.
+  const movedByUs = () => {
+    const [cx, cy] = win.getPosition();
+    return !!commanded && cx === commanded.x && cy === commanded.y;
+  };
+
   win.on("move", () => {
-    if (!anchoring) lastUserMoveAt = Date.now();
+    if (!movedByUs()) lastUserMoveAt = Date.now();
   });
 
   win.on("moved", () => {
-    if (anchoring) return;
+    if (movedByUs()) return;
     lastUserMoveAt = Date.now();
-    if (!lastTarget) return;
+    // 숨어 있을 때 옛 좌표를 기준으로 오프셋을 저장하면 그 값이 영구히 어긋난다
+    if (!lastTarget || !visible) return;
 
     const [rawX, rawY] = win.getPosition();
     const { w, h } = windowSize();
     // 창 밖으로 끌었으면 경계 안으로 되돌린다
     const { x, y } = clampToWindow(rawX, rawY, w, h, lastTarget);
     if (x !== rawX || y !== rawY) {
-      anchoring = true;
+      commanded = { x, y };
       win.setPosition(x, y);
-      anchoring = false;
     }
 
     // 창 위치는 따라가는 창의 오른쪽 아래 모서리 기준 오프셋으로 기억한다
@@ -408,14 +458,30 @@ app.whenReady().then(async () => {
   }
   createWindow();
 
-  globalShortcut.register("CommandOrControl+Alt+P", () => applyClickThrough(!config.clickThrough));
-  globalShortcut.register("CommandOrControl+Alt+H", () => (win.isVisible() ? win.hide() : win.showInactive()));
-  globalShortcut.register("CommandOrControl+Alt+Q", () => app.quit());
+  // 전역 단축키는 시스템에서 배타적이다 — 펫이 여러 마리면 먼저 등록한 한 마리만 먹는다
+  const bind = (accel, fn) => {
+    if (!globalShortcut.register(accel, fn)) {
+      process.stderr.write(`단축키 ${accel} 는 다른 펫이 이미 쓰고 있음 — 이 펫에는 안 먹는다\n`);
+    }
+  };
+  bind("CommandOrControl+Alt+P", () => applyClickThrough(!config.clickThrough));
+  bind("CommandOrControl+Alt+H", () => {
+    userHidden = !userHidden; // 폴링이 되돌리지 않도록 상태로 남긴다
+    pollAnchor();
+  });
+  bind("CommandOrControl+Alt+Q", () => app.quit());
   // 항상 보이기 — 켜면 크롬 등 다른 앱을 봐도 펫이 남는다 (설정에 저장됨)
-  globalShortcut.register("CommandOrControl+Alt+K", () => {
+  bind("CommandOrControl+Alt+K", () => {
     settings.save(config, { keepVisible: !config.keepVisible });
     pollAnchor();
   });
+
+  // 터미널이 강제 종료되면 래퍼의 정리 코드가 돌지 않는다 — 고아로 남지 않게 스스로 끝낸다
+  if (termPid) {
+    setInterval(() => {
+      if (!pkstate.pidAlive(termPid)) app.quit();
+    }, OWN_PID_CHECK_MS);
+  }
 
   setInterval(() => {
     const state = currentState();

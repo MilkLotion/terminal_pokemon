@@ -29,7 +29,10 @@ overlay_pids=()
 
 # 터미널 종류에 따라 따라갈 앱 — 그 앱 창 모서리에 붙고, 앞에 없을 때는 숨는다
 anchor_app=""
-case "${TERM_PROGRAM:-}" in
+# TERM_PROGRAM 이 비어 있어도 VS Code 계열이면 주입 표시로 알아낸다
+term_program="${TERM_PROGRAM:-}"
+if [[ -z "$term_program" && -n "${VSCODE_INJECTION:-}" ]]; then term_program="vscode"; fi
+case "$term_program" in
   vscode) anchor_app="Code" ;;
   ghostty) anchor_app="Ghostty" ;;
   iTerm.app) anchor_app="iTerm2" ;;
@@ -41,9 +44,10 @@ esac
 RUN_DIR="${TMPDIR:-/tmp}/pkmon-pets"
 mkdir -p "$RUN_DIR"
 
+# 같은 터미널 탭의 펫만 센다 — 다른 창·다른 탭의 펫 때문에 옆으로 밀리지 않도록
 live_pets() {
   local count=0 file pid
-  for file in "$RUN_DIR"/*.pid; do
+  for file in "$RUN_DIR/$PPID"-*.pid; do
     [[ -e "$file" ]] || continue
     pid="$(cat "$file" 2>/dev/null)"
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
@@ -114,7 +118,7 @@ if [[ -n "$pet" ]]; then
         PKMON_INDEX="$((base + slot))" PKMON_ANCHOR_APP="$anchor_app" PKMON_TERM_PID="$PPID" \
         "$electron" "$PROJECT" >/dev/null 2>&1 &
       overlay_pids+=("$!")
-      echo "$!" > "$RUN_DIR/$!.pid"
+      echo "$!" > "$RUN_DIR/$PPID-$!.pid"
       slot=$((slot + 1))
     done
   else
@@ -126,7 +130,7 @@ cleanup() {
   for pid in "${overlay_pids[@]:-}"; do
     [[ -n "$pid" ]] || continue
     kill "$pid" 2>/dev/null
-    rm -f "$RUN_DIR/$pid.pid"
+    rm -f "$RUN_DIR/$PPID-$pid.pid"
   done
   overlay_pids=()
 }

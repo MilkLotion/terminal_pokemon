@@ -14,12 +14,8 @@ const PATHS = {
   example: path.join(PROJECT_DIR, "pkmon.config.example.json"),
   home: PKMON_HOME,
   state: path.join(PKMON_HOME, "state"), // 훅이 세션 상태를 적는 곳
-  activeTerminal: path.join(PKMON_HOME, "active-terminal.json"), // VS Code 확장이 활성 탭을 적는 곳
-  // 이름 바꾸기 전 경로 — 확장을 새로 불러오기 전까지는 구버전이 여기에 적는다 (나중에 지워도 됨)
-  activeTerminalLegacy: path.join(os.homedir(), ".claude", "pet", "active-terminal.json"),
+  windows: path.join(PKMON_HOME, "windows"), // VS Code 창마다 자기 상태를 적는 곳 (창 하나당 파일 하나)
   gifs: path.join(PKMON_HOME, "gifs"), // 원본 GIF 캐시
-  hook: path.join(os.homedir(), ".claude", "scripts", "hooks", "pkmon-state.cjs"),
-  electron: path.join(PROJECT_DIR, "node_modules", ".bin", "electron"),
 };
 
 // 사용자가 손대는 값 — pkmon.config.json 에 저장된다
@@ -55,12 +51,21 @@ function readJson(file) {
 // 환경변수는 "이번 한 번만" 다르게 쓰는 용도라 파일에 저장하지 않는다
 function load() {
   const saved = readJson(PATHS.config);
+  const env = process.env;
   const config = { ...USER_DEFAULTS, ...INTERNAL, ...saved };
+  if (env.PKMON_SLUG) config.slug = env.PKMON_SLUG; // 위치 키를 만들기 전에 펫 이름부터 확정
 
   // 창 위치는 드래그할 때 자동 저장되는 값 — 사용자가 적을 일은 없다
-  config.window = { dx: INTERNAL.anchorDx, dy: INTERNAL.anchorDy, ...(saved.window || {}) };
+  // 펫마다 따로 기억한다. 한 칸만 두면 두 마리를 띄웠을 때 한 마리를 옮기는 순간 다른 마리 자리가 덮인다
+  config.windowKey = `${config.slug}#${Number(env.PKMON_INDEX) || 0}`;
+  const perPet = (saved.windows || {})[config.windowKey];
+  config.window = {
+    dx: INTERNAL.anchorDx,
+    dy: INTERNAL.anchorDy,
+    ...(saved.window || {}), // 펫별 저장 이전 버전의 값 — 있으면 출발점으로 쓴다
+    ...(perPet || {}),
+  };
 
-  const env = process.env;
   // 환경변수로 덮어쓴 값은 저장할 때 제외한다 — "이번 한 번만" 이라는 뜻이므로
   const fromEnv = new Set();
   const override = (key, value) => {
@@ -82,7 +87,7 @@ function load() {
     matchCwd: env.PKMON_MATCH_CWD || null, // 조상 기록이 없을 때 쓰는 대비책
     index: Number(env.PKMON_INDEX) || 0, // 여러 마리를 옆으로 미는 순번
     anchorApp: env.PKMON_ANCHOR_APP || null, // 따라갈 앱 (터미널 종류로 결정)
-    activeTerminalFile: env.PKMON_ACTIVE_FILE || PATHS.activeTerminal,
+    windowsDir: env.PKMON_WINDOWS_DIR || PATHS.windows,
     debug: Boolean(env.PKMON_DEBUG),
   };
   return config;
@@ -100,7 +105,8 @@ function save(config, patch = {}) {
     const envOnly = config.fromEnv?.has(key) && !(key in patch);
     out[key] = envOnly ? (key in saved ? saved[key] : USER_DEFAULTS[key]) : config[key];
   }
-  out.window = config.window;
+  out.windows = { ...(saved.windows || {}) };
+  if (config.windowKey) out.windows[config.windowKey] = config.window;
   try {
     fs.writeFileSync(PATHS.config, `${JSON.stringify(out, null, 2)}\n`);
   } catch {

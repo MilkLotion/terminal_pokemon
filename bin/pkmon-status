@@ -7,76 +7,74 @@ PROJECT="${PKMON_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 TERM_PID="$PPID"
 
 node - "$PROJECT" "$TERM_PID" <<'NODE'
-const fs = require("fs");
-const path = require("path");
 const [project, termPidArg] = process.argv.slice(2);
 const termPid = Number(termPidArg);
-// 경로·설정은 config.js 한 곳에서만 온다
+// 경로·설정·판정은 전부 공통 모듈에서 온다 — 펫과 같은 코드를 쓴다
 const settings = require(`${project}/config.js`);
+const state = require(`${project}/lib/state.js`);
 const { PATHS, USER_DEFAULTS } = settings;
-const STATE_DIR = PATHS.state;
-const ACTIVE_FILE = PATHS.activeTerminal;
-const STALE_SEC = 600;
 
 const age = (at) => (Date.now() / 1000 - (at || 0)).toFixed(1);
-
 const config = settings.load();
-const userValues = Object.keys(USER_DEFAULTS)
-  .map((key) => `${key}=${config[key]}`)
-  .join(" ");
+
 console.log(`설정 파일: ${PATHS.config}`);
-console.log(`  ${userValues}`);
+console.log(`  ${Object.keys(USER_DEFAULTS).map((k) => `${k}=${config[k]}`).join(" ")}`);
 console.log(`이 터미널 셸 번호: ${termPid}`);
 
-try {
-  const active = JSON.parse(fs.readFileSync(ACTIVE_FILE, "utf8"));
-  const mark = active.pid === termPid ? "← 이 터미널" : "";
-  console.log(`활성 터미널(확장 기록): pid=${active.pid} name=${active.name} ${age(active.at)}초 전 ${mark}`);
-} catch {
-  console.log("활성 터미널 기록 없음 — VS Code 확장이 없거나 아직 기록 전");
+// 펫과 동일하게 조상 체인으로 내 터미널을 잡는다
+const myPids = state.myPidsFor(termPid);
+console.log(`내 프로세스 체인: ${[...myPids].join(" ")}`);
+
+const records = state.readWindowRecords(PATHS.windows);
+console.log(`\n살아 있는 IDE 창 기록 ${records.length}건 (${PATHS.windows})`);
+const mine = state.myRecord(records, myPids);
+for (const rec of records) {
+  const tag = rec === mine ? "← 내 창" : "";
+  console.log(
+    `  ${String(rec.windowId).slice(0, 8)}  활성탭=${rec.activeTerminal}  탭들=[${rec.terminals.join(",")}]` +
+      `  포커스=${rec.focused}  ${age(rec.at)}초 전  ${tag}`,
+  );
 }
+if (!records.length) console.log("  없음 — VS Code 확장이 없거나 아직 기록 전 (탭 구분이 꺼진다)");
+
+const tab = state.tabAxis(mine, myPids);
+console.log(`\n탭 축(내 탭이 활성인가): ${tab === null ? "알 수 없음 — 확장 없음" : tab}`);
+console.log("창 축(내 창이 맨 앞인가): 펫이 실행 중에만 판정 — winbounds 로 직접 확인한다");
 
 let files = [];
 try {
+  const fs = require("fs");
+  const path = require("path");
   files = fs
-    .readdirSync(STATE_DIR)
+    .readdirSync(PATHS.state)
     .filter((f) => f.endsWith(".json"))
-    .map((f) => path.join(STATE_DIR, f))
+    .map((f) => path.join(PATHS.state, f))
     .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
 } catch {
-  console.log("상태 파일 폴더 없음 — 훅 미설치");
+  console.log("\n상태 파일 폴더 없음 — 훅 미설치");
 }
 
 console.log(`\n세션 상태 기록 ${files.length}건 (최신순)`);
-let resolved = null;
-for (const file of files) {
+for (const file of files.slice(0, 10)) {
   let record;
   try {
-    record = JSON.parse(fs.readFileSync(file, "utf8"));
+    record = JSON.parse(require("fs").readFileSync(file, "utf8"));
   } catch {
     continue;
   }
-  const anc = Array.isArray(record.ancestors) ? record.ancestors : [];
-  const mine = anc.length ? anc.includes(termPid) : null;
-  let shown = record.state;
-  const a = Date.now() / 1000 - (record.at || 0);
-  if (record.hold != null && a >= record.hold) shown = record.then || "idle";
-  if ((shown === "running" || shown === "waiting") && a > STALE_SEC) shown = "idle";
-  if (mine && resolved === null) resolved = shown;
-  const tag = mine === null ? "조상 기록 없음" : mine ? "← 이 터미널" : "다른 터미널";
+  const isMine = state.stateIsMine(record, myPids, config.runtime.matchCwd);
   console.log(
-    `  ${path.basename(file).slice(0, 8)}  기록=${record.state}${record.hold ? `(${record.hold}초)` : ""}` +
-      ` → 지금=${shown}  ${age(record.at)}초 전  cwd=${(record.cwd || "").slice(-30)}  ${tag}`,
+    `  ${require("path").basename(file).slice(0, 8)}  기록=${record.state}` +
+      ` → 지금=${state.resolveState(record)}  ${age(record.at)}초 전  ${isMine ? "← 이 터미널" : "다른 터미널"}`,
   );
 }
-console.log(`\n이 터미널 펫이 보여야 할 동작: ${resolved ?? "idle (내 터미널 기록 없음)"}`);
+console.log(`\n이 터미널 펫이 보여야 할 동작: ${state.sessionState(PATHS.state, myPids, config.runtime.matchCwd)}`);
 
 try {
   const out = require("child_process").execFileSync("ps", ["-Ao", "pid=,args="], { encoding: "utf8" });
   const pets = out
     .split("\n")
-    .filter((l) => l.includes(project) && !l.includes("--type=") && l.includes("Electron"))
-    .map((l) => l.trim().split(/\s+/)[0]);
+    .filter((l) => l.includes(project) && !l.includes("--type=") && l.includes("Electron"));
   console.log(`떠 있는 펫 프로세스: ${pets.length}개`);
 } catch {
   // 프로세스 조회 실패는 무시

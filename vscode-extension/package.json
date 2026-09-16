@@ -2,7 +2,7 @@
   "name": "pkmon-active-terminal",
   "displayName": "pkmon active terminal",
   "description": "활성 터미널의 셸 PID를 파일로 알려 pkmon 펫이 자기 터미널에서만 보이게 한다",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -15,5 +15,8 @@
     "onStartupFinished"
   ],
   "main": "./extension.js",
-  "contributes": {}
+  "contributes": {},
+  "extensionKind": [
+    "ui"
+  ]
 }

@@ -1,57 +1,120 @@
-// 활성 터미널의 셸 PID 를 ~/.claude/pkmon/active-terminal.json 에 기록
-// pkmon 펫이 이 값을 자기 터미널 번호와 비교해, 그 탭을 보고 있을 때만 나타난다
+// 이 VS Code 창의 상태를 창마다 자기 파일 하나에 기록한다
+//   ~/.claude/pkmon/windows/<sessionId>-<확장호스트PID>.json
+// 펫은 이 기록으로 "내 터미널 탭이 지금 활성인가"만 판단한다.
+// 어느 창이 화면 맨 앞인지는 펫이 OS 에 직접 묻는다 — 그건 파일로 주고받지 않는다.
 const vscode = require("vscode");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-const PKMON_DIR = path.join(os.homedir(), ".claude", "pkmon");
-const ACTIVE_FILE = path.join(PKMON_DIR, "active-terminal.json");
+const WINDOWS_DIR = path.join(os.homedir(), ".claude", "pkmon", "windows");
+const STALE_SEC = 600; // 이보다 오래된 남의 창 기록은 청소 대상
+const HEARTBEAT_MS = 10_000;
 
-async function writeActive(terminal) {
+// 파일명에 쓸 수 없는 문자를 막는다 — sessionId 형식은 계약으로 보장된 값이 아니다
+const safe = (s) => String(s).replace(/[^A-Za-z0-9_-]/g, "");
+const MY_FILE = path.join(WINDOWS_DIR, `${safe(vscode.env.sessionId)}-${process.pid}.json`);
+
+let lastAt = 0; // 비동기 완료 순서가 뒤집혀 낡은 내용이 덮어쓰는 것을 막는다
+
+function alive(pid) {
   try {
-    // 포커스 없는 창은 기록하지 않는다 — 마지막 활성 터미널을 그대로 남겨 둔다.
-    // 지워 버리면 펫을 드래그하는 동안(=VS Code 가 뒤로 감) 같은 터미널의 다른 펫이 사라진다.
-    if (!vscode.window.state.focused) return;
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e.code === "EPERM"; // 남의 소유 프로세스 — 살아 있다
+  }
+}
 
-    fs.mkdirSync(PKMON_DIR, { recursive: true });
-    const pid = terminal ? await terminal.processId : null;
-    // 이 창에 열린 터미널 전부 — 펫이 "이 기록이 내 창 것인가"를 가리는 데 쓴다
-    // (창이 여러 개면 각 창의 확장이 같은 파일에 쓰므로, 남의 창 기록에 숨지 않으려면 필요하다)
+async function write() {
+  try {
+    // at 은 await 이전에 찍는다 — 이벤트 발생 시각이어야 순서 비교가 맞는다
+    const at = Date.now() / 1000;
+    const focused = vscode.window.state.focused;
+    const terminal = vscode.window.activeTerminal;
+
+    const activeTerminal = terminal ? await terminal.processId.catch(() => null) : null;
     const terminals = (
       await Promise.all(vscode.window.terminals.map((t) => Promise.resolve(t.processId).catch(() => null)))
     ).filter((p) => typeof p === "number");
+
+    if (at < lastAt) return; // 더 최근 기록이 이미 나갔다
+    lastAt = at;
+
+    fs.mkdirSync(WINDOWS_DIR, { recursive: true });
     const payload = {
-      pid: pid ?? null,
-      name: terminal?.name ?? "",
+      v: 2,
       windowId: vscode.env.sessionId,
+      hostPid: process.pid, // 펫이 "이 창이 아직 살아 있나"를 확인하는 데 쓴다
+      remote: vscode.env.remoteName || null,
+      activeTerminal: typeof activeTerminal === "number" ? activeTerminal : null,
       terminals,
-      focused: true,
-      at: Date.now() / 1000,
+      focused, // 포커스가 없어도 false 로 반드시 기록한다 — 안 쓰면 "뒤에 있음"과 "죽음"이 구분되지 않는다
+      at,
     };
-    const tmp = `${ACTIVE_FILE}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(payload));
-    fs.renameSync(tmp, ACTIVE_FILE);
+    const tmp = `${MY_FILE}.tmp`;
+    // Windows 는 읽는 쪽이 파일을 열고 있으면 rename 이 막힌다 — 잠깐 뒤 다시 시도
+    for (let i = 0; i < 3; i++) {
+      try {
+        fs.writeFileSync(tmp, JSON.stringify(payload));
+        fs.renameSync(tmp, MY_FILE);
+        return;
+      } catch (e) {
+        if (i === 2 || !["EPERM", "EBUSY", "EACCES"].includes(e.code)) throw e;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }
   } catch {
-    // 기록 실패는 무시 — 펫은 기존 동작(항상 표시)으로 돌아감
+    // 기록 실패는 무시 — 펫은 탭 구분 없이 동작한다
+  }
+}
+
+// 죽은 창이 남긴 기록 청소 — 강제 종료되면 deactivate 가 불리지 않는다
+function sweep() {
+  try {
+    const now = Date.now() / 1000;
+    for (const name of fs.readdirSync(WINDOWS_DIR)) {
+      const file = path.join(WINDOWS_DIR, name);
+      if (name.endsWith(".tmp")) {
+        fs.unlinkSync(file);
+        continue;
+      }
+      if (!name.endsWith(".json") || file === MY_FILE) continue;
+      let rec;
+      try {
+        rec = JSON.parse(fs.readFileSync(file, "utf8"));
+      } catch {
+        fs.unlinkSync(file); // 파손 파일
+        continue;
+      }
+      const dead = rec.hostPid ? !alive(rec.hostPid) : now - (rec.at || 0) > STALE_SEC;
+      if (dead) fs.unlinkSync(file);
+    }
+  } catch {
+    // 청소 실패는 무시
   }
 }
 
 function activate(context) {
-  writeActive(vscode.window.activeTerminal);
-  // 30초마다 다시 기록 — 펫 쪽에서 "기록이 멈췄다 = 확장이 없다"를 구분할 수 있게 한다
-  const heartbeat = setInterval(() => writeActive(vscode.window.activeTerminal), 30_000);
+  fs.mkdirSync(WINDOWS_DIR, { recursive: true });
+  sweep();
+  write();
+  const heartbeat = setInterval(write, HEARTBEAT_MS);
   context.subscriptions.push(
     { dispose: () => clearInterval(heartbeat) },
-    vscode.window.onDidChangeActiveTerminal((t) => writeActive(t)),
-    vscode.window.onDidOpenTerminal(() => writeActive(vscode.window.activeTerminal)),
-    vscode.window.onDidCloseTerminal(() => writeActive(vscode.window.activeTerminal)),
-    vscode.window.onDidChangeWindowState(() => writeActive(vscode.window.activeTerminal)),
+    vscode.window.onDidChangeActiveTerminal(() => write()),
+    vscode.window.onDidOpenTerminal(() => write()),
+    vscode.window.onDidCloseTerminal(() => write()),
+    vscode.window.onDidChangeWindowState(() => write()), // blur 도 여기서 기록된다
   );
 }
 
 function deactivate() {
-  writeActive(undefined);
+  try {
+    fs.unlinkSync(MY_FILE);
+  } catch {
+    // 이미 없으면 그만
+  }
 }
 
 module.exports = { activate, deactivate };
