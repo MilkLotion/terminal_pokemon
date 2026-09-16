@@ -1,12 +1,13 @@
 # terminal_pokemon
 
 터미널 위에 떠 있는 포켓몬 펫. 테두리 없는 투명 창이라 VS Code 터미널 위에 겹쳐 놓을 수 있다.
-`claude`·`codex` 를 실행할 때 함께 뜨고, 명령이 끝나면 같이 사라진다. macOS · Windows 에서 동작한다.
+명령을 실행하는 동안 함께 뜨고, 명령이 끝나면 같이 사라진다. macOS · Windows 에서 동작한다.
 
 ```bash
-claude pkmon=gengar          # 2D 도트 팬텀
-claude pkmon=zapdos-3d       # 3D 썬더
-claude pkmon=zapdos,pikachu  # 여러 마리
+pkmon gengar            # 2D 도트 팬텀 — 명령을 생략하면 claude
+pkmon zapdos-3d         # 3D 썬더
+pkmon zapdos,pikachu    # 여러 마리
+pkmon eevee -- codex    # 다른 명령을 감쌀 때
 ```
 
 포켓몬 이미지는 이 저장소에 없다. 실행할 때 [Pokémon Showdown](https://play.pokemonshowdown.com/sprites/) 의
@@ -29,33 +30,87 @@ npm install
 
 `npm install` 때 macOS 용 창 위치 헬퍼(Swift)가 자동으로 빌드된다. Swift 컴파일러가 없으면 이 단계만 건너뛴다.
 
-셸에 래퍼를 등록한다. mac/Linux 는 `~/.zshrc` 에 한 줄을 추가한다.
+`pkmon` 을 PATH 에 올린다. mac/Linux 는 `~/.zshrc` 에 한 줄을 넣거나,
 
 ```bash
 source <클론한 경로>/shell/pkmon.zsh
 ```
 
-Windows 는 PowerShell 프로필(`$PROFILE`)에 dot-source 한다.
+심링크를 걸어도 된다.
 
-```powershell
-. "<클론한 경로>/shell/pkmon.ps1"
+```bash
+ln -s <클론한 경로>/bin/pkmon ~/.local/bin/pkmon
 ```
 
-래퍼는 자기 파일 위치에서 프로젝트 경로를 찾는다. 다른 곳을 가리키려면 `PKMON_HOME` 환경변수를 쓴다.
+Windows 는 `bin/pkmon.ps1` 을 쓴다. PowerShell 프로필(`$PROFILE`)에 한 줄:
+
+```powershell
+$env:PATH = "<클론한 경로>\bin;$env:PATH"
+```
+
+`pkmon` 은 자기 파일 위치에서 프로젝트 경로를 찾는다(심링크도 따라간다).
+다른 곳을 가리키려면 `PKMON_HOME` 환경변수를 쓴다.
+
+> **`claude`·`codex` 를 셸 함수로 덮지 않는다.**
+> 남의 명령에 없는 문법을 얹는 것은 관례가 아니다 — `pyenv`·`conda` 는 기존 서브커맨드를
+> 가로챌 뿐 문법을 늘리지 않고, `direnv`·`singularity` 는 환경변수를 쓴다.
+> 덮어쓰면 프롬프트 토큰을 먹거나(`claude fix fps=30 bug` 에서 단어가 사라진다)
+> 셸 스냅샷에서 깨진다. `pkmon` 은 `env(1)`·`nice(1)`·`timeout(1)` 과 같은 별도 명령이다.
 
 ## 사용
 
-```bash
-claude pkmon=pikachu
-codex pkmon=charizard-3d
-claude pkmon=zapdos,pikachu   # 쉼표로 여러 마리 — 나란히 뜬다
-claude pkmon=eevee pos=free   # 창 밖에도 둘 수 있게 (기본은 pos=fix)
-claude                        # pkmon= 없으면 평소와 동일
+```
+pkmon <펫> [이름=값 ...] [-- <명령> [인자 ...]]
 ```
 
-- 펫을 드래그해 원하는 자리에 놓으면 위치가 기억된다.
+```bash
+pkmon pikachu                          # 명령을 생략하면 claude
+pkmon charizard-3d -- codex
+pkmon zapdos,pikachu                   # 쉼표로 여러 마리 — 나란히 뜬다
+pkmon eevee pos=free                   # 창 밖에도 둘 수 있게 (기본은 pos=fix)
+pkmon eevee gif=off                    # 스프라이트시트 — 상태마다 진짜 동작이 따로 있다
+pkmon eevee -- claude -p "고쳐줘"       # 대상 명령의 인자는 '--' 뒤에
+```
+
+인자 경계는 `env(1)`·`nice(1)`·`timeout(1)` 과 같다 — **우리 옵션은 앞에, 대상 명령은 `--` 뒤에.**
+`--` 뒤는 한 글자도 건드리지 않고 그대로 넘긴다.
+
+```
+env    FOO=1        cmd args
+nice   -n 10        cmd args
+pkmon  eevee gif=off -- cmd args
+```
+
+### 옵션
+
+| 옵션 | 값 | 뜻 |
+|---|---|---|
+| (첫 인자) | 펫 이름 | 쉼표로 여러 마리. `--pet <이름>` 으로도 준다 |
+| `pos=` | `fix`(기본) · `free` | 따라가는 창 안에 가둘지 |
+| `gif=` | `auto`(기본) · `off` | `off` 면 스프라이트시트 — 상태별 동작 9종 |
+| `dot=` | 숫자 | 도트 한 칸을 몇 px 로 볼지 (펫 크기) |
+| `fps=` | 숫자 | 스프라이트시트 모드 재생 속도 |
+| `keep=` | `on` · `off` | 다른 앱을 봐도 숨지 않기 |
+| `click=` | `on` · `off` | 펫 위 클릭을 아래 터미널로 통과 |
+
+`이름=값` 과 `--이름 값` 둘 다 받는다. `on`/`off` 자리에는 `true`/`false`, `1`/`0`, `yes`/`no` 도 쓸 수 있다.
+**이번 실행에만 적용되고 설정 파일에는 저장되지 않는다.**
+
+환경변수로도 같은 값을 줄 수 있다 — 스크립트나 CI 에서 편하다.
+
+| 환경변수 | 대응 옵션 |
+|---|---|
+| `PKMON_SLUG` | 펫 이름 |
+| `PKMON_POS` | `pos=` |
+| `PKMON_USE_GIF` | `gif=` |
+| `PKMON_DOT_SIZE` | `dot=` |
+| `PKMON_FPS` | `fps=` |
+| `PKMON_KEEP_VISIBLE` | `keep=` |
+| `PKMON_CLICK_THROUGH` | `click=` |
+| `PKMON_DEBUG=1` | 판정 로그를 파일로 남긴다 (경로를 알려 준다) |
+
+- 펫을 드래그해 원하는 자리에 놓으면 위치가 기억된다. 펫마다 따로 기억한다.
 - 여러 마리를 띄우면 겹치지 않게 옆으로 밀려서 배치된다.
-- 래퍼 없이 직접 쓰려면 `bin/pkmon --pet pikachu -- <명령>`.
 
 | 단축키 | 동작 |
 |---|---|
@@ -98,13 +153,25 @@ claude                        # pkmon= 없으면 평소와 동일
 그 밖의 값(스프라이트 저장소 경로, 따라갈 앱, 왕복 재생, 움직임 보정 등)은 손댈 일이 거의 없어
 `config.js` 의 `INTERNAL` 에 두었다.
 
-한 번만 다르게 쓰려면 환경변수를 쓴다 — 파일에는 저장되지 않는다.
+한 번만 다르게 쓰려면 위의 **명령줄 옵션**을 쓴다. 환경변수로도 같은 값을 줄 수 있다 —
+둘 다 파일에는 저장되지 않는다.
 
 ```bash
-PKMON_KEEP_VISIBLE=1 claude pkmon=gengar   # 이번만 항상 보이기
-PKMON_USE_GIF=off claude pkmon=gengar      # 이번만 스프라이트시트
-PKMON_DOT_SIZE=3 claude pkmon=gengar       # 이번만 크게
+pkmon gengar keep=on       # 이번만 항상 보이기
+pkmon gengar gif=off       # 이번만 스프라이트시트
+pkmon gengar dot=3         # 이번만 크게
 ```
+
+| 환경변수 | 대응 옵션 |
+|---|---|
+| `PKMON_SLUG` | `pkmon=` |
+| `PKMON_POS` | `pos=` |
+| `PKMON_USE_GIF` | `gif=` |
+| `PKMON_DOT_SIZE` | `dot=` |
+| `PKMON_FPS` | `fps=` |
+| `PKMON_KEEP_VISIBLE` | `keep=` |
+| `PKMON_CLICK_THROUGH` | `click=` |
+| `PKMON_DEBUG=1` | 판정 로그를 파일로 남긴다 (경로를 알려 준다) |
 
 ## 언제 보이고 언제 숨는가
 
@@ -189,9 +256,9 @@ PKMON_DOT_SIZE=3 claude pkmon=gengar       # 이번만 크게
 
 ```bash
 # 1번 탭
-claude pkmon=pikachu
+pkmon pikachu
 # 2번 탭
-claude pkmon=zapdos
+pkmon zapdos
 ```
 
 확장은 **선택**이다. 없으면 탭 축이 꺼지고 창 단위로만 동작한다 — 그 창의 펫이 함께 보인다.

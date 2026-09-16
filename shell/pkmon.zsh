@@ -1,39 +1,13 @@
-# pkmon — claude·codex 실행 시 펫을 함께 띄운다
-#   claude pkmon=pikachu
-#   codex pkmon=charizard-3d
-#   claude                    (pkmon= 없으면 평소와 동일)
-# ~/.zshrc 에서 이 파일을 source 해 사용한다.
-
-# 이 파일 위치에서 프로젝트 경로를 구한다 — 옛 경로가 환경변수에 남아 있어도 올바르게 잡히도록
+# pkmon 을 PATH 에 올린다. ~/.zshrc 에서 이 파일을 source 한다.
+#
+#   pkmon eevee                            명령을 생략하면 claude
+#   pkmon eevee gif=off -- claude -p "고쳐줘"
+#   pkmon zapdos,pikachu                   쉼표로 여러 마리
+#
+# claude·codex 를 셸 함수로 덮지 않는다. 남의 명령에 없는 문법을 얹는 것은 관례가 아니고
+# (pyenv·conda 는 문법을 늘리지 않고, direnv 는 환경변수를 쓴다), 프롬프트 토큰을 먹거나
+# 셸 스냅샷에서 깨지는 문제를 부른다. pkmon 은 env(1)·nice(1) 과 같은 별도 명령이다.
 _pkmon_script_dir=${${(%):-%x}:A:h}
-if [[ -z "${PKMON_HOME:-}" || ! -x "${PKMON_HOME}/bin/pkmon" ]]; then
-  export PKMON_HOME="${_pkmon_script_dir:h}"
-fi
+export PKMON_HOME="${_pkmon_script_dir:h}"
 unset _pkmon_script_dir
-
-_pkmon_wrap() {
-  local cmd="$1"
-  shift
-  local pet=""
-  local pos=""
-  local -a args=()
-  for a in "$@"; do
-    case "$a" in
-      pkmon=*|pokemon=*|pet=*) pet="${a#*=}" ;;
-      pos=*) pos="${a#*=}" ;; # fix(기본, 창 안에 가둠) · free
-      *) args+=("$a") ;;
-    esac
-  done
-
-  if [[ -z "$pet" ]]; then
-    command "$cmd" "${args[@]}"
-    return $?
-  fi
-  # zsh 는 확장 결과를 단어로 나누지 않는다 — 배열로 넘겨야 --pos 와 값이 따로 전달된다
-  local -a pos_args=()
-  [[ -n "$pos" ]] && pos_args=(--pos "$pos")
-  "$PKMON_HOME/bin/pkmon" --pet "$pet" "${pos_args[@]}" -- "$cmd" "${args[@]}"
-}
-
-claude() { _pkmon_wrap claude "$@"; }
-codex() { _pkmon_wrap codex "$@"; }
+[[ ":$PATH:" == *":$PKMON_HOME/bin:"* ]] || export PATH="$PKMON_HOME/bin:$PATH"

@@ -72,10 +72,25 @@ function load() {
     config[key] = value;
     fromEnv.add(key);
   };
+  // on/off · true/false · 1/0 · yes/no 를 받는다. 값이 없거나 알 수 없으면 손대지 않는다
+  const asBool = (value) => {
+    if (value == null || value === "") return null;
+    const v = String(value).trim().toLowerCase();
+    if (["1", "on", "true", "yes", "y"].includes(v)) return true;
+    if (["0", "off", "false", "no", "n"].includes(v)) return false;
+    return null;
+  };
+  const boolOverride = (key, value) => {
+    const parsed = asBool(value);
+    if (parsed !== null) override(key, parsed);
+  };
+
   if (env.PKMON_SLUG) override("slug", env.PKMON_SLUG);
   if (env.PKMON_DOT_SIZE) override("dotSize", Number(env.PKMON_DOT_SIZE));
   if (env.PKMON_USE_GIF) override("useGif", env.PKMON_USE_GIF);
-  if (env.PKMON_KEEP_VISIBLE) override("keepVisible", true);
+  if (env.PKMON_FPS) override("fps", Number(env.PKMON_FPS) || config.fps);
+  boolOverride("keepVisible", env.PKMON_KEEP_VISIBLE);
+  boolOverride("clickThrough", env.PKMON_CLICK_THROUGH);
   if (env.PKMON_POS) override("pos", env.PKMON_POS);
   if (env.PKMON_SCALE) override("scale", Number(env.PKMON_SCALE) || config.scale);
   if (env.PKMON_SOURCE) override("source", env.PKMON_SOURCE);

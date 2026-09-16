@@ -1,26 +1,88 @@
 #!/usr/bin/env bash
-# 명령을 실행하는 동안 펫 오버레이를 띄우고, 명령이 끝나면 펫도 함께 종료
-# 사용: pkmon --pet pikachu [--scale 1] -- claude
-#       pkmon --pet zapdos,pikachu -- claude      (쉼표로 여러 마리)
+# 명령을 실행하는 동안 펫 오버레이를 띄우고, 명령이 끝나면 펫도 함께 종료한다.
+#
+# 사용:
+#   pkmon <펫> [이름=값 ...] [-- <명령> [인자 ...]]
+#   pkmon [--pet <펫>] [--gif off] ... -- <명령>
+#
+# 예:
+#   pkmon eevee                            명령을 생략하면 claude
+#   pkmon eevee -- codex
+#   pkmon eevee gif=off dot=4 -- claude -p "고쳐줘"
+#   pkmon zapdos,pikachu                   쉼표로 여러 마리
+#
+# 인자 경계는 env(1)·nice(1)·timeout(1) 과 같다 — 우리 옵션은 앞에, 대상 명령은 '--' 뒤에.
+# 대상 명령의 인자는 한 글자도 건드리지 않는다.
 set -uo pipefail
 
-PROJECT="${PKMON_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+# 심링크로 PATH 에 걸어 두어도 프로젝트를 찾도록 자기 실제 경로를 따라간다
+_self="${BASH_SOURCE[0]}"
+while [[ -L "$_self" ]]; do
+  _link="$(readlink "$_self")"
+  if [[ "$_link" = /* ]]; then
+    _self="$_link"
+  else
+    _self="$(cd "$(dirname "$_self")" && cd "$(dirname "$_link")" && pwd)/$(basename "$_link")"
+  fi
+done
+if [[ -n "${PKMON_HOME:-}" && -f "$PKMON_HOME/config.js" ]]; then
+  PROJECT="$PKMON_HOME"
+else
+  PROJECT="$(cd "$(dirname "$_self")/.." && pwd)"
+fi
+unset _self _link
+
+usage() {
+  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+}
 
 pet=""
 scale=""
 pos=""
+gif=""
+dot=""
+fps=""
+keep=""
+click=""
+
+# 첫 인자가 옵션도 '--' 도 아니면 펫 이름으로 받는다 (pkmon eevee -- claude)
+if [[ $# -gt 0 && "$1" != -* && "$1" != *=* ]]; then
+  pet="$1"
+  shift
+fi
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --pet) pet="${2:-}"; shift 2 ;;
     --scale) scale="${2:-}"; shift 2 ;;
     --pos) pos="${2:-}"; shift 2 ;;
+    --gif) gif="${2:-}"; shift 2 ;;
+    --dot) dot="${2:-}"; shift 2 ;;
+    --fps) fps="${2:-}"; shift 2 ;;
+    --keep) keep="${2:-}"; shift 2 ;;
+    --click) click="${2:-}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    # env(1) 처럼 이름=값 도 받는다. 우리 명령이라 대상 명령과 섞일 일이 없다
+    pkmon=*|pokemon=*|pet=*) pet="${1#*=}"; shift ;;
+    pos=*) pos="${1#*=}"; shift ;;
+    gif=*) gif="${1#*=}"; shift ;;
+    dot=*) dot="${1#*=}"; shift ;;
+    fps=*) fps="${1#*=}"; shift ;;
+    keep=*) keep="${1#*=}"; shift ;;
+    click=*) click="${1#*=}"; shift ;;
     --) shift; break ;;
-    *) echo "알 수 없는 옵션: $1" >&2; exit 2 ;;
+    *) echo "알 수 없는 옵션: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
+# 명령을 생략하면 claude — 이 도구를 쓰는 대부분의 경우다
 if [[ $# -eq 0 ]]; then
-  echo "실행할 명령이 없음 — 사용: pkmon --pet pikachu -- claude" >&2
+  set -- claude
+fi
+
+if [[ -z "$pet" ]]; then
+  echo "펫 이름이 없음 — 사용: pkmon eevee -- claude" >&2
+  usage >&2
   exit 2
 fi
 
@@ -125,6 +187,8 @@ if [[ -n "$pet" ]]; then
 
       # $PPID = 이 스크립트를 부른 대화형 셸 = VS Code 가 터미널 탭의 프로세스로 보는 번호
       PKMON_SLUG="$resolved" PKMON_SCALE="$scale" PKMON_POS="$pos" PKMON_MATCH_CWD="$PWD" \
+        PKMON_USE_GIF="$gif" PKMON_DOT_SIZE="$dot" PKMON_FPS="$fps" \
+        PKMON_KEEP_VISIBLE="$keep" PKMON_CLICK_THROUGH="$click" \
         PKMON_INDEX="$((base + slot))" PKMON_ANCHOR_APP="$anchor_app" PKMON_TERM_PID="$PPID" \
         "$electron" "$PROJECT" >"$pet_log" 2>&1 &
       overlay_pids+=("$!")

@@ -460,8 +460,10 @@ function pollAnchor() {
   });
 }
 
-function applyClickThrough(on) {
-  settings.save(config, { clickThrough: on });
+function applyClickThrough(on, persist = true) {
+  // 기동 시 적용은 저장하지 않는다 — 인자로 받은 값이 파일에 눌러앉으면 다음 실행까지 따라온다
+  if (persist) settings.save(config, { clickThrough: on });
+  else config.clickThrough = on;
   win.setIgnoreMouseEvents(on, { forward: true });
   win.webContents.send("click-through", on);
 }
@@ -508,7 +510,7 @@ function createWindow() {
   }
 
   win.webContents.on("did-finish-load", () => {
-    applyClickThrough(config.clickThrough);
+    applyClickThrough(config.clickThrough, false);
     win.webContents.send("state", currentState());
     pollAnchor();
   });
