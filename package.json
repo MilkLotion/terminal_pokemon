@@ -1,15 +1,60 @@
 {
-  "name": "terminal_pkmon",
-  "version": "0.1.0",
+  "name": "terminal-pkmon",
+  "version": "0.2.0",
   "private": true,
   "description": "터미널 위에 떠 있는 포켓몬 펫 오버레이 (macOS / Windows)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MilkLotion/terminal_pokemon.git"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "terminal",
+    "pet",
+    "desktop-pet",
+    "electron"
+  ],
   "main": "main.js",
+  "bin": {
+    "pkmon": "bin/pkmon",
+    "pkmon-status": "bin/pkmon-status"
+  },
+  "files": [
+    "main.js",
+    "preload.js",
+    "config.js",
+    "art/",
+    "buddy/",
+    "cli/",
+    "lib/",
+    "renderer/",
+    "hooks/",
+    "helpers/winbounds",
+    "helpers/winbounds.ps1",
+    "helpers/winbounds.swift",
+    "bin/pkmon",
+    "bin/pkmon-status",
+    "scripts/postinstall.js",
+    "scripts/build-helper.js",
+    "vscode-extension/*.vsix"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "os": [
+    "darwin",
+    "win32"
+  ],
   "scripts": {
     "start": "electron .",
-    "build:helper": "swiftc -O -o helpers/winbounds helpers/winbounds.swift",
-    "postinstall": "node -e \"if(process.platform==='darwin'){try{require('child_process').execFileSync('swiftc',['-O','-o','helpers/winbounds','helpers/winbounds.swift'],{stdio:'ignore'})}catch(e){console.log('창 추적 헬퍼 빌드 생략 — swiftc 없음')}}\""
+    "build:helper": "node scripts/build-helper.js",
+    "build:vsix": "node scripts/build-vsix.js",
+    "prepack": "node scripts/build-helper.js && node scripts/build-vsix.js",
+    "postinstall": "node scripts/postinstall.js"
   },
-  "devDependencies": {
-    "electron": "^44.4.0"
+  "dependencies": {
+    "electron": "44.4.0"
   }
 }

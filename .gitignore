@@ -3,3 +3,4 @@ pkmon.config.json
 *.vsix
 helpers/winbounds
 .DS_Store
+*.tgz

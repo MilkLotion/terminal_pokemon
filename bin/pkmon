@@ -1,224 +1,52 @@
-#!/usr/bin/env bash
-# 명령을 실행하는 동안 펫 오버레이를 띄우고, 명령이 끝나면 펫도 함께 종료한다.
-#
-# 사용:
-#   pkmon <펫> [이름=값 ...] [-- <명령> [인자 ...]]
-#   pkmon [--pet <펫>] [--gif off] ... -- <명령>
-#
-# 예:
-#   pkmon eevee                            명령을 생략하면 claude
-#   pkmon eevee -- codex
-#   pkmon eevee art=showdown               원본 GIF 로 (동작은 하나뿐)
-#   pkmon eevee buddy=calm                 덜 돌아다니게 (off 면 제자리)
-#   pkmon eevee dot=4 -- claude -p "고쳐줘"
-#   pkmon zapdos,pikachu                   쉼표로 여러 마리
-#
-# 인자 경계는 env(1)·nice(1)·timeout(1) 과 같다 — 우리 옵션은 앞에, 대상 명령은 '--' 뒤에.
-# 대상 명령의 인자는 한 글자도 건드리지 않는다.
-set -uo pipefail
-
-# 심링크로 PATH 에 걸어 두어도 프로젝트를 찾도록 자기 실제 경로를 따라간다
-_self="${BASH_SOURCE[0]}"
-while [[ -L "$_self" ]]; do
-  _link="$(readlink "$_self")"
-  if [[ "$_link" = /* ]]; then
-    _self="$_link"
-  else
-    _self="$(cd "$(dirname "$_self")" && cd "$(dirname "$_link")" && pwd)/$(basename "$_link")"
-  fi
-done
-if [[ -n "${PKMON_HOME:-}" && -f "$PKMON_HOME/config.js" ]]; then
-  PROJECT="$PKMON_HOME"
-else
-  PROJECT="$(cd "$(dirname "$_self")/.." && pwd)"
-fi
-unset _self _link
-
-usage() {
-  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+#!/usr/bin/env node
+// pkmon — 명령을 실행하는 동안 펫을 띄우고, 명령이 끝나면 펫도 함께 끝낸다.
+//
+//   pkmon <펫> [이름=값 ...] [-- <명령> [인자 ...]]
+//   pkmon setup | uninstall | status
+//
+// mac·Windows·npm 전역 설치·git clone 모두 이 파일 하나로 돈다.
+// (예전 bash·PowerShell 두 벌은 옵션 해석이 조금씩 어긋나 한 벌로 합쳤다)
+// Electron 44 설치기가 Node 22.12 이상을 요구한다. 낮으면 설치는 끝나도 펫이 끝내 뜨지 않으니 먼저 알린다
+const [major, minor] = process.versions.node.split(".").map(Number);
+if (major < 22 || (major === 22 && minor < 12)) {
+  process.stderr.write(`pkmon 은 Node.js 22.12 이상이 필요하다 (지금 ${process.versions.node})\n`);
+  process.exit(1);
 }
 
-pet=""
-scale=""
-pos=""
-gif=""
-art=""
-buddy=""
-dot=""
-fps=""
-keep=""
-click=""
+// `pkmon status | head` 처럼 읽는 쪽이 먼저 닫으면 조용히 끝낸다 (스택을 찍지 않게)
+process.stdout.on("error", (e) => {
+  if (e.code === "EPIPE") process.exit(0);
+  throw e;
+});
 
-# 첫 인자가 옵션도 '--' 도 아니면 펫 이름으로 받는다 (pkmon eevee -- claude)
-if [[ $# -gt 0 && "$1" != -* && "$1" != *=* ]]; then
-  pet="$1"
-  shift
-fi
+const { parseArgs, USAGE } = require("../cli/args.js");
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --pet) pet="${2:-}"; shift 2 ;;
-    --scale) scale="${2:-}"; shift 2 ;;
-    --pos) pos="${2:-}"; shift 2 ;;
-    --gif) gif="${2:-}"; shift 2 ;;
-    --art) art="${2:-}"; shift 2 ;;
-    --buddy) buddy="${2:-}"; shift 2 ;;
-    --dot) dot="${2:-}"; shift 2 ;;
-    --fps) fps="${2:-}"; shift 2 ;;
-    --keep) keep="${2:-}"; shift 2 ;;
-    --click) click="${2:-}"; shift 2 ;;
-    -h|--help) usage; exit 0 ;;
-    # env(1) 처럼 이름=값 도 받는다. 우리 명령이라 대상 명령과 섞일 일이 없다
-    pkmon=*|pokemon=*|pet=*) pet="${1#*=}"; shift ;;
-    pos=*) pos="${1#*=}"; shift ;;
-    gif=*) gif="${1#*=}"; shift ;;
-    art=*) art="${1#*=}"; shift ;;
-    buddy=*) buddy="${1#*=}"; shift ;;
-    dot=*) dot="${1#*=}"; shift ;;
-    fps=*) fps="${1#*=}"; shift ;;
-    keep=*) keep="${1#*=}"; shift ;;
-    click=*) click="${1#*=}"; shift ;;
-    --) shift; break ;;
-    *) echo "알 수 없는 옵션: $1" >&2; usage >&2; exit 2 ;;
-  esac
-done
+const parsed = parseArgs(process.argv.slice(2));
 
-# 명령을 생략하면 claude — 이 도구를 쓰는 대부분의 경우다
-if [[ $# -eq 0 ]]; then
-  set -- claude
-fi
-
-if [[ -z "$pet" ]]; then
-  echo "펫 이름이 없음 — 사용: pkmon eevee -- claude" >&2
-  usage >&2
-  exit 2
-fi
-
-electron="$PROJECT/node_modules/.bin/electron"
-overlay_pids=()
-
-# 터미널 종류로 앱 이름을 넘긴다 — 다만 이건 대비책이다.
-# 평소에는 펫이 자기 프로세스 조상에서 창 주인을 직접 찾으므로 여기 없는 프로그램도 동작한다.
-# (tmux 처럼 조상 관계가 끊기는 경우에만 이 값이 쓰인다)
-anchor_app=""
-# TERM_PROGRAM 이 비어 있어도 VS Code 계열이면 주입 표시로 알아낸다
-term_program="${TERM_PROGRAM:-}"
-if [[ -z "$term_program" && -n "${VSCODE_INJECTION:-}" ]]; then term_program="vscode"; fi
-case "$term_program" in
-  vscode) anchor_app="Code" ;;
-  ghostty) anchor_app="Ghostty" ;;
-  iTerm.app) anchor_app="iTerm2" ;;
-  Apple_Terminal) anchor_app="Terminal" ;;
-  WezTerm) anchor_app="WezTerm" ;;
-esac
-
-# 떠 있는 펫 목록 — pid 파일로 관리한다 (Electron 은 한 마리가 여러 프로세스를 만들어 프로세스 수로는 셀 수 없음)
-RUN_DIR="${TMPDIR:-/tmp}/pkmon-pets"
-mkdir -p "$RUN_DIR"
-
-# 같은 터미널 탭의 펫만 센다 — 다른 창·다른 탭의 펫 때문에 옆으로 밀리지 않도록
-live_pets() {
-  local count=0 file pid
-  for file in "$RUN_DIR/$PPID"-*.pid; do
-    [[ -e "$file" ]] || continue
-    pid="$(cat "$file" 2>/dev/null)"
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-      count=$((count + 1))
-    else
-      rm -f "$file" # 죽은 펫의 흔적 정리
-    fi
-  done
-  echo "$count"
+switch (parsed.kind) {
+  case "help":
+    process.stdout.write(`${USAGE}\n`);
+    break;
+  case "version":
+    process.stdout.write(`${require("../package.json").version}\n`);
+    break;
+  case "setup":
+    require("../cli/setup.js").setup({ dryRun: parsed.flags.has("--dry-run"), editor: !parsed.flags.has("--no-editor") });
+    break;
+  case "uninstall":
+    require("../cli/setup.js").uninstall({
+      dryRun: parsed.flags.has("--dry-run"),
+      purge: parsed.flags.has("--purge"),
+      editor: !parsed.flags.has("--no-editor"),
+    });
+    break;
+  case "status":
+    require("../cli/status.js").status(parsed.rest[0]);
+    break;
+  default:
+    if (parsed.error) {
+      process.stderr.write(`${parsed.error}\n\n${USAGE}\n`);
+      process.exit(2);
+    }
+    require("../cli/run.js").run(parsed.opts, parsed.command);
 }
-
-# 스프라이트 저장소 경로 — 설정은 config.js 한 곳에서만 온다
-sprite_source() {
-  node -e 'process.stdout.write(require(process.argv[1] + "/config.js").load().source)' "$PROJECT" 2>/dev/null
-}
-
-# 입력 이름 → 실제 폴더명. 소문자로 맞추고, 2D 가 없는 6세대 이후는 -3d 로 대체
-resolve_slug() {
-  local input="$1" source="$2" name cand
-  name="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
-  for cand in "$name" "${name}-3d"; do
-    if [[ -f "$source/pets/$cand/spritesheet.webp" ]]; then
-      printf '%s' "$cand"
-      return 0
-    fi
-  done
-  return 1
-}
-
-# 오타·없는 이름일 때 비슷한 폴더명 몇 개 — mega 처럼 팩에 없는 접두/접미는 떼고 찾는다
-suggest_slugs() {
-  local input="$1" source="$2" key
-  key="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z')"
-  key="${key#mega}"
-  key="${key%mega}"
-  [[ ${#key} -ge 3 ]] || return 0
-  ls "$source/pets" 2>/dev/null | grep -i -- "$key" | head -5
-}
-
-if [[ -n "$pet" ]]; then
-  if [[ -x "$electron" ]]; then
-    source_dir="$(sprite_source)"
-    # 이미 떠 있는 펫 수 — 그만큼 옆으로 밀어서 배치
-    base="$(live_pets)"
-    IFS=',' read -r -a pet_list <<< "$pet"
-    slot=0
-    for slug in "${pet_list[@]}"; do
-      slug="${slug//[[:space:]]/}"
-      [[ -z "$slug" ]] && continue
-
-      if [[ -d "$source_dir/pets" ]]; then
-        if ! resolved="$(resolve_slug "$slug" "$source_dir")"; then
-          echo "펫 이름을 찾을 수 없음: $slug" >&2
-          hits="$(suggest_slugs "$slug" "$source_dir")"
-          if [[ -n "$hits" ]]; then
-            echo "  비슷한 이름:" >&2
-            printf '    %s\n' $hits >&2
-          fi
-          echo "  전체 목록: $source_dir/pets" >&2
-          continue
-        fi
-      else
-        resolved="$slug" # 스프라이트 저장소를 못 찾으면 검사 없이 그대로 넘긴다
-      fi
-
-      # PKMON_DEBUG=1 이면 판정 로그를 파일로 남긴다. 평소에는 버린다
-      if [[ -n "${PKMON_DEBUG:-}" ]]; then
-        pet_log="$RUN_DIR/debug-$PPID-$resolved.log"
-        echo "펫 로그: $pet_log" >&2
-      else
-        pet_log="/dev/null"
-      fi
-
-      # $PPID = 이 스크립트를 부른 대화형 셸 = VS Code 가 터미널 탭의 프로세스로 보는 번호
-      PKMON_SLUG="$resolved" PKMON_SCALE="$scale" PKMON_POS="$pos" PKMON_MATCH_CWD="$PWD" \
-        PKMON_ART="$art" PKMON_BUDDY="$buddy" PKMON_USE_GIF="$gif" PKMON_DOT_SIZE="$dot" PKMON_FPS="$fps" \
-        PKMON_KEEP_VISIBLE="$keep" PKMON_CLICK_THROUGH="$click" \
-        PKMON_INDEX="$((base + slot))" PKMON_ANCHOR_APP="$anchor_app" PKMON_TERM_PID="$PPID" \
-        "$electron" "$PROJECT" >"$pet_log" 2>&1 &
-      overlay_pids+=("$!")
-      echo "$!" > "$RUN_DIR/$PPID-$!.pid"
-      slot=$((slot + 1))
-    done
-  else
-    echo "펫을 건너뜀 — Electron 미설치: $PROJECT 에서 npm install 필요" >&2
-  fi
-fi
-
-cleanup() {
-  for pid in "${overlay_pids[@]:-}"; do
-    [[ -n "$pid" ]] || continue
-    kill "$pid" 2>/dev/null
-    rm -f "$RUN_DIR/$PPID-$pid.pid"
-  done
-  overlay_pids=()
-}
-trap cleanup EXIT INT TERM
-
-"$@"
-status=$?
-cleanup
-exit $status

@@ -29,8 +29,17 @@ const OWN_PID_CHECK_MS = 5000; // 터미널이 죽었는지 확인하는 주기
 // 정확히 같을 때만 인정하면 그 어긋남이 "사용자가 끌었다"가 되고, 2초 동안 창 추적이 멈춘다
 const MOVE_TOLERANCE_PX = 3;
 
+// Electron 캐시·세션 폴더를 펫 데이터 아래로 — 기본값(~/Library/Application Support/<패키지 이름>)은
+// 패키지 이름이 바뀌면 옛 폴더가 버려지고, uninstall --purge 로도 안 지워진다. ready 전에 정해야 한다
+app.setPath("userData", PATHS.electronData);
+// 디스크 캐시를 끈다 — 펫은 로컬 파일과 data URL 만 그려 캐시가 필요 없고, 여러 마리가 같은 폴더의
+// 캐시 파일을 동시에 잡으면 Chromium 이 "Failed to open …/GPUCache" 오류를 줄줄이 남긴다
+app.commandLine.appendSwitch("disable-http-cache");
+app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
+
 const config = settings.load();
-const { debug, termPid, matchCwd, index, anchorApp, windowsDir } = config.runtime;
+const { debug, matchCwd, index, anchorApp, windowsDir } = config.runtime;
+let { termPid } = config.runtime; // pkmon 이 넘긴 첫 추정 — 확장 기록으로 바로잡을 수 있다 (refineTermPid)
 let win = null;
 let art = null; // gif·sheet: { kind, dataUrl, w, h, scale, from } / pmd: { kind, cell, zoom, anims, clips, credits, dex, from }
 let lastState = null;
@@ -61,7 +70,20 @@ let ownerPid = null; // 내 터미널을 띄운 프로그램의 프로세스 번
 
 // 기동 시 한 번만 구한다 — 래퍼가 먼저 끝나면 부모 관계가 끊긴다
 const ancestors = pkstate.ancestorPids(); // 창 주인을 찾는 데 쓴다 (체인 전체)
-const myPids = pkstate.pidsUpTo(ancestors, termPid); // 터미널 셸까지만 (탭·상태 판정용)
+let myPids = pkstate.pidsUpTo(ancestors, termPid); // 터미널 셸까지만 (탭·상태 판정용)
+let termRefined = false;
+
+// 터미널 셸을 확장 기록으로 한 번 바로잡는다 (판정은 lib/state — 진단 도구와 같은 규칙)
+function refineTermPid(records) {
+  if (termRefined || !records.length) return;
+  const found = pkstate.terminalFromRecords(ancestors, records);
+  if (found == null) return; // 이 창의 터미널이 아니거나 기록이 아직 없다 — 다음 기록에서 다시 본다
+  termRefined = true;
+  if (found === termPid) return;
+  if (debug) console.log(JSON.stringify({ termPid: { from: termPid, to: found } }));
+  termPid = found;
+  myPids = pkstate.pidsUpTo(ancestors, termPid);
+}
 
 function windowSize() {
   // art 는 창을 만들기 전에 한 번 정해지고 그 뒤 바뀌지 않는다 — 그래서 이 값은 상수다.
@@ -199,7 +221,9 @@ function watchRecords() {
       pending = true;
       setImmediate(() => {
         pending = false;
-        const rec = myRecord(readWindowRecords());
+        const records = readWindowRecords();
+        refineTermPid(records);
+        const rec = myRecord(records);
         if (!rec) return;
         sawExtension = true;
         const tab = tabAxis(rec);
@@ -382,14 +406,17 @@ function pollAnchor() {
   const helper = helperCommand();
   if (!helper) {
     // 창을 추적할 수단이 없다 — 탭 축만으로 정한다
-    const rec = myRecord(readWindowRecords());
+    const records = readWindowRecords();
+    refineTermPid(records);
+    const rec = myRecord(records);
     const tab = tabAxis(rec);
     if (rec) sawExtension = true;
     applyVisible(decideWant(tab, rec, true));
     return;
   }
 
-  execFile(helper.cmd, helper.args, { timeout: 2000 }, (err, stdout) => {
+  // windowsHide — 펫은 콘솔 없는 GUI 프로세스라, 숨기지 않으면 1초마다 PowerShell 창이 번쩍인다
+  execFile(helper.cmd, helper.args, { timeout: 2000, windowsHide: true }, (err, stdout) => {
     if (!win) return;
     if (err) {
       // 헬퍼가 계속 실패하면 안전한 쪽으로 — 아무 앱 위에나 영영 떠 있는 것을 막는다
@@ -421,6 +448,7 @@ function pollAnchor() {
     if (!appWindows.length) appWindows = anchorApp ? windows.filter((w) => w.app === anchorApp) : windows;
 
     const records = readWindowRecords();
+    refineTermPid(records);
     const rec = myRecord(records);
     if (rec) sawExtension = true;
     const tab = tabAxis(rec);
@@ -550,7 +578,8 @@ function createWindow() {
   });
 
   if (debug) {
-    win.webContents.on("console-message", (_e, _level, message) => console.log(`[renderer] ${message}`));
+    // Electron 44 부터 인자가 객체 하나 — 예전 위치 인자는 경고를 낸다
+    win.webContents.on("console-message", (details) => console.log(`[renderer] ${details.message}`));
     const info =
       art.kind === "pmd"
         ? { 그림: art.kind, 크기: `${art.cell.w}x${art.cell.h}`, 배율: art.zoom, 출처: art.from,
@@ -615,6 +644,27 @@ function settleUserMove() {
   });
 }
 
+// 이 펫이 떴으니 이 펫의 옛 실패 기록은 지운다 — 남겨 두면 status 가 해결된 문제를 계속 보여 준다.
+// 다른 펫의 기록은 건드리지 않는다 (여러 마리를 함께 띄운 경우)
+function clearFailure() {
+  try {
+    const e = JSON.parse(fs.readFileSync(PATHS.lastError, "utf8"));
+    if (e.slug === config.slug) fs.rmSync(PATHS.lastError, { force: true });
+  } catch {
+    // 기록 없음
+  }
+}
+
+// 펫이 못 뜬 이유를 남긴다 — 실패해도 조용히 넘어간다
+function reportFailure(message) {
+  try {
+    fs.mkdirSync(PATHS.home, { recursive: true });
+    fs.writeFileSync(PATHS.lastError, JSON.stringify({ at: Date.now() / 1000, slug: config.slug, message }));
+  } catch {
+    // 기록 실패는 무시
+  }
+}
+
 ipcMain.handle("art", () => art);
 
 // 포인터로 펫을 만졌다 (buddy 전용) — 렌더러는 화면 좌표만 알려 주고, 옮기기·반응은 여기서 한다
@@ -659,11 +709,19 @@ app.whenReady().then(async () => {
     log: debug ? (o) => console.log(JSON.stringify(o)) : null,
   });
   if (!art) {
-    // 원본 GIF 도 스프라이트시트도 없음 — 대개 없는 펫 이름이다
-    process.stderr.write(`펫 그림을 찾을 수 없음: ${config.slug}\n  스프라이트시트: ${settings.spritePath(config)}\n`);
-    app.quit();
+    // 원본 GIF 도 스프라이트시트도 없음 — 대개 없는 펫 이름이거나 네트워크가 막혔다
+    const sheet = settings.spritePath(config) || "저장소 모름 (PKMON_SOURCE 로 codex-pokepets 경로를 주면 art=sheet 를 쓸 수 있다)";
+    process.stderr.write(`펫 그림을 찾을 수 없음: ${config.slug}\n  스프라이트시트: ${sheet}\n`);
+    // 펫의 출력은 평소 버려진다 — pkmon 명령과 pkmon status 가 읽을 수 있게 이유를 남긴다
+    reportFailure(
+      config.art === "sheet" && !config.source
+        ? "art=sheet 는 codex-pokepets 저장소 경로(PKMON_SOURCE)가 필요하다"
+        : `${config.slug} 그림을 받지 못함 — 네트워크(프록시)를 확인하거나 다른 펫 이름으로 시도`,
+    );
+    app.exit(3); // 실패로 끝낸다 — pkmon 이 종료 코드를 보고 "펫이 뜨지 못함"을 알린다
     return;
   }
+  clearFailure();
   createWindow();
 
   // 전역 단축키는 시스템에서 배타적이다 — 펫이 여러 마리면 먼저 등록한 한 마리만 먹는다

@@ -5,8 +5,8 @@
 
 ```bash
 pkmon eevee             # 명령을 생략하면 claude
-pkmon zapdos,pikachu    # 여러 마리
-pkmon eevee -- codex    # 다른 명령을 감쌀 때
+pkmon zapdos+pikachu    # 여러 마리
+pkmon eevee codex       # 다른 명령을 감쌀 때
 ```
 
 펫은 Claude 가 일하는 상태에 따라 동작이 바뀌고(걷기·두리번·쓰러짐…), 한가할 때는 창 안을 가끔 돌아다니다가
@@ -26,40 +26,46 @@ PMD 스프라이트는 **CC BY-NC 4.0** 이다 — [라이선스](#라이선스)
 
 ## 요구사항
 
-- Node.js 18 이상 (내장 `fetch` 사용)
-- macOS 또는 Windows
-- (선택) [codex-pokepets](https://github.com/dnnyngyen/codex-pokepets) 클론 — GIF 를 못 받을 때의 대체 그림
+- Node.js 22.12 이상 — Electron 44 설치기가 요구한다 (그보다 낮으면 설치는 끝나도 펫이 뜨지 않는다)
+- macOS(Apple Silicon·Intel) 또는 Windows
+- Claude Code 상태 연동을 쓰려면 Claude Code, 탭별 표시를 쓰려면 VS Code 계열 에디터
 
 ## 설치
 
 ```bash
+npm install -g terminal-pkmon
+pkmon setup
+```
+
+(npm 에 게시하기 전에는 [배포](#배포-관리자용) 절에서 만든 `.tgz` 파일로 `npm install -g ./terminal-pkmon-<버전>.tgz`)
+
+- `npm install` 이 Electron(약 100MB)까지 받는다. mac 창 추적 헬퍼는 패키지에 미리 빌드돼 있다(universal).
+- `pkmon setup` 은 처음 한 번만 하면 된다. 하는 일:
+  - Claude Code 훅 설치 — `~/.claude/scripts/hooks/pkmon-state.cjs` 복사, `~/.claude/settings.json` 에 7개 이벤트 등록.
+    **바꾸기 전에 백업을 남기고, 이미 있는 항목은 건드리지 않고, 여러 번 실행해도 결과가 같다.**
+  - VS Code 계열 에디터(VS Code·Cursor·Windsurf·Antigravity…)에 탭 구분 확장 설치 — CLI 를 PATH 나 앱 안에서 찾는다
+  - 펫 데이터 폴더 `~/.claude/pkmon` 생성
+- 무엇을 바꿀지 먼저 보려면 `pkmon setup --dry-run`. 에디터 확장을 빼려면 `--no-editor`.
+
+지우기:
+
+```bash
+pkmon uninstall            # 훅 등록·훅 파일·에디터 확장 제거 (설정·그림 캐시는 남김)
+pkmon uninstall --purge    # ~/.claude/pkmon 까지
+npm uninstall -g terminal-pkmon
+```
+
+### 저장소에서 바로 쓰기 (개발용)
+
+```bash
 git clone https://github.com/MilkLotion/terminal_pokemon.git
 cd terminal_pokemon
-npm install
+npm install                # mac 은 Swift 컴파일러가 있으면 헬퍼를 이 컴퓨터용으로 빌드한다
+bin/pkmon setup
 ```
 
-`npm install` 때 macOS 용 창 위치 헬퍼(Swift)가 자동으로 빌드된다. Swift 컴파일러가 없으면 이 단계만 건너뛴다.
-
-`pkmon` 을 PATH 에 올린다. mac/Linux 는 `~/.zshrc` 에 한 줄을 넣거나,
-
-```bash
-source <클론한 경로>/shell/pkmon.zsh
-```
-
-심링크를 걸어도 된다.
-
-```bash
-ln -s <클론한 경로>/bin/pkmon ~/.local/bin/pkmon
-```
-
-Windows 는 `bin/pkmon.ps1` 을 쓴다. PowerShell 프로필(`$PROFILE`)에 한 줄:
-
-```powershell
-$env:PATH = "<클론한 경로>\bin;$env:PATH"
-```
-
-`pkmon` 은 자기 파일 위치에서 프로젝트 경로를 찾는다(심링크도 따라간다).
-다른 곳을 가리키려면 `PKMON_HOME` 환경변수를 쓴다.
+`pkmon` 을 PATH 에 올린다 — mac 은 `~/.zshrc` 에 `source <클론한 경로>/shell/pkmon.zsh`,
+Windows 는 PowerShell 프로필에 `$env:PATH = "<클론한 경로>\bin;$env:PATH"` (`bin/pkmon.ps1` 이 받는다).
 
 > **`claude`·`codex` 를 셸 함수로 덮지 않는다.**
 > 남의 명령에 없는 문법을 얹는 것은 관례가 아니다 — `pyenv`·`conda` 는 기존 서브커맨드를
@@ -70,34 +76,38 @@ $env:PATH = "<클론한 경로>\bin;$env:PATH"
 ## 사용
 
 ```
-pkmon <펫> [이름=값 ...] [-- <명령> [인자 ...]]
+pkmon <펫> [이름=값 ...] [--] [<명령> [인자 ...]]
 ```
 
 ```bash
 pkmon pikachu                          # 명령을 생략하면 claude
-pkmon charizard-3d -- codex
-pkmon zapdos,pikachu                   # 쉼표로 여러 마리 — 나란히 뜬다
+pkmon charizard-3d codex               # 다른 명령
+pkmon zapdos+pikachu                   # 여러 마리 — 나란히 뜬다 (쉼표도 되지만 PowerShell 에서는 따옴표로 감싼다)
 pkmon eevee pos=free                   # 창 밖에도 둘 수 있게 (기본은 pos=fix)
 pkmon eevee dot=3                      # 크게 — PMD 는 도트가 작아 3~4 를 권한다
 pkmon eevee buddy=calm                 # 덜 돌아다니게 (off 면 제자리)
 pkmon eevee art=showdown               # 원본 GIF — 화질 우선, 동작은 하나
-pkmon eevee -- claude -p "고쳐줘"       # 대상 명령의 인자는 '--' 뒤에
+pkmon eevee claude -p "고쳐줘"          # 대상 명령의 인자는 그대로 넘어간다
 ```
 
-인자 경계는 `env(1)`·`nice(1)`·`timeout(1)` 과 같다 — **우리 옵션은 앞에, 대상 명령은 `--` 뒤에.**
-`--` 뒤는 한 글자도 건드리지 않고 그대로 넘긴다.
+인자 경계는 `env(1)` 과 같다 — **우리 옵션(`이름=값` · `--이름 값`)이 앞에 오고, 옵션 모양이 아닌 첫 단어부터가
+대상 명령이다.** 그 뒤는 한 글자도 건드리지 않고 그대로 넘긴다. 경계를 분명히 하고 싶으면 `--` 를 넣어도 된다.
+(`--` 를 필수로 두지 않는 건 PowerShell 이 스크립트에 인자를 넘길 때 `--` 를 지워 버리기 때문이다)
 
 ```
 env    FOO=1        cmd args
-nice   -n 10        cmd args
-pkmon  eevee dot=3 -- cmd args
+pkmon  eevee dot=3  cmd args
 ```
+
+Windows PowerShell 에서 `pkmon` 이 "이 시스템에서 스크립트를 실행할 수 없으므로" 로 막히면
+npm 이 만든 `pkmon.ps1` 이 실행 정책에 걸린 것이다. `pkmon.cmd eevee` 처럼 부르거나,
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` 로 풀면 된다.
 
 ### 옵션
 
 | 옵션 | 값 | 뜻 |
 |---|---|---|
-| (첫 인자) | 펫 이름 | 쉼표로 여러 마리. `--pet <이름>` 으로도 준다 |
+| (첫 인자) | 펫 이름 | `+` 나 쉼표로 여러 마리. `--pet <이름>` 으로도 준다 |
 | `pos=` | `fix`(기본) · `free` | 따라가는 창 안에 가둘지 |
 | `art=` | `pmd`(기본) · `showdown` · `sheet` | 그림 소스 |
 | `buddy=` | `on`(기본) · `calm` · `off` | 돌아다니기·졸기·만지기 반응. `pmd` 에서만 동작 |
@@ -153,8 +163,10 @@ PMD 는 같은 이름을 도감 번호로 바꿔 받는다(`lib/dex.json`) — `
 
 ## 설정
 
-설정은 **`pkmon.config.json` 한 파일**이 전부다. `pkmon.config.example.json` 을 복사해 쓴다.
-기본값과 경로도 전부 `config.js` 한 곳에 있고, `main.js`·`bin/pkmon`·`bin/pkmon-status` 가 모두 그것을 참고한다.
+설정은 **`~/.claude/pkmon/config.json` 한 파일**이 전부다. 펫을 옮기거나 단축키로 값을 바꾸면 자동으로 생긴다.
+프로그램 폴더가 아니라 홈에 두는 건, npm 으로 업데이트해도 위치·설정이 지워지지 않게 하려는 것이다.
+(예전 버전의 `pkmon.config.json` 은 처음 실행할 때 이리로 복사해 온다. 형식은 저장소의 `pkmon.config.example.json` 참고)
+기본값과 경로는 전부 `config.js` 한 곳에 있고, 펫(`main.js`)과 명령(`cli/`)이 모두 그것을 참고한다.
 
 | 항목 | 기본 | 설명 |
 |---|---|---|
@@ -169,8 +181,8 @@ PMD 는 같은 이름을 도감 번호로 바꿔 받는다(`lib/dex.json`) — `
 
 예전 설정의 `useGif: "off"` 는 `art: "sheet"` 로 읽는다.
 `window` 항목은 드래그할 때 자동으로 저장되는 위치라 직접 적을 일이 없다.
-그 밖의 값(스프라이트 저장소 경로, 따라갈 앱, 왕복 재생, 움직임 보정 등)은 손댈 일이 거의 없어
-`config.js` 의 `INTERNAL` 에 두었다.
+그 밖의 값(따라갈 앱, 왕복 재생, 움직임 보정 등)은 손댈 일이 거의 없어 `config.js` 의 `INTERNAL` 에 두었다.
+`art=sheet` 를 쓰려면 [codex-pokepets](https://github.com/dnnyngyen/codex-pokepets) 를 클론하고 `PKMON_SOURCE` 에 그 경로를 준다.
 
 한 번만 다르게 쓰려면 위의 **명령줄 옵션**을 쓴다. 환경변수로도 같은 값을 줄 수 있다 —
 둘 다 파일에는 저장되지 않는다.
@@ -272,7 +284,8 @@ pkmon gengar dot=3         # 이번만 크게
 ## 터미널 탭별로 보이기 (VS Code 계열)
 
 터미널 탭마다 다른 펫을 띄우고, 그 탭을 보고 있을 때만 그 펫이 나타나게 할 수 있다.
-설치는 `vscode-extension/README.md` 참고.
+`pkmon setup` 이 확장을 설치한다. 에디터 CLI 를 못 찾았다면 에디터의 확장 보기 → … → "VSIX 에서 설치" 로
+패키지 안의 `vscode-extension/pkmon-active-terminal-*.vsix` 를 고른다. 설치 뒤 열려 있던 창은 다시 불러와야 한다.
 
 ```bash
 # 1번 탭
@@ -288,14 +301,9 @@ VS Code 가 아닌 프로그램에서는 애초에 탭을 구분할 방법이 �
 
 ## Claude Code 상태 연동 (선택)
 
-`hooks/pkmon-state.cjs` 를 설치하고 훅으로 등록하면 작업 상태에 따라 동작이 바뀐다.
-훅이 없으면 대기 동작만 반복한다.
+`pkmon setup` 이 훅을 설치·등록한다. 훅이 없으면 상태별 동작 없이 대기 동작과 buddy 만 돈다.
 
-```bash
-mkdir -p ~/.claude/scripts/hooks
-cp hooks/pkmon-state.cjs ~/.claude/scripts/hooks/
-```
-
+직접 등록하려면 `hooks/pkmon-state.cjs` 를 `~/.claude/scripts/hooks/` 에 복사하고,
 `~/.claude/settings.json` 의 `hooks` 에 아래 7개 이벤트를 **병합**한다(이미 있는 이벤트 배열은 끝에 항목만 추가).
 모든 항목의 내용은 같다.
 
@@ -334,7 +342,7 @@ cp hooks/pkmon-state.cjs ~/.claude/scripts/hooks/
 같은 프로젝트를 여러 터미널에서 열어도 섞이지 않는다.
 
 훅은 마지막 프롬프트 시각(`promptAt`)도 이어서 적는다. buddy 가 "사용자가 마지막으로 뭔가 한 때"를
-알아야 잠들 수 있어서다. **예전에 복사해 둔 훅이 있으면 다시 복사한다.**
+알아야 잠들 수 있어서다. 업데이트한 뒤에는 `pkmon setup` 을 다시 실행하면 훅 파일이 새 버전으로 바뀐다.
 
 `art=showdown` 은 그림이 하나뿐이라 상태별 동작 구분이 없다.
 
@@ -388,7 +396,7 @@ PMDCollab 은 종마다 동작이 따로 있는 거의 유일한 오픈 스프�
 - `https://spriteserver.pmdcollab.org/assets/<도감4자리>/sprites.zip` 을 받아 `~/.claude/pkmon/pmd/` 에 캐시한다.
   풀지 않고 메모리에서 읽는다
 - 스프라이트가 없는 종은 404 가 아니라 **200 + 빈 ZIP** 을 준다. 크기·내용을 검사해 캐시에 눌러앉지 않게 한다
-- 저작자 목록(`credits.txt`)은 ZIP 에 없어 GitHub 에서 따로 받는다 — `pkmon-status <펫>` 이 보여 준다
+- 저작자 목록(`credits.txt`)은 ZIP 에 없어 GitHub 에서 따로 받는다 — `pkmon status <펫>` 이 보여 준다
 - 칸 크기가 동작마다 달라도 기준점이 `(칸너비/2, 칸높이/2+4)` 로 같아서, 고정 캔버스 가운데에 놓으면 발 위치가 맞는다
 
 ### 원본 GIF (art=showdown)
@@ -430,12 +438,12 @@ PMDCollab 은 종마다 동작이 따로 있는 거의 유일한 오픈 스프�
 ## 문제 확인
 
 ```bash
-pkmon-status
+pkmon status
 ```
 
 설정 값, 이 터미널의 프로세스 체인, 살아 있는 IDE 창 기록 전부, 탭 축 판정, 세션별 상태와 마지막 프롬프트,
 "이 터미널 펫이 보여야 할 동작", PMD 캐시·저작자, 떠 있는 펫 수를 한 번에 보여 준다.
-`pkmon-status eevee` 처럼 펫 이름을 주면 그 펫의 PMD 저작자를 보여 준다.
+`pkmon status eevee` 처럼 펫 이름을 주면 그 펫의 PMD 저작자를 보여 준다. 훅이 덜 설치됐으면 그것도 알려 준다.
 판정 로직은 펫과 **같은 코드**(`lib/state.js`)를 쓰므로 실제 동작과 어긋나지 않는다.
 
 펫이 어느 창에 붙었는지까지 보려면 디버그 모드로 띄운다.
@@ -451,11 +459,25 @@ PKMON_DEBUG=1 pkmon eevee
 `driftMax` 는 창을 옮기라고 지시한 자리와 실제 자리의 최대 차이다 — 3 을 넘으면 드래그 판정이 흔들린다.
 buddy 가 켜져 있으면 `{buddy: 단계, act: 동작/방향/방식, idleSec, roam}` 도 단계가 바뀔 때마다 찍는다.
 
+## 배포 (관리자용)
+
+```bash
+npm pack          # mac 에서 — universal 헬퍼와 확장 vsix 를 빌드해 넣는다 (prepack)
+npm install -g ./terminal-pkmon-<버전>.tgz   # 올리기 전에 이 파일로 설치해 확인
+```
+
+- **mac 에서 만든다.** 헬퍼는 Swift·lipo·codesign 이 필요해서 다른 OS 에서는 `npm pack` 이 멈춘다
+- 게시 전 할 일: `package.json` 의 `"private": true` 제거(실수로 게시하지 않게 막아 둔 줄), 버전 올리기,
+  Windows 실기에서 `pkmon setup` · `pkmon eevee` 확인
+- 확장을 고쳤으면 `vscode-extension/package.json` 의 버전도 올린다 — `pkmon setup` 은 같은 버전도 덮어 설치하지만, 버전이 같으면 사용자가 어느 쪽인지 구분할 수 없다
+- Electron 은 시험한 버전으로 고정해 두었다(`dependencies.electron`). 올릴 때는 펫 실행·드래그·산책을 다시 확인한다
+- PMD 그림은 패키지에 들어가지 않는다(CC BY-NC). 받는 사람 컴퓨터에서 실행할 때 내려받는다
+
 ## 라이선스
 
 코드는 MIT. 자세한 내용은 [LICENSE](LICENSE) 참고. 포켓몬 이미지는 이 저장소에 포함되어 있지 않다.
 
 PMD 스프라이트는 [PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab) 기여자들의 작품이며
 **CC BY-NC 4.0**(저작자 표시·비상업) 이다. MIT 와 섞일 수 없어 저장소에 넣지 않고, 실행할 때 사용자 컴퓨터로
-받아 캐시만 한다. 펫별 저작자는 `pkmon-status <펫>` 으로 확인한다. 이 도구로 만든 화면을 공유할 때는
+받아 캐시만 한다. 펫별 저작자는 `pkmon status <펫>` 으로 확인한다. 이 도구로 만든 화면을 공유할 때는
 저작자와 출처를 함께 밝힌다.

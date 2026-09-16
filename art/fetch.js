@@ -6,6 +6,19 @@ const fs = require("fs");
 const path = require("path");
 
 const TIMEOUT_MS = 8000;
+
+// Electron 메인 프로세스에서는 net.fetch 를 쓴다 — 시스템 프록시·인증서 설정을 따른다.
+// Node 의 fetch 는 따르지 않아 회사 프록시 뒤에서는 그림을 못 받고 펫이 조용히 안 뜬다.
+// Electron 밖(진단 도구·시험)에서는 require("electron") 이 실행 파일 경로만 주므로 Node fetch 로 간다
+const httpFetch = (() => {
+  if (!process.versions.electron) return fetch;
+  try {
+    const { net } = require("electron");
+    return net && typeof net.fetch === "function" ? (url, init) => net.fetch(url, init) : fetch;
+  } catch {
+    return fetch;
+  }
+})();
 // User-Agent 가 없으면 Showdown 이 403 으로 막는다
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36";
@@ -13,7 +26,7 @@ const UA =
 // 받아서 Buffer 로. 실패하면 null — 왜 실패했는지는 호출한 쪽이 판단한다
 async function get(url, { timeout = TIMEOUT_MS } = {}) {
   try {
-    const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(timeout) });
+    const res = await httpFetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(timeout) });
     if (!res.ok) return null;
     return Buffer.from(await res.arrayBuffer());
   } catch {

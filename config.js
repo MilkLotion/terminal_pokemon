@@ -1,5 +1,5 @@
 // 설정 한 곳 — 기본값·경로·사용자 설정을 여기서만 정한다
-// main.js, bin/pkmon, bin/pkmon-status 가 모두 이 파일을 참고한다
+// main.js, cli/(pkmon 명령), 진단 도구가 모두 이 파일을 참고한다
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -10,8 +10,12 @@ const PKMON_HOME = path.join(os.homedir(), ".claude", "pkmon");
 // 경로 — 하드코딩을 한 곳에 모은다
 const PATHS = {
   project: PROJECT_DIR,
-  config: path.join(PROJECT_DIR, "pkmon.config.json"),
-  example: path.join(PROJECT_DIR, "pkmon.config.example.json"),
+  // 사용자 설정은 홈에 둔다. 프로그램 폴더 안에 두면 npm 으로 업데이트할 때마다 지워지고,
+  // Node 버전 관리자(nvm)로 버전을 바꾸면 설정이 따로 논다
+  config: path.join(PKMON_HOME, "config.json"),
+  legacyConfig: path.join(PROJECT_DIR, "pkmon.config.json"), // 예전 위치 — 처음 읽을 때 한 번 가져온다
+  lastError: path.join(PKMON_HOME, "last-error.json"), // 펫이 못 떴을 때의 이유 — 펫 출력은 버려지므로 여기 남긴다
+  electronData: path.join(PKMON_HOME, "electron"), // Electron 캐시·세션 — uninstall --purge 로 같이 지워지게 홈 아래에
   home: PKMON_HOME,
   state: path.join(PKMON_HOME, "state"), // 훅이 세션 상태를 적는 곳
   windows: path.join(PKMON_HOME, "windows"), // VS Code 창마다 자기 상태를 적는 곳 (창 하나당 파일 하나)
@@ -33,7 +37,7 @@ const USER_DEFAULTS = {
 
 // 손댈 일 없는 내부 기본값 — 바꿀 일이 생기면 여기만 고친다
 const INTERNAL = {
-  source: path.join(os.homedir(), "dev", "project", "1.personal", "codex-pokepets"), // 스프라이트 저장소
+  source: null, // codex-pokepets 저장소 경로 — art=sheet 에만 쓴다. PKMON_SOURCE 로 준다
   scale: 1, // 스프라이트시트 모드 창 배율
   motionAssist: "off", // 스프라이트 위에 움직임 덧붙이기 — off · auto · on
   pingPong: "auto", // 루프가 끊긴 스프라이트 왕복 재생 — auto · on · off
@@ -41,17 +45,31 @@ const INTERNAL = {
   anchorDy: -60,
 };
 
+// 객체가 아니면(null·배열·숫자로 망가진 파일) 없는 것으로 친다 — "art" in null 같은 데서 죽지 않게
 function readJson(file) {
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
+    const data = JSON.parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
+    return data && typeof data === "object" && !Array.isArray(data) ? data : {};
   } catch {
     return {};
+  }
+}
+
+// 예전 위치(프로그램 폴더)의 설정을 홈으로 가져온다 — 옮기지 않고 복사한다. 옛 버전으로 돌아가도 그대로 쓰게
+function migrateLegacyConfig() {
+  try {
+    if (fs.existsSync(PATHS.config) || !fs.existsSync(PATHS.legacyConfig)) return;
+    fs.mkdirSync(PATHS.home, { recursive: true });
+    fs.copyFileSync(PATHS.legacyConfig, PATHS.config);
+  } catch {
+    // 못 가져오면 기본값으로 시작한다
   }
 }
 
 // 설정 읽기 — 파일 → 환경변수 순으로 덮어쓴다
 // 환경변수는 "이번 한 번만" 다르게 쓰는 용도라 파일에 저장하지 않는다
 function load() {
+  migrateLegacyConfig();
   const saved = readJson(PATHS.config);
   const env = process.env;
   const config = { ...USER_DEFAULTS, ...INTERNAL, ...saved };
@@ -138,14 +156,16 @@ function save(config, patch = {}) {
   out.windows = { ...(saved.windows || {}) };
   if (config.windowKey) out.windows[config.windowKey] = config.window;
   try {
+    fs.mkdirSync(PATHS.home, { recursive: true });
     fs.writeFileSync(PATHS.config, `${JSON.stringify(out, null, 2)}\n`);
   } catch {
     // 저장 실패는 무시 — 위치 기억만 못 한다
   }
 }
 
+// codex 스프라이트시트 경로 — 저장소를 모르면 null
 function spritePath(config, slug = config.slug) {
-  return path.join(config.source, "pets", slug, "spritesheet.webp");
+  return config.source ? path.join(config.source, "pets", slug, "spritesheet.webp") : null;
 }
 
 module.exports = { PATHS, USER_DEFAULTS, INTERNAL, load, save, spritePath };
