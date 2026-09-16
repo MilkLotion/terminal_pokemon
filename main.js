@@ -8,13 +8,11 @@ const path = require("path");
 const settings = require("./config");
 // 판정 로직은 진단 도구(bin/pkmon-status)와 같은 것을 쓴다 — 두 벌이 되면 진단이 거짓말을 한다
 const pkstate = require("./lib/state");
+// 그림 소스는 art/ 한 곳에서 고른다 — showdown·sheet·pmd 가 서로를 모르게 분리돼 있다
+const { loadArt } = require("./art");
 
 const { PATHS } = settings;
-// User-Agent 가 없으면 Showdown 이 403 으로 막는다
-const GIF_UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36";
-const GIF_MAX = { w: 480, h: 420 }; // 창이 지나치게 커지지 않도록
-const CELL = { w: 192, h: 208 }; // 팩 스프라이트시트의 한 칸
+const { CELL } = require("./art/sheet.js"); // 팩 스프라이트시트의 한 칸 — 정의는 그쪽에 있다
 const STATE_POLL_MS = 500;
 const ANCHOR_POLL_MS = process.platform === "darwin" ? 400 : 1000;
 const STACK_RATIO = 0.8; // 여러 마리를 나란히 둘 때 창 너비 대비 간격
@@ -52,6 +50,11 @@ const ancestors = pkstate.ancestorPids(); // 창 주인을 찾는 데 쓴다 (�
 const myPids = pkstate.pidsUpTo(ancestors, termPid); // 터미널 셸까지만 (탭·상태 판정용)
 
 function windowSize() {
+  // art 는 창을 만들기 전에 한 번 정해지고 그 뒤 바뀌지 않는다 — 그래서 이 값은 상수다.
+  // 동작마다 크기를 바꾸면 stackShift·clampToWindow·commanded 가 줄줄이 어긋난다
+  if (art && art.kind === "pmd") {
+    return { w: art.cell.w * art.zoom, h: art.cell.h * art.zoom };
+  }
   if (art && art.kind === "gif") {
     return { w: Math.round(art.w * art.scale), h: Math.round(art.h * art.scale) };
   }
@@ -60,92 +63,6 @@ function windowSize() {
 
 function stackShift() {
   return Math.round(windowSize().w * STACK_RATIO) * index;
-}
-
-// 원본 GIF 주소 — 3D 는 Showdown 애니메이션 세트, 2D 는 같은 사이트의 5세대 세트(폼까지 이름으로 구분된다)
-function gifUrls(slug) {
-  const base = slug.replace(/-3d$/, "");
-  if (/-3d$/.test(slug)) return [`https://play.pokemonshowdown.com/sprites/ani/${base}.gif`];
-  return [
-    `https://play.pokemonshowdown.com/sprites/gen5ani/${slug}.gif`,
-    `https://play.pokemonshowdown.com/sprites/ani/${slug}.gif`,
-  ];
-}
-
-// GIF 헤더에서 크기만 읽는다 (7~10번째 바이트)
-function gifSize(buf) {
-  if (buf.length < 10 || buf.toString("ascii", 0, 3) !== "GIF") return null;
-  const w = buf.readUInt16LE(6);
-  const h = buf.readUInt16LE(8);
-  return w && h ? { w, h } : null;
-}
-
-async function loadGif(slug) {
-  const cached = path.join(PATHS.gifs, `${slug}.gif`);
-  try {
-    if (fs.existsSync(cached)) {
-      const buf = fs.readFileSync(cached);
-      const size = gifSize(buf);
-      if (size) return { buf, size, from: cached };
-    }
-  } catch {
-    // 캐시가 깨졌으면 새로 받는다
-  }
-
-  for (const url of gifUrls(slug)) {
-    try {
-      const res = await fetch(url, { headers: { "User-Agent": GIF_UA } });
-      if (!res.ok) continue;
-      const buf = Buffer.from(await res.arrayBuffer());
-      const size = gifSize(buf);
-      if (!size) continue;
-      fs.mkdirSync(PATHS.gifs, { recursive: true });
-      fs.writeFileSync(cached, buf);
-      return { buf, size, from: url };
-    } catch {
-      // 네트워크 실패·차단 — 다음 후보나 스프라이트시트로 넘어간다
-    }
-  }
-  return null;
-}
-
-// 표시할 그림 — 원본 GIF 가 있으면 그것, 없으면 팩의 스프라이트시트
-async function loadArt() {
-  if (config.useGif !== "off") {
-    const gif = await loadGif(config.slug);
-    if (gif) {
-      // 도트가 1px 인 원본을 정수배로 확대 — 배율이 깨지면 도트가 고르지 않다
-      const target = Math.max(1, config.dotSize || 1);
-      const scale = Math.max(
-        1,
-        Math.min(target, Math.floor(GIF_MAX.w / gif.size.w), Math.floor(GIF_MAX.h / gif.size.h)),
-      );
-      return {
-        kind: "gif",
-        dataUrl: `data:image/gif;base64,${gif.buf.toString("base64")}`,
-        w: gif.size.w,
-        h: gif.size.h,
-        scale,
-        from: gif.from,
-      };
-    }
-  }
-
-  const file = settings.spritePath(config);
-  try {
-    const data = fs.readFileSync(file);
-    return {
-      kind: "sheet",
-      dataUrl: `data:image/webp;base64,${data.toString("base64")}`,
-      w: CELL.w,
-      h: CELL.h,
-      scale: config.scale,
-      from: file,
-    };
-  } catch {
-    // GIF 도 스프라이트시트도 못 구한 경우 — 창 없이 프로세스만 남지 않게 여기서 끝낸다
-    return null;
-  }
 }
 
 // 훅(pkmon-state.cjs)이 남긴 세션 상태 중 내 터미널 것
@@ -506,7 +423,12 @@ function createWindow() {
 
   if (debug) {
     win.webContents.on("console-message", (_e, _level, message) => console.log(`[renderer] ${message}`));
-    console.log(JSON.stringify({ 그림: art.kind, 크기: `${art.w}x${art.h}`, 배율: art.scale, 출처: art.from }));
+    const info =
+      art.kind === "pmd"
+        ? { 그림: art.kind, 크기: `${art.cell.w}x${art.cell.h}`, 배율: art.zoom, 출처: art.from,
+            동작: Object.entries(art.clips).map(([k, c]) => `${k}=${c.anim}`).join(" ") }
+        : { 그림: art.kind, 크기: `${art.w}x${art.h}`, 배율: art.scale, 출처: art.from };
+    console.log(JSON.stringify(info));
   }
 
   win.webContents.on("did-finish-load", () => {
@@ -555,7 +477,9 @@ ipcMain.handle("art", () => art);
 
 app.whenReady().then(async () => {
   if (process.platform === "darwin") app.dock?.hide();
-  art = await loadArt();
+  art = await loadArt(config, PATHS, settings.spritePath, (want, got) => {
+    process.stderr.write(`${config.slug}: ${want} 그림을 못 구해 ${got} 로 대체\n`);
+  });
   if (!art) {
     // 원본 GIF 도 스프라이트시트도 없음 — 대개 없는 펫 이름이다
     process.stderr.write(`펫 그림을 찾을 수 없음: ${config.slug}\n  스프라이트시트: ${settings.spritePath(config)}\n`);

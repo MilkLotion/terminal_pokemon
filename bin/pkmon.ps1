@@ -19,7 +19,7 @@ if (-not $env:PKMON_HOME -or -not (Test-Path (Join-Path $env:PKMON_HOME "config.
 function Invoke-Pkmon {
   param([string[]]$Arguments)
 
-  $pet = ""; $pos = ""; $gif = ""; $dot = ""; $fps = ""; $keep = ""; $click = ""
+  $pet = ""; $pos = ""; $gif = ""; $dot = ""; $fps = ""; $keep = ""; $click = ""; $art = ""
   $i = 0
   # 첫 인자가 옵션도 이름=값 도 아니면 펫 이름으로 받는다
   if ($Arguments.Count -gt 0 -and $Arguments[0] -notmatch '^-' -and $Arguments[0] -notmatch '=') {
@@ -31,6 +31,7 @@ function Invoke-Pkmon {
     elseif ($a -eq '--pet')   { $pet   = $Arguments[$i + 1]; $i += 2 }
     elseif ($a -eq '--pos')   { $pos   = $Arguments[$i + 1]; $i += 2 }
     elseif ($a -eq '--gif')   { $gif   = $Arguments[$i + 1]; $i += 2 }
+    elseif ($a -eq '--art')   { $art   = $Arguments[$i + 1]; $i += 2 }
     elseif ($a -eq '--dot')   { $dot   = $Arguments[$i + 1]; $i += 2 }
     elseif ($a -eq '--fps')   { $fps   = $Arguments[$i + 1]; $i += 2 }
     elseif ($a -eq '--keep')  { $keep  = $Arguments[$i + 1]; $i += 2 }
@@ -38,6 +39,7 @@ function Invoke-Pkmon {
     elseif ($a -match '^(pkmon|pokemon|pet)=(.+)$') { $pet = $Matches[2]; $i += 1 }
     elseif ($a -match '^pos=(.+)$')   { $pos   = $Matches[1]; $i += 1 }
     elseif ($a -match '^gif=(.+)$')   { $gif   = $Matches[1]; $i += 1 }
+    elseif ($a -match '^art=(.+)$')   { $art   = $Matches[1]; $i += 1 }
     elseif ($a -match '^dot=(.+)$')   { $dot   = $Matches[1]; $i += 1 }
     elseif ($a -match '^fps=(.+)$')   { $fps   = $Matches[1]; $i += 1 }
     elseif ($a -match '^keep=(.+)$')  { $keep  = $Matches[1]; $i += 1 }
@@ -91,6 +93,7 @@ function Invoke-Pkmon {
     $env:PKMON_ANCHOR_APP = $anchor
     if ($pos) { $env:PKMON_POS = $pos }
     if ($gif) { $env:PKMON_USE_GIF = $gif }
+    if ($art) { $env:PKMON_ART = $art }
     if ($dot) { $env:PKMON_DOT_SIZE = $dot }
     if ($fps) { $env:PKMON_FPS = $fps }
     if ($keep) { $env:PKMON_KEEP_VISIBLE = $keep }

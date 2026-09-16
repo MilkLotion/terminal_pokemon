@@ -8,6 +8,7 @@
 # 예:
 #   pkmon eevee                            명령을 생략하면 claude
 #   pkmon eevee -- codex
+#   pkmon eevee art=showdown               원본 GIF 로 (동작은 하나뿐)
 #   pkmon eevee gif=off dot=4 -- claude -p "고쳐줘"
 #   pkmon zapdos,pikachu                   쉼표로 여러 마리
 #
@@ -40,6 +41,7 @@ pet=""
 scale=""
 pos=""
 gif=""
+art=""
 dot=""
 fps=""
 keep=""
@@ -57,6 +59,7 @@ while [[ $# -gt 0 ]]; do
     --scale) scale="${2:-}"; shift 2 ;;
     --pos) pos="${2:-}"; shift 2 ;;
     --gif) gif="${2:-}"; shift 2 ;;
+    --art) art="${2:-}"; shift 2 ;;
     --dot) dot="${2:-}"; shift 2 ;;
     --fps) fps="${2:-}"; shift 2 ;;
     --keep) keep="${2:-}"; shift 2 ;;
@@ -66,6 +69,7 @@ while [[ $# -gt 0 ]]; do
     pkmon=*|pokemon=*|pet=*) pet="${1#*=}"; shift ;;
     pos=*) pos="${1#*=}"; shift ;;
     gif=*) gif="${1#*=}"; shift ;;
+    art=*) art="${1#*=}"; shift ;;
     dot=*) dot="${1#*=}"; shift ;;
     fps=*) fps="${1#*=}"; shift ;;
     keep=*) keep="${1#*=}"; shift ;;
@@ -187,7 +191,7 @@ if [[ -n "$pet" ]]; then
 
       # $PPID = 이 스크립트를 부른 대화형 셸 = VS Code 가 터미널 탭의 프로세스로 보는 번호
       PKMON_SLUG="$resolved" PKMON_SCALE="$scale" PKMON_POS="$pos" PKMON_MATCH_CWD="$PWD" \
-        PKMON_USE_GIF="$gif" PKMON_DOT_SIZE="$dot" PKMON_FPS="$fps" \
+        PKMON_ART="$art" PKMON_USE_GIF="$gif" PKMON_DOT_SIZE="$dot" PKMON_FPS="$fps" \
         PKMON_KEEP_VISIBLE="$keep" PKMON_CLICK_THROUGH="$click" \
         PKMON_INDEX="$((base + slot))" PKMON_ANCHOR_APP="$anchor_app" PKMON_TERM_PID="$PPID" \
         "$electron" "$PROJECT" >"$pet_log" 2>&1 &

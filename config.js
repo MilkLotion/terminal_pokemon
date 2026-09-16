@@ -16,13 +16,14 @@ const PATHS = {
   state: path.join(PKMON_HOME, "state"), // 훅이 세션 상태를 적는 곳
   windows: path.join(PKMON_HOME, "windows"), // VS Code 창마다 자기 상태를 적는 곳 (창 하나당 파일 하나)
   gifs: path.join(PKMON_HOME, "gifs"), // 원본 GIF 캐시
+  pmd: path.join(PKMON_HOME, "pmd"), // PMD 스프라이트 묶음 캐시 (CC BY-NC — 저장소엔 넣지 않는다)
 };
 
 // 사용자가 손대는 값 — pkmon.config.json 에 저장된다
 const USER_DEFAULTS = {
   slug: "pikachu", // 펫 이름 (codex-pokepets 의 pets/ 폴더명)
   dotSize: 2, // 도트 한 칸을 몇 px 로 볼지 — 펫 크기를 좌우한다. 0 이면 원본 그대로
-  useGif: "auto", // 원본 GIF 재생 — auto · off(팩 스프라이트시트)
+  art: "pmd", // 그림 소스 — pmd(동작 여러 개) · showdown(원본 GIF, 동작 하나) · sheet(codex 팩)
   keepVisible: false, // true 면 크롬 등 다른 앱을 봐도 펫이 남는다 (Cmd+Alt+K)
   clickThrough: false, // true 면 펫 위 클릭이 아래 터미널로 통과한다 (Cmd+Alt+P)
   pos: "fix", // fix = 따라가는 창 안에만 있게 가둔다 · free = 화면 아무 데나 둘 수 있다
@@ -53,6 +54,8 @@ function load() {
   const saved = readJson(PATHS.config);
   const env = process.env;
   const config = { ...USER_DEFAULTS, ...INTERNAL, ...saved };
+  // 예전엔 useGif 로 갈랐다. 같은 축이 둘이면 모순 조합(art=pmd + gif=off)이 생겨 art 로 합쳤다
+  if (!("art" in saved) && saved.useGif === "off") config.art = "sheet";
   if (env.PKMON_SLUG) config.slug = env.PKMON_SLUG; // 위치 키를 만들기 전에 펫 이름부터 확정
 
   // 창 위치는 드래그할 때 자동 저장되는 값 — 사용자가 적을 일은 없다
@@ -87,7 +90,7 @@ function load() {
 
   if (env.PKMON_SLUG) override("slug", env.PKMON_SLUG);
   if (env.PKMON_DOT_SIZE) override("dotSize", Number(env.PKMON_DOT_SIZE));
-  if (env.PKMON_USE_GIF) override("useGif", env.PKMON_USE_GIF);
+  if (env.PKMON_ART) override("art", env.PKMON_ART);
   if (env.PKMON_FPS) override("fps", Number(env.PKMON_FPS) || config.fps);
   boolOverride("keepVisible", env.PKMON_KEEP_VISIBLE);
   boolOverride("clickThrough", env.PKMON_CLICK_THROUGH);
