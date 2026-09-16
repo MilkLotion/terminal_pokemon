@@ -23,8 +23,8 @@ export function setup(art) {
   resize(cell.w * zoom, cell.h * zoom);
 
   const images = {}; // 동작 이름 → 이미지
-  let act = null; // 메인이 고른 동작 { anim, row, mode } — 상태보다 앞선다 (걸러진 것만)
-  let cur = null; // 지금 재생 중 { anim, row, mode }. 첫 재생 전엔 null
+  let act = null; // 메인이 고른 동작 { anim, row, mode, rate } — 상태보다 앞선다 (걸러진 것만)
+  let cur = null; // 지금 재생 중 { anim, row, mode, rate }. 첫 재생 전엔 null
   let frame = 0;
   let due = 0;
   let frozen = false; // 한 번 재생이 끝나 마지막 프레임에서 멈춘 상태
@@ -48,7 +48,9 @@ export function setup(art) {
     play(wanted());
   });
 
-  const asPlay = (c) => ({ anim: c.anim, row: c.row, mode: c.mode });
+  const asPlay = (c) => ({ anim: c.anim, row: c.row, mode: c.mode, rate: 1 });
+  // 프레임 지속시간 — rate 배 빠르게 (산책 속도에 맞춰 걷는 그림도 빨라지고 느려진다)
+  const msOf = (a, i) => a.frames[i].ms / cur.rate;
 
   // 지금 보여야 할 동작 — act 가 있으면 그것, 없으면 상태에 붙은 것
   function wanted() {
@@ -73,7 +75,7 @@ export function setup(art) {
     const prev = cur;
     cur = next;
     // 같은 그림을 계속 도는 전환은 되감지 않는다 — 되감으면 뚝 끊긴다.
-    // idle→waiting 이 둘 다 Idle 루프인 경우, 산책 중 방향만 바뀌는 경우(프레임은 잇고 행만 바꿔 그린다)
+    // idle→waiting 이 둘 다 Idle 루프인 경우, 산책 중 방향·속도만 바뀌는 경우(프레임은 잇고 행만 바꿔 그린다)
     if (prev && prev.anim === next.anim && prev.mode === "loop" && next.mode === "loop") {
       if (prev.row !== next.row) paint();
       return;
@@ -85,9 +87,9 @@ export function setup(art) {
       frame = anims[next.anim].frames.length - 1;
       frozen = true;
     }
-    due = performance.now() + anims[next.anim].frames[frame].ms;
+    due = performance.now() + msOf(anims[next.anim], frame);
     paint();
-    log({ pmd: act ? "act" : shared.state, anim: next.anim, row: next.row, mode: next.mode });
+    log({ pmd: act ? "act" : shared.state, anim: next.anim, row: next.row, mode: next.mode, rate: next.rate });
   }
 
   // 있는 동작만 받는다 — 방향 행은 그 시트에 있는 범위로 줄인다 (1행짜리 동작 방어)
@@ -96,7 +98,9 @@ export function setup(art) {
     if (!req || typeof req.anim !== "string" || !Object.hasOwn(images, req.anim)) return null;
     const row = Math.min(Math.max(0, Math.round(req.row) || 0), anims[req.anim].rows - 1);
     const mode = req.mode === "hold" ? "hold" : "loop"; // act 는 반복 또는 끝 자세 유지 — 언제 끝낼지는 메인이 정한다
-    return { anim: req.anim, row, mode };
+    // 재생 속도 — 없거나 망가진 값이면 원래 속도. 0 에 가까우면 멈춘 것처럼 보이고 너무 크면 깜박이므로 가둔다
+    const rate = Number.isFinite(req.rate) ? Math.min(Math.max(req.rate, 0.25), 4) : 1;
+    return { anim: req.anim, row, mode, rate };
   }
 
   function step() {
@@ -122,8 +126,8 @@ export function setup(art) {
       frame += 1;
     }
 
-    due += a.frames[frame].ms;
-    if (now - due > CATCHUP_LIMIT_MS) due = now + a.frames[frame].ms;
+    due += msOf(a, frame);
+    if (now - due > CATCHUP_LIMIT_MS) due = now + msOf(a, frame);
     paint();
   }
 

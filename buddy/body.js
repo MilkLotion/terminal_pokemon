@@ -42,8 +42,8 @@ function createBuddy({ art, mode, timeScale = 1, send, log }) {
     // 훅이 남긴 상태. promptAt 은 초 단위.
     //   쉬다가 일을 시작함  훅 기록에 promptAt 이 없어도(Codex 등) 프롬프트로 친다.
     //                       실패 표시가 끝나 작업으로 돌아가는 것(failed→running)은 자동이라 빼고
-    //   일이 끝남          사용자가 결과를 읽는 때다. 안 치면 3분 시계가 프롬프트부터 돌아,
-    //                       4분짜리 작업이 끝나자마자 잠든다 (시뮬레이션: 프롬프트의 46% 가 자는 펫에 도착)
+    //   일이 끝남          사용자가 결과를 읽는 때다. 안 치면 수면 시계가 프롬프트부터 돌아,
+    //                       수면 시간보다 긴 작업이 끝나자마자 잠든다 (3분 시절 시뮬레이션: 프롬프트의 46% 가 자는 펫에 도착)
     state(next, promptAt) {
       if (promptAt) bump(promptAt * 1000);
       if (next !== agent && next === "running" && agent !== "failed") bump();
@@ -68,7 +68,7 @@ function createBuddy({ art, mode, timeScale = 1, send, log }) {
     },
     drop() {
       bump();
-      brain.drop(Date.now(), activeAt, agent);
+      brain.drop(Date.now(), agent);
     },
     click() {
       bump();
@@ -76,7 +76,7 @@ function createBuddy({ art, mode, timeScale = 1, send, log }) {
     },
     // 펫 드래그가 아닌 경로로 창이 옮겨졌다 — 놓인 자리가 새 집
     rehome() {
-      brain.rehome(Date.now(), activeAt);
+      brain.rehome(Date.now());
     },
 
     // 렌더러가 새로 떴다 — 보냈던 동작을 다시 보내게 한다
