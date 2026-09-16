@@ -27,7 +27,9 @@ fi
 electron="$PROJECT/node_modules/.bin/electron"
 overlay_pids=()
 
-# 터미널 종류에 따라 따라갈 앱 — 그 앱 창 모서리에 붙고, 앞에 없을 때는 숨는다
+# 터미널 종류로 앱 이름을 넘긴다 — 다만 이건 대비책이다.
+# 평소에는 펫이 자기 프로세스 조상에서 창 주인을 직접 찾으므로 여기 없는 프로그램도 동작한다.
+# (tmux 처럼 조상 관계가 끊기는 경우에만 이 값이 쓰인다)
 anchor_app=""
 # TERM_PROGRAM 이 비어 있어도 VS Code 계열이면 주입 표시로 알아낸다
 term_program="${TERM_PROGRAM:-}"

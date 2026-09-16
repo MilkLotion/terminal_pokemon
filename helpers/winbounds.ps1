@@ -76,7 +76,7 @@ foreach ($row in [PkmonWin]::List()) {
     $p = Get-Process -Id $pid -ErrorAction SilentlyContinue
     $nameCache[$pid] = if ($p) { $p.ProcessName } else { "" }
   }
-  $items += ('{"app":"' + $nameCache[$pid] + '","id":' + $hwnd +
+  $items += ('{"app":"' + $nameCache[$pid] + '","pid":' + $pid + ',"id":' + $hwnd +
              ',"x":' + $row[2] + ',"y":' + $row[3] + ',"w":' + $row[4] + ',"h":' + $row[5] + '}')
 }
 

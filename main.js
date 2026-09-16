@@ -22,7 +22,7 @@ const DRAG_GRACE_MS = 2000; // 이 시간 안에 내 창이 움직였으면 드�
 const VISIBLE_CONFIRM = 2; // 표시 전환은 이만큼 연속 같은 판정일 때만 — 한 번의 경합이 깜빡임이 되지 않게
 const CAPTURE_CONFIRM = 2; // 앵커 창을 확정하기까지 연속 일치 횟수
 const ANCHOR_MISS_LIMIT = 8; // 내 창이 이만큼 연속으로 안 보이면 앵커를 풀고 다시 찾는다
-const CAPTURE_MIN = { w: 600, h: 400 }; // 분리된 DevTools 같은 보조 창을 앵커로 잡지 않도록
+const CAPTURE_MIN = { w: 400, h: 250 }; // 분리된 DevTools 같은 보조 창을 앵커로 잡지 않도록
 const OWN_PID_CHECK_MS = 5000; // 터미널이 죽었는지 확인하는 주기
 
 const config = settings.load();
@@ -43,10 +43,13 @@ let wantStreak = 0;
 let sawExtension = false; // 확장 기록을 한 번이라도 봤으면, 잃었을 때 닫는 쪽으로 간다
 let userHidden = false; // Cmd+Alt+H 로 직접 숨김
 let helperFails = 0;
-let onTop = false; // 펫을 이미 올려 뒀는가 — 같은 상태에서 moveTop 을 반복하지 않게
+let frontIsMine = false; // 내 창이 화면 맨 앞인가
+let level = null; // 지금 창 레벨 — "float" | "normal"
+let ownerPid = null; // 내 터미널을 띄운 프로그램의 프로세스 번호 (한 번 찾으면 재사용)
 
 // 기동 시 한 번만 구한다 — 래퍼가 먼저 끝나면 부모 관계가 끊긴다
-const myPids = pkstate.myPidsFor(termPid);
+const ancestors = pkstate.ancestorPids(); // 창 주인을 찾는 데 쓴다 (체인 전체)
+const myPids = pkstate.pidsUpTo(ancestors, termPid); // 터미널 셸까지만 (탭·상태 판정용)
 
 function windowSize() {
   if (art && art.kind === "gif") {
@@ -155,17 +158,18 @@ const tabAxis = (rec) => pkstate.tabAxis(rec, myPids);
 // 앵커 앱의 창 위치를 읽는 헬퍼 — mac 은 컴파일된 Swift, Windows 는 PowerShell
 // PKMON_WINBOUNDS 로 다른 실행 파일을 가리킬 수 있다 (테스트가 실제 헬퍼를 건드리지 않도록)
 function helperCommand() {
-  if (!anchorApp) return null;
+  // 앱 이름을 몰라도 된다 — 목록은 전체로 받고, 내 창은 프로세스 조상으로 가린다
+  const args = anchorApp ? [anchorApp] : [];
   const override = process.env.PKMON_WINBOUNDS;
-  if (override) return fs.existsSync(override) ? { cmd: override, args: [anchorApp] } : null;
+  if (override) return fs.existsSync(override) ? { cmd: override, args } : null;
   if (process.platform === "darwin") {
     const bin = path.join(PATHS.project, "helpers", "winbounds");
-    return fs.existsSync(bin) ? { cmd: bin, args: [anchorApp] } : null;
+    return fs.existsSync(bin) ? { cmd: bin, args } : null;
   }
   if (process.platform === "win32") {
     const ps1 = path.join(PATHS.project, "helpers", "winbounds.ps1");
     return fs.existsSync(ps1)
-      ? { cmd: "powershell", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, anchorApp] }
+      ? { cmd: "powershell", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, ...args] }
       : null;
   }
   return null;
@@ -219,12 +223,30 @@ function offScreen(windows) {
 }
 
 // 펫을 z-order 맨 위로 올린다 — 포커스는 빼앗지 않는다
-function raise() {
+// 펫을 z-order 의 알맞은 자리에 놓는다.
+//   내 창이 맨 앞  → floating. 그 위에 있어야 할 창이 없고, 창을 클릭해도 묻히지 않는다
+//   내 창이 뒤     → 일반 레벨로 내리고 내 창 "바로 위"에 꽂는다. 그 위의 창들이 자연히 가린다
+// moveTop() 은 쓰지 않는다 — 백그라운드 앱에서는 창을 활성 앱 아래로 밀어넣는다 (실측 확인)
+function place(anchorWindowId) {
   if (!win || !win.isVisible()) return;
-  // moveTop() 을 쓰면 안 된다 — 백그라운드 앱에서는 창을 활성 앱 "아래"로 밀어넣는다 (실측 확인)
-  // showInactive() 는 orderFrontRegardless 라 포커스를 뺏지 않고 맨 위로 올린다
-  win.showInactive();
-  onTop = true;
+  if (frontIsMine) {
+    if (level !== "float") {
+      win.setAlwaysOnTop(true, "floating");
+      level = "float";
+    }
+    return;
+  }
+  if (level !== "normal") {
+    win.setAlwaysOnTop(false);
+    level = "normal";
+  }
+  if (anchorWindowId == null) return;
+  try {
+    // 다른 앱 창 바로 위에 꽂는다 — mediaSourceId 의 번호는 mac 의 CGWindowNumber, Windows 의 HWND
+    win.moveAbove(`window:${anchorWindowId}:0`);
+  } catch {
+    // 그 창이 사라졌다 — 다음 폴링에서 다시 잡는다
+  }
 }
 
 // 확장이 포커스 변화를 적는 순간 바로 반응한다 — 폴링(0.4초)을 기다리면 그만큼 펫이 창에 가려 있다
@@ -242,11 +264,21 @@ function watchRecords() {
       pending = true;
       setImmediate(() => {
         pending = false;
-        if (onTop) return; // 이미 올려 뒀다 — 하트비트 기록까지 반응할 필요는 없다
         const rec = myRecord(readWindowRecords());
-        if (rec && rec.focused === true && tabAxis(rec)) {
-          raise();
-          if (debug) console.log(JSON.stringify({ watch: "raise", lagMs: Math.round(Date.now() - rec.at * 1000) }));
+        if (!rec) return;
+        sawExtension = true;
+        const tab = tabAxis(rec);
+        // 내 창이 포커스면 그게 곧 "화면 맨 앞" — winbounds 를 다시 돌릴 필요가 없다
+        frontIsMine = rec.focused === true;
+        // 탭을 옮기면 확장이 즉시 적는다. 폴링(0.4초)에 디바운스(2회)까지 기다리면 스르륵 늦게 사라진다
+        if (Date.now() - lastUserMoveAt >= DRAG_GRACE_MS) {
+          applyVisibleNow(decideWant(tab, rec, !!lastTarget));
+        }
+        place(anchorId != null ? anchorId : lastTarget && lastTarget.id);
+        if (debug) {
+          console.log(
+            JSON.stringify({ watch: "sync", tab, visible, frontIsMine, lagMs: Math.round(Date.now() - rec.at * 1000) }),
+          );
         }
       });
     });
@@ -266,6 +298,31 @@ function petSpot(target) {
     target,
   );
   return { x, y, w, h };
+}
+
+// 표시 여부 — 폴링과 확장 이벤트가 같은 규칙을 쓰도록 한 곳에 모은다
+function decideWant(tab, rec, hasTarget) {
+  let want;
+  if (tab === null) {
+    // 확장 기록이 없다. 한 번이라도 본 적 있으면 잃은 것이므로 닫는 쪽으로 간다
+    want = sawExtension ? false : hasTarget;
+  } else if (anchorId == null) {
+    // 아직 내 창을 특정하지 못했다 — 확장이 알려주는 포커스를 함께 본다
+    want = tab && rec.focused === true && hasTarget;
+  } else {
+    want = tab && hasTarget; // 내 창이 목록에 없으면(다른 Space·최소화) 숨긴다
+  }
+  if (config.keepVisible) want = true;
+  if (userHidden) want = false;
+  return want;
+}
+
+// 확장이 알려 준 변화는 경합이 아니라 확정 신호다 — 디바운스를 건너뛰고 바로 반영한다
+function applyVisibleNow(want) {
+  wantLast = want;
+  wantStreak = VISIBLE_CONFIRM;
+  visible = want;
+  setVisible(want);
 }
 
 // 표시 전환은 같은 판정이 연속으로 나올 때만 반영한다
@@ -288,10 +345,7 @@ function pollAnchor() {
     const rec = myRecord(readWindowRecords());
     const tab = tabAxis(rec);
     if (rec) sawExtension = true;
-    let want = tab === null ? !sawExtension : tab && rec.focused === true;
-    if (config.keepVisible) want = true;
-    if (userHidden) want = false;
-    applyVisible(want);
+    applyVisible(decideWant(tab, rec, true));
     return;
   }
 
@@ -316,7 +370,15 @@ function pollAnchor() {
     // 가림 판정에는 전체가 필요하다 — 내 창을 덮는 게 어느 앱인지는 상관없다
     const windows = (info.windows || []).filter((w) => w && typeof w.id === "number");
     if (offScreen(windows)) return; // Space 전환 중
-    const appWindows = anchorApp ? windows.filter((w) => w.app === anchorApp) : windows;
+    // 내 터미널을 띄운 프로그램의 창들 — 앱 이름 표가 아니라 프로세스 조상으로 찾는다.
+    // VS Code·cmux·iTerm2·Warp·Windows Terminal·cmd 무엇이든 이걸로 잡힌다
+    // 한 번 찾은 창 주인은 바뀌지 않는다 — 다시 찾는 건 그 프로세스의 창이 하나도 없을 때뿐
+    if (ownerPid == null || !windows.some((w) => w.pid === ownerPid)) {
+      ownerPid = pkstate.ownerPidOf(ancestors, windows);
+    }
+    let appWindows = ownerPid != null ? windows.filter((w) => w.pid === ownerPid) : [];
+    // 조상으로 못 찾을 때(tmux·원격 세션 등)는 터미널 종류에서 받은 앱 이름으로 갈음한다
+    if (!appWindows.length) appWindows = anchorApp ? windows.filter((w) => w.app === anchorApp) : windows;
 
     const records = readWindowRecords();
     const rec = myRecord(records);
@@ -336,13 +398,15 @@ function pollAnchor() {
     if (anchorId == null) {
       const head = appWindows[0] || null;
       // 내 창이 지금 포커스이고 내 탭이 활성인 순간에만 확정한다 — 그때 맨 앞 창은 반드시 내 창이다
+      // 확장이 있으면 그 신호로 확정한다. 없으면 "내 프로그램의 창이 화면 맨 앞" 으로 갈음한다 —
+      // 명령을 친 창이 곧 맨 앞이므로 펫이 뜨는 시점에는 이게 맞다
       const sure =
         !!head &&
-        tab === true &&
-        rec.focused === true &&
         head.w >= CAPTURE_MIN.w &&
         head.h >= CAPTURE_MIN.h &&
-        !records.some((r) => r !== rec && r.focused === true);
+        (rec
+          ? tab === true && rec.focused === true && !records.some((r) => r !== rec && r.focused === true)
+          : !!windows[0] && windows[0].id === head.id);
       if (sure && head.id === captureId) {
         if ((captureHits += 1) >= CAPTURE_CONFIRM) {
           anchorId = head.id;
@@ -358,27 +422,12 @@ function pollAnchor() {
     // ── 내 창이 화면 맨 앞이면 펫을 그 위로 올린다
     // 일반 레벨이라 A 를 클릭하면 A 가 펫 위로 올라온다. 다시 올려 주면 [펫, A] 가 되고,
     // 그 뒤 B 를 클릭하면 B 가 그 위로 올라와 [B, 펫, A] — 겹친 부분만 OS 가 알아서 가린다
-    // 내 창이 맨 앞으로 돌아온 순간에만 올린다. 이미 올려 뒀으면 다시 부르지 않는다
-    if (target && windows[0] && windows[0].id === target.id) {
-      if (!onTop) raise();
-    } else {
-      onTop = false;
-    }
+    // 내 창이 맨 앞인가 — 확장 기록이 더 정확하고, 없으면 창 순서로 갈음한다
+    frontIsMine = rec ? rec.focused === true : !!(target && windows[0] && windows[0].id === target.id);
 
     const spot = target ? petSpot(target) : null;
 
-    let want;
-    if (tab === null) {
-      // 확장 기록이 없다. 한 번이라도 본 적 있으면 잃은 것이므로 닫는 쪽으로 간다
-      want = sawExtension ? false : !!target;
-    } else if (anchorId == null) {
-      // 아직 내 창을 특정하지 못했다 — 확장이 알려주는 포커스를 함께 본다
-      want = tab && rec.focused === true && !!target;
-    } else {
-      want = tab && !!target; // 내 창이 목록에 없으면(다른 Space·최소화) 숨긴다
-    }
-    if (config.keepVisible) want = true;
-    if (userHidden) want = false;
+    let want = decideWant(tab, rec, !!target);
     // 펫을 잡으면 IDE 가 뒤로 간다 — 드래그 중에는 판정을 보류하고 직전 상태를 유지한다
     const dragging = Date.now() - lastUserMoveAt < DRAG_GRACE_MS;
     if (dragging) want = visible;
@@ -393,6 +442,7 @@ function pollAnchor() {
     }
 
     applyVisible(want);
+    place(anchorId != null ? anchorId : target && target.id);
 
     if (debug) {
       console.log(

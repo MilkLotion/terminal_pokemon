@@ -19,10 +19,11 @@ if let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopEl
               let boundsDict = w[kCGWindowBounds as String] as? [String: Any],
               let rect = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
               let layer = w[kCGWindowLayer as String] as? Int, layer == 0,
-              let number = w[kCGWindowNumber as String] as? Int
+              let number = w[kCGWindowNumber as String] as? Int,
+              let pid = w[kCGWindowOwnerPID as String] as? Int
         else { continue }
         if rect.width < 200 || rect.height < 200 { continue }  // 툴팁·패널 제외
-        items.append("{\"app\":\"\(owner)\",\"id\":\(number),\"x\":\(Int(rect.minX)),\"y\":\(Int(rect.minY)),\"w\":\(Int(rect.width)),\"h\":\(Int(rect.height))}")
+        items.append("{\"app\":\"\(owner)\",\"pid\":\(pid),\"id\":\(number),\"x\":\(Int(rect.minX)),\"y\":\(Int(rect.minY)),\"w\":\(Int(rect.width)),\"h\":\(Int(rect.height))}")
     }
 }
 print("{\"frontmost\":\"\(frontmost)\",\"windows\":[\(items.joined(separator: ","))]}")
