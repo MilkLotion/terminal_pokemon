@@ -36,10 +36,10 @@ export function enablePointer() {
     if (!press.dragging) {
       if (Math.hypot(e.screenX - press.sx, e.screenY - press.sy) < DRAG_START_PX) return;
       press.dragging = true;
-      window.pkmon.pointer({ type: "grab" });
+      window.termimon.pointer({ type: "grab" });
     }
     // 잡은 지점이 커서 밑에 그대로 있도록 창 좌상단을 계산해 넘긴다
-    window.pkmon.pointer({ type: "drag", x: Math.round(e.screenX - press.grabX), y: Math.round(e.screenY - press.grabY) });
+    window.termimon.pointer({ type: "drag", x: Math.round(e.screenX - press.grabX), y: Math.round(e.screenY - press.grabY) });
   });
 
   const release = (e, cancelled) => {
@@ -47,15 +47,15 @@ export function enablePointer() {
     const { dragging, at } = press;
     press = null;
     document.body.style.cursor = "grab";
-    if (dragging) window.pkmon.pointer({ type: "drop" });
-    else if (!cancelled && performance.now() - at <= CLICK_MAX_MS) window.pkmon.pointer({ type: "click" });
+    if (dragging) window.termimon.pointer({ type: "drop" });
+    else if (!cancelled && performance.now() - at <= CLICK_MAX_MS) window.termimon.pointer({ type: "click" });
   };
   document.body.addEventListener("pointerup", (e) => release(e, false));
   // 캡처를 잃으면(창이 숨겨짐 등) 놓은 것으로 친다 — 안 그러면 들린 채로 남는다
   document.body.addEventListener("pointercancel", (e) => release(e, true));
   document.body.addEventListener("lostpointercapture", (e) => release(e, true));
   // 클릭 통과를 켜면 이후 마우스는 아래로 간다 — 누르고 있던 것도 놓는다 (메인도 따로 놓는다)
-  window.pkmon.onClickThrough((on) => {
+  window.termimon.onClickThrough((on) => {
     if (on && press) release({ pointerId: press.id }, true);
   });
 }

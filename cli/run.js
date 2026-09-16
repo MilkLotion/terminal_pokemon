@@ -1,9 +1,9 @@
-// pkmon <펫> — 이 명령을 실행한 세션에 펫을 붙이고 곧바로 돌아온다.
+// termimon <펫> — 이 명령을 실행한 세션에 펫을 붙이고 곧바로 돌아온다.
 //
-//   CLI LLM 안에서  !pkmon eevee   → 그 CLI(claude·codex·gemini…)가 끝나면 펫도 끝난다. 상태 훅이 있으면 상태에 반응한다
-//   셸에서 바로     pkmon eevee    → 그 터미널 셸이 끝나면 펫도 끝난다. 산책·수면 같은 기본 동작만
+//   CLI LLM 안에서  !termimon eevee   → 그 CLI(claude·codex·gemini…)가 끝나면 펫도 끝난다. 상태 훅이 있으면 상태에 반응한다
+//   셸에서 바로     termimon eevee    → 그 터미널 셸이 끝나면 펫도 끝난다. 산책·수면 같은 기본 동작만
 //
-// 명령(CLI)을 pkmon 이 띄우지 않는다. 예전처럼 감싸서 띄우면 claude 의 부모가 터미널 셸이 아니라 pkmon(node)이 되는데,
+// 명령(CLI)을 termimon 이 띄우지 않는다. 예전처럼 감싸서 띄우면 claude 의 부모가 터미널 셸이 아니라 termimon(node)이 되는데,
 // 그렇게 뜬 claude 는 화면이 달랐다 (상태줄 이모지가 ♦ 로 나오고 탭 제목이 안 바뀜).
 // 펫은 따로 떠서 스스로 세션이 끝났는지 본다 (main.js)
 const { execFile, spawn } = require("child_process");
@@ -55,7 +55,7 @@ function resolveSlug(input, source) {
 
 // Electron 실행 파일. require("electron") 은 쓰지 않는다 — Electron 44 는 실행 파일이 없으면 그 자리에서
 // 100MB 를 받기 시작해 명령이 그만큼 멈추고, 오프라인이면 매번 스택을 찍는다.
-// 받는 일은 설치(postinstall)와 pkmon setup 이 맡고, 여기서는 있는지만 본다
+// 받는 일은 설치(postinstall)와 termimon setup 이 맡고, 여기서는 있는지만 본다
 function electronPath() {
   try {
     const dir = path.dirname(require.resolve("electron/package.json"));
@@ -88,7 +88,7 @@ function dismiss(pets) {
 const say = (line = "") => process.stdout.write(`${line}\n`);
 const slugList = (pets) => pets.map((pet) => pet.slug).join(", ");
 // 안내에 적는 명령 — CLI 안이면 ! 를 붙여야 그대로 따라 칠 수 있다
-const commandFor = (session, rest) => `${session.host ? "!" : ""}pkmon ${rest}`;
+const commandFor = (session, rest) => `${session.host ? "!" : ""}termimon ${rest}`;
 // 이 세션의 떠 있는 펫 (순번 차례)
 const sessionPets = (session) => livePets().filter((pet) => pet.key === session.key);
 
@@ -111,14 +111,14 @@ function launchPet(electron, env) {
   }
   // 경로는 환경변수로 넘긴다 — 명령줄에 끼워 넣으면 사용자 이름의 공백·따옴표가 PowerShell 문법이 된다
   const script =
-    "(Start-Process -PassThru -FilePath $env:PKMON_LAUNCH_EXE -WorkingDirectory $env:PKMON_LAUNCH_APP" +
-    " -ArgumentList ('\"' + $env:PKMON_LAUNCH_APP + '\"')).Id";
+    "(Start-Process -PassThru -FilePath $env:TERMIMON_LAUNCH_EXE -WorkingDirectory $env:TERMIMON_LAUNCH_APP" +
+    " -ArgumentList ('\"' + $env:TERMIMON_LAUNCH_APP + '\"')).Id";
   return new Promise((resolve) => {
     execFile(
       "powershell",
       ["-NoProfile", "-NonInteractive", "-Command", script],
       {
-        env: { ...env, PKMON_LAUNCH_EXE: electron, PKMON_LAUNCH_APP: PROJECT },
+        env: { ...env, TERMIMON_LAUNCH_EXE: electron, TERMIMON_LAUNCH_APP: PROJECT },
         encoding: "utf8",
         timeout: 20_000,
         windowsHide: true,
@@ -138,7 +138,7 @@ async function waitGone(pids) {
   while (pids.some((pid) => state.pidAlive(pid)) && Date.now() < until) await sleep(POLL_MS);
 }
 
-// pkmon stop [펫 ...] [all] — 이 세션의 펫 내리기
+// termimon stop [펫 ...] [all] — 이 세션의 펫 내리기
 //   이름을 주면 그 펫만(eevee+pikachu 처럼 여러 마리도), all 이면 전부.
 //   아무것도 안 주면 한 마리일 때는 바로 내리고, 여러 마리면 체크리스트로 고른다 (cli/checklist.js).
 //   CLI LLM 의 ! 명령은 표준입력이 터미널이 아니라 키를 받을 수 없다 — 그때는 이름으로 고르는 법을 알려 준다
@@ -163,10 +163,10 @@ async function stop(names = [], { all = false } = {}) {
     }
   } else if (pets.length === 1) chosen = pets;
   else if (process.stdin.isTTY && process.stdout.isTTY) {
-    const picked = await checklist({ title: "pkmon stop", items: pets.map((pet) => pet.slug) });
+    const picked = await checklist({ title: "termimon stop", items: pets.map((pet) => pet.slug) });
     chosen = picked.map((i) => pets[i]);
   } else {
-    say("pkmon stop");
+    say("termimon stop");
     say("---");
     for (const pet of pets) say(pet.slug);
     say("---");
@@ -186,11 +186,11 @@ async function stop(names = [], { all = false } = {}) {
 
 async function run(opts) {
   const startedAt = Date.now() / 1000;
-  const debug = Boolean(process.env.PKMON_DEBUG);
+  const debug = Boolean(process.env.TERMIMON_DEBUG);
 
   const electron = electronPath();
   if (!electron) {
-    process.stderr.write("펫을 띄우지 못함 — Electron 이 아직 준비되지 않음. pkmon setup 을 한 번 실행하면 받는다\n");
+    process.stderr.write("펫을 띄우지 못함 — Electron 이 아직 준비되지 않음. termimon setup 을 한 번 실행하면 받는다\n");
     process.exitCode = 1;
     return;
   }
@@ -212,7 +212,7 @@ async function run(opts) {
 
   const session = currentSession();
   // 같은 세션에 펫을 더한다. 이미 떠 있는 펫 이름이면 그 펫만 내리고 같은 자리(순번)에 다시 띄운다 —
-  // 옵션만 바꿀 때 (!pkmon eevee dot=3). 먼저 끝나길 기다려야 새 펫이 옛 펫의 전역 단축키를 이어받는다
+  // 옵션만 바꿀 때 (!termimon eevee dot=3). 먼저 끝나길 기다려야 새 펫이 옛 펫의 전역 단축키를 이어받는다
   const live = sessionPets(session);
   const replaced = live.filter((pet) => wanted.includes(pet.slug));
   await waitGone(dismiss(replaced));
@@ -241,19 +241,19 @@ async function run(opts) {
       const env = {
         ...process.env,
         ...optionEnv(opts),
-        PKMON_SLUG: slug,
-        PKMON_MATCH_CWD: process.cwd(),
-        PKMON_INDEX: String(index),
-        PKMON_ANCHOR_APP: anchorApp(),
-        PKMON_TERM_PID: String(session.term),
-        PKMON_HOST_PID: session.host ? String(session.host) : "",
-        PKMON_SESSION: String(session.key),
-        PKMON_ANCESTORS: session.chain.join(","),
+        TERMIMON_SLUG: slug,
+        TERMIMON_MATCH_CWD: process.cwd(),
+        TERMIMON_INDEX: String(index),
+        TERMIMON_ANCHOR_APP: anchorApp(),
+        TERMIMON_TERM_PID: String(session.term),
+        TERMIMON_HOST_PID: session.host ? String(session.host) : "",
+        TERMIMON_SESSION: String(session.key),
+        TERMIMON_ANCESTORS: session.chain.join(","),
       };
-      // PKMON_DEBUG=1 이면 펫이 판정 로그를 파일로 남긴다. 평소에는 버린다
+      // TERMIMON_DEBUG=1 이면 펫이 판정 로그를 파일로 남긴다. 평소에는 버린다
       if (debug) {
-        env.PKMON_LOG = path.join(PATHS.pets, `debug-${session.key}-${slug}.log`);
-        process.stderr.write(`펫 로그: ${env.PKMON_LOG}\n`);
+        env.TERMIMON_LOG = path.join(PATHS.pets, `debug-${session.key}-${slug}.log`);
+        process.stderr.write(`펫 로그: ${env.TERMIMON_LOG}\n`);
       }
       const pet = { slug, pid: null, file: null, ready: false, exited: false };
       try {

@@ -1,7 +1,7 @@
 // 렌더러에 최소 기능만 노출 — 그림 로드, 상태·클릭 통과 알림
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("pkmon", {
+contextBridge.exposeInMainWorld("termimon", {
   // gif·sheet: { kind, dataUrl, w, h, scale } / pmd: { kind, cell, zoom, anims, clips, credits, dex }
   getArt: () => ipcRenderer.invoke("art"),
   onState: (cb) => ipcRenderer.on("state", (_e, state) => cb(state)),

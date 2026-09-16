@@ -1,5 +1,5 @@
 {
-  "name": "terminal-pkmon",
+  "name": "termimon",
   "version": "0.2.0",
   "private": true,
   "description": "터미널 위에 떠 있는 포켓몬 펫 오버레이 (macOS / Windows)",
@@ -18,8 +18,8 @@
   ],
   "main": "main.js",
   "bin": {
-    "pkmon": "bin/pkmon",
-    "pkmon-status": "bin/pkmon-status"
+    "termimon": "bin/termimon",
+    "termimon-status": "bin/termimon-status"
   },
   "files": [
     "main.js",
@@ -34,8 +34,8 @@
     "helpers/winbounds",
     "helpers/winbounds.ps1",
     "helpers/winbounds.swift",
-    "bin/pkmon",
-    "bin/pkmon-status",
+    "bin/termimon",
+    "bin/termimon-status",
     "scripts/postinstall.js",
     "scripts/build-helper.js",
     "vscode-extension/*.vsix"

@@ -1,7 +1,0 @@
-#!/usr/bin/env node
-// pkmon-status [펫] — pkmon status 와 같다. 펫이 이상하게 보일 때 지금 판정 상태를 보여 준다
-process.stdout.on("error", (e) => {
-  if (e.code === "EPIPE") process.exit(0); // pkmon-status | head
-  throw e;
-});
-require("../cli/status.js").status(process.argv[2]);

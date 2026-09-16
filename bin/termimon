@@ -1,19 +1,19 @@
 #!/usr/bin/env node
-// pkmon — 이 명령을 실행한 세션에 펫을 붙인다. claude 안에서 !pkmon eevee 로 띄우면 claude 가 끝날 때 함께 끝난다.
+// termimon — 이 명령을 실행한 세션에 펫을 붙인다. claude 안에서 !termimon eevee 로 띄우면 claude 가 끝날 때 함께 끝난다.
 //
-//   pkmon <펫> [이름=값 ...]
-//   pkmon stop [펫 ...|all] | setup | uninstall | status
+//   termimon <펫> [이름=값 ...]
+//   termimon stop [펫 ...|all] | setup | uninstall | status
 //
 // mac·Windows·npm 전역 설치·git clone 모두 이 파일 하나로 돈다.
 // (예전 bash·PowerShell 두 벌은 옵션 해석이 조금씩 어긋나 한 벌로 합쳤다)
 // Electron 44 설치기가 Node 22.12 이상을 요구한다. 낮으면 설치는 끝나도 펫이 끝내 뜨지 않으니 먼저 알린다
 const [major, minor] = process.versions.node.split(".").map(Number);
 if (major < 22 || (major === 22 && minor < 12)) {
-  process.stderr.write(`pkmon 은 Node.js 22.12 이상이 필요하다 (지금 ${process.versions.node})\n`);
+  process.stderr.write(`termimon 은 Node.js 22.12 이상이 필요하다 (지금 ${process.versions.node})\n`);
   process.exit(1);
 }
 
-// `pkmon status | head` 처럼 읽는 쪽이 먼저 닫으면 조용히 끝낸다 (스택을 찍지 않게)
+// `termimon status | head` 처럼 읽는 쪽이 먼저 닫으면 조용히 끝낸다 (스택을 찍지 않게)
 process.stdout.on("error", (e) => {
   if (e.code === "EPIPE") process.exit(0);
   throw e;

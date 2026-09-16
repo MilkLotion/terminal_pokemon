@@ -6,7 +6,7 @@ const { execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const settings = require("./config");
-// 판정 로직은 진단 도구(bin/pkmon-status)와 같은 것을 쓴다 — 두 벌이 되면 진단이 거짓말을 한다
+// 판정 로직은 진단 도구(bin/termimon-status)와 같은 것을 쓴다 — 두 벌이 되면 진단이 거짓말을 한다
 const pkstate = require("./lib/state");
 // 그림 소스는 art/ 한 곳에서 고른다 — showdown·sheet·pmd 가 서로를 모르게 분리돼 있다
 const { loadArt } = require("./art");
@@ -15,11 +15,11 @@ const { createBuddy } = require("./buddy/body.js");
 // Windows 창 추적 헬퍼를 띄워 두고 한 줄씩 묻는다
 const { createLineHelper } = require("./lib/line-helper.js");
 
-// PKMON_LOG 가 있으면 출력(console·stderr)을 그 파일에 이어 쓴다 — pkmon 은 펫에 출력 핸들을 넘기지 않는다
+// TERMIMON_LOG 가 있으면 출력(console·stderr)을 그 파일에 이어 쓴다 — termimon 은 펫에 출력 핸들을 넘기지 않는다
 // (Windows 는 Start-Process 로 띄워 넘길 수도 없다. cli/run.js launchPet)
-if (process.env.PKMON_LOG) {
+if (process.env.TERMIMON_LOG) {
   try {
-    const logFd = fs.openSync(process.env.PKMON_LOG, "w");
+    const logFd = fs.openSync(process.env.TERMIMON_LOG, "w");
     const write = (chunk, encoding, done) => {
       try {
         fs.writeSync(logFd, typeof chunk === "string" ? chunk : Buffer.from(chunk));
@@ -69,7 +69,7 @@ app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
 
 const config = settings.load();
 const { debug, matchCwd, index, anchorApp, windowsDir, hostPid, session } = config.runtime;
-let { termPid } = config.runtime; // pkmon 이 넘긴 첫 추정 — 확장 기록으로 바로잡을 수 있다 (refineTermPid)
+let { termPid } = config.runtime; // termimon 이 넘긴 첫 추정 — 확장 기록으로 바로잡을 수 있다 (refineTermPid)
 let win = null;
 let art = null; // gif·sheet: { kind, dataUrl, w, h, scale, from } / pmd: { kind, cell, zoom, anims, clips, credits, dex, from }
 let lastState = null;
@@ -106,7 +106,7 @@ let quitting = false;
 const intervals = []; // 끝낼 때 멈출 setInterval
 const watchers = []; // 끝낼 때 닫을 fs.watch
 
-// 창 주인을 찾는 데 쓴다 (체인 전체). pkmon 이 구해 넘긴 것을 쓴다 — pkmon 은 펫을 띄우고 곧바로 끝나서,
+// 창 주인을 찾는 데 쓴다 (체인 전체). termimon 이 구해 넘긴 것을 쓴다 — termimon 은 펫을 띄우고 곧바로 끝나서,
 // 펫이 스스로 구하면 부모 관계가 이미 끊겨 있다 (Windows 는 끊긴 채 남고, mac 은 launchd 밑으로 옮겨진다).
 // 넘겨받지 못했으면(npm start 로 직접 실행) 스스로 구한다
 const ancestors = config.runtime.ancestors.length ? [process.pid, ...config.runtime.ancestors] : pkstate.ancestorPids();
@@ -141,8 +141,8 @@ function stackShift() {
   return Math.round(windowSize().w * STACK_RATIO) * index;
 }
 
-// 훅(pkmon-state.cjs)이 남긴 세션 상태 중 나를 부른 CLI 것.
-// pkmon 이 띄웠는데 부른 CLI 가 없으면 셸에서 바로 띄운 펫이다 — CLI 상태를 따르지 않는다 (기본 동작만)
+// 훅(termimon-state.cjs)이 남긴 세션 상태 중 나를 부른 CLI 것.
+// termimon 이 띄웠는데 부른 CLI 가 없으면 셸에서 바로 띄운 펫이다 — CLI 상태를 따르지 않는다 (기본 동작만)
 const terminalOnly = session != null && !hostPid;
 const currentInfo = () => pkstate.sessionInfo(PATHS.state, { myPids, matchCwd, hostPid, terminalOnly });
 const currentState = () => currentInfo().state;
@@ -152,12 +152,12 @@ const myRecord = (records) => pkstate.myRecord(records, myPids);
 const tabAxis = (rec) => pkstate.tabAxis(rec, myPids);
 
 // 앵커 앱의 창 위치를 읽는 헬퍼 — mac 은 컴파일된 Swift, Windows 는 PowerShell
-// PKMON_WINBOUNDS 로 다른 실행 파일을 가리킬 수 있다 (테스트가 실제 헬퍼를 건드리지 않도록)
+// TERMIMON_WINBOUNDS 로 다른 실행 파일을 가리킬 수 있다 (테스트가 실제 헬퍼를 건드리지 않도록)
 // serve 면 한 번 띄워 두고 한 줄씩 묻는다 (lib/line-helper.js)
 function helperCommand() {
   // 앱 이름을 몰라도 된다 — 목록은 전체로 받고, 내 창은 프로세스 조상으로 가린다
   const args = anchorApp ? [anchorApp] : [];
-  const override = process.env.PKMON_WINBOUNDS;
+  const override = process.env.TERMIMON_WINBOUNDS;
   if (override) return fs.existsSync(override) ? { cmd: override, args } : null;
   if (process.platform === "darwin") {
     const bin = path.join(PATHS.project, "helpers", "winbounds");
@@ -743,13 +743,13 @@ function clearFailure() {
   }
 }
 
-// pkmon 이 만든 내 pid 파일 — pkmon 없이 직접 실행했으면 없다
+// termimon 이 만든 내 pid 파일 — termimon 없이 직접 실행했으면 없다
 const petFile = session ? settings.petFile(session, process.pid, index, config.slug) : null;
 let petFileSeen = false;
 let petFileReady = false;
 
-// 창을 만들었으면 ready 를 적어 pkmon 이 기다림을 끝내게 하고, 파일이 사라졌으면(pkmon stop · 같은 세션에서 다른 펫으로
-// 바꿈) 스스로 끝난다. 한 번도 못 봤으면 끝내지 않는다 — pkmon 이 파일을 못 만든 경우까지 곧바로 끝나지 않게
+// 창을 만들었으면 ready 를 적어 termimon 이 기다림을 끝내게 하고, 파일이 사라졌으면(termimon stop · 같은 세션에서 다른 펫으로
+// 바꿈) 스스로 끝난다. 한 번도 못 봤으면 끝내지 않는다 — termimon 이 파일을 못 만든 경우까지 곧바로 끝나지 않게
 function checkPetFile() {
   if (!petFile) return;
   if (!fs.existsSync(petFile)) {
@@ -795,7 +795,7 @@ function watchLifetime() {
 }
 
 // 전역 단축키 — 시스템에서 배타적이라 펫이 여러 마리면 먼저 잡은 한 마리만 먹는다.
-// 못 잡은 펫은 가끔 다시 잡아 본다 — 잡고 있던 펫이 내려지면(pkmon stop eevee) 남은 펫이 이어받는다
+// 못 잡은 펫은 가끔 다시 잡아 본다 — 잡고 있던 펫이 내려지면(termimon stop eevee) 남은 펫이 이어받는다
 const SHORTCUT_RETRY_MS = 3000;
 let shortcutWarned = false;
 function bindShortcuts() {
@@ -883,15 +883,15 @@ app.whenReady().then(async () => {
   });
   if (!art) {
     // 원본 GIF 도 스프라이트시트도 없음 — 대개 없는 펫 이름이거나 네트워크가 막혔다
-    const sheet = settings.spritePath(config) || "저장소 모름 (PKMON_SOURCE 로 codex-pokepets 경로를 주면 art=sheet 를 쓸 수 있다)";
+    const sheet = settings.spritePath(config) || "저장소 모름 (TERMIMON_SOURCE 로 codex-pokepets 경로를 주면 art=sheet 를 쓸 수 있다)";
     process.stderr.write(`펫 그림을 찾을 수 없음: ${config.slug}\n  스프라이트시트: ${sheet}\n`);
-    // 펫의 출력은 평소 버려진다 — pkmon 명령과 pkmon status 가 읽을 수 있게 이유를 남긴다
+    // 펫의 출력은 평소 버려진다 — termimon 명령과 termimon status 가 읽을 수 있게 이유를 남긴다
     reportFailure(
       config.art === "sheet" && !config.source
-        ? "art=sheet 는 codex-pokepets 저장소 경로(PKMON_SOURCE)가 필요하다"
+        ? "art=sheet 는 codex-pokepets 저장소 경로(TERMIMON_SOURCE)가 필요하다"
         : `${config.slug} 그림을 받지 못함 — 네트워크(프록시)를 확인하거나 다른 펫 이름으로 시도`,
     );
-    app.exit(3); // 실패로 끝낸다 — pkmon 이 종료 코드를 보고 "펫이 뜨지 못함"을 알린다
+    app.exit(3); // 실패로 끝낸다 — termimon 이 종료 코드를 보고 "펫이 뜨지 못함"을 알린다
     return;
   }
   clearFailure();
@@ -937,7 +937,7 @@ app.on("before-quit", () => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
-  // 떠 있는 펫 목록에서 빠진다 — 남겨 두면 status 가 끝난 펫을 센다 (죽은 번호는 pkmon 이 다음에 청소한다)
+  // 떠 있는 펫 목록에서 빠진다 — 남겨 두면 status 가 끝난 펫을 센다 (죽은 번호는 termimon 이 다음에 청소한다)
   if (petFile) fs.rmSync(petFile, { force: true });
 });
 app.on("window-all-closed", () => app.quit());

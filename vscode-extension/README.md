@@ -1,9 +1,9 @@
-# pkmon active terminal
+# termimon active terminal
 
 VS Code 창마다 **자기 파일 하나**에 그 창의 터미널 상태를 기록한다.
 
 ```
-~/.claude/pkmon/windows/<sessionId>-<확장호스트PID>.json
+~/.claude/termimon/windows/<sessionId>-<확장호스트PID>.json
 ```
 
 ```json
@@ -55,7 +55,7 @@ VS Code 창마다 **자기 파일 하나**에 그 창의 터미널 상태를 기
 ```bash
 cd vscode-extension
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension pkmon-active-terminal-*.vsix
+code --install-extension termimon-active-terminal-*.vsix
 ```
 
 설치 후 명령 팔레트에서 `Developer: Reload Window` 를 실행해야 동작한다.

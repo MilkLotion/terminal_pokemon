@@ -1,5 +1,5 @@
 // 이 VS Code 창의 상태를 창마다 자기 파일 하나에 기록한다
-//   ~/.claude/pkmon/windows/<sessionId>-<확장호스트PID>.json
+//   ~/.claude/termimon/windows/<sessionId>-<확장호스트PID>.json
 // 펫은 이 기록으로 "내 터미널 탭이 지금 활성인가"만 판단한다.
 // 어느 창이 화면 맨 앞인지는 펫이 OS 에 직접 묻는다 — 그건 파일로 주고받지 않는다.
 const vscode = require("vscode");
@@ -7,7 +7,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-const WINDOWS_DIR = path.join(os.homedir(), ".claude", "pkmon", "windows");
+const WINDOWS_DIR = path.join(os.homedir(), ".claude", "termimon", "windows");
 const STALE_SEC = 600; // 이보다 오래된 남의 창 기록은 청소 대상
 const HEARTBEAT_MS = 10_000;
 

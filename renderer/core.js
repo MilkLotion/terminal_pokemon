@@ -11,7 +11,7 @@ export const opts = {
   pointer: params.get("pointer") === "1", // buddy — 잡기·클릭을 렌더러가 직접 받는다
 };
 
-export const canvas = document.getElementById("pkmon");
+export const canvas = document.getElementById("termimon");
 export const ctx = canvas.getContext("2d");
 
 // 캔버스 크기를 정한다. 반드시 이 함수로만 정한다.
@@ -46,7 +46,7 @@ export function start() {
       document.addEventListener(type, (e) => log({ input: type, button: e.button, screen: [e.screenX, e.screenY] }), true);
     }
   }
-  window.pkmon.getArt().then(async (art) => {
+  window.termimon.getArt().then(async (art) => {
     const loaders = { pmd: () => import("./pmd.js"), gif: () => import("./showdown.js"), sheet: () => import("./sheet.js") };
     const load = loaders[art.kind];
     // 모르는 종류를 아무 모듈에나 넘기면 빈 화면이 된다 — 차라리 알린다
@@ -56,7 +56,7 @@ export function start() {
     if (opts.pointer && art.kind === "pmd") (await import("./pointer.js")).enablePointer();
   });
 
-  window.pkmon.onState((next) => {
+  window.termimon.onState((next) => {
     if (next === shared.state) return;
     const prev = shared.state;
     shared.state = next;
@@ -64,12 +64,12 @@ export function start() {
   });
 
   // getArt·모듈 import 를 기다리지 않고 바로 받는다 — 그 사이에 온 act 를 IPC 가 버리지 않게
-  window.pkmon.onAct((req) => {
+  window.termimon.onAct((req) => {
     shared.act = req;
     for (const fn of actListeners) fn(req);
   });
 
-  window.pkmon.onClickThrough((on) => {
+  window.termimon.onClickThrough((on) => {
     // 포인터로 직접 끄는 중이면 app-region 을 되살리지 않는다 — 살리면 OS 가 마우스를 가로채 클릭이 안 온다
     document.body.style.webkitAppRegion = on || shared.pointer ? "no-drag" : "drag";
     document.body.style.cursor = on ? "default" : "grab";
