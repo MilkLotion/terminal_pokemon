@@ -15,6 +15,28 @@ const { createBuddy } = require("./buddy/body.js");
 // Windows 창 추적 헬퍼를 띄워 두고 한 줄씩 묻는다
 const { createLineHelper } = require("./lib/line-helper.js");
 
+// PKMON_LOG 가 있으면 출력(console·stderr)을 그 파일에 이어 쓴다 — pkmon 은 펫에 출력 핸들을 넘기지 않는다
+// (Windows 는 Start-Process 로 띄워 넘길 수도 없다. cli/run.js launchPet)
+if (process.env.PKMON_LOG) {
+  try {
+    const logFd = fs.openSync(process.env.PKMON_LOG, "w");
+    const write = (chunk, encoding, done) => {
+      try {
+        fs.writeSync(logFd, typeof chunk === "string" ? chunk : Buffer.from(chunk));
+      } catch {
+        // 로그 실패는 무시
+      }
+      const cb = typeof encoding === "function" ? encoding : done;
+      if (typeof cb === "function") cb();
+      return true;
+    };
+    process.stdout.write = write;
+    process.stderr.write = write;
+  } catch {
+    // 로그 파일을 못 열면 출력은 원래대로 버려진다
+  }
+}
+
 const { PATHS } = settings;
 const { CELL } = require("./art/sheet.js"); // 팩 스프라이트시트의 한 칸 — 정의는 그쪽에 있다
 const STATE_POLL_MS = 500;
@@ -31,7 +53,7 @@ const VISIBLE_CONFIRM = 2; // 표시 전환은 이만큼 연속 같은 판정일
 const CAPTURE_CONFIRM = 2; // 앵커 창을 확정하기까지 연속 일치 횟수
 const ANCHOR_MISS_LIMIT = 8; // 내 창이 이만큼 연속으로 안 보이면 앵커를 풀고 다시 찾는다
 const CAPTURE_MIN = { w: 400, h: 250 }; // 분리된 DevTools 같은 보조 창을 앵커로 잡지 않도록
-const OWN_PID_CHECK_MS = 5000; // 터미널이 죽었는지 확인하는 주기
+const LIFE_CHECK_MS = 1000; // 세션(CLI LLM)·터미널이 끝났는지, pid 파일이 남아 있는지 확인하는 주기
 // 지시한 좌표에서 이만큼 안쪽이면 우리가 옮긴 것으로 본다.
 // Windows 배율(125%·150%)에서는 논리 좌표 ↔ 물리 픽셀 반올림으로 1~2px 어긋난 채 돌아온다.
 // 정확히 같을 때만 인정하면 그 어긋남이 "사용자가 끌었다"가 되고, 2초 동안 창 추적이 멈춘다
@@ -46,7 +68,7 @@ app.commandLine.appendSwitch("disable-http-cache");
 app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
 
 const config = settings.load();
-const { debug, matchCwd, index, anchorApp, windowsDir } = config.runtime;
+const { debug, matchCwd, index, anchorApp, windowsDir, hostPid, session } = config.runtime;
 let { termPid } = config.runtime; // pkmon 이 넘긴 첫 추정 — 확장 기록으로 바로잡을 수 있다 (refineTermPid)
 let win = null;
 let art = null; // gif·sheet: { kind, dataUrl, w, h, scale, from } / pmd: { kind, cell, zoom, anims, clips, credits, dex, from }
@@ -78,8 +100,10 @@ let ownerPid = null; // 내 터미널을 띄운 프로그램의 프로세스 번
 let ownerDeepAt = 0; // 프로세스 표로 창 주인을 마지막으로 찾아본 시각
 let servedHelper = null; // Windows 창 추적 헬퍼 (띄워 두고 한 줄씩 묻는다)
 
-// 기동 시 한 번만 구한다 — 래퍼가 먼저 끝나면 부모 관계가 끊긴다
-const ancestors = pkstate.ancestorPids(); // 창 주인을 찾는 데 쓴다 (체인 전체)
+// 창 주인을 찾는 데 쓴다 (체인 전체). pkmon 이 구해 넘긴 것을 쓴다 — pkmon 은 펫을 띄우고 곧바로 끝나서,
+// 펫이 스스로 구하면 부모 관계가 이미 끊겨 있다 (Windows 는 끊긴 채 남고, mac 은 launchd 밑으로 옮겨진다).
+// 넘겨받지 못했으면(npm start 로 직접 실행) 스스로 구한다
+const ancestors = config.runtime.ancestors.length ? [process.pid, ...config.runtime.ancestors] : pkstate.ancestorPids();
 let myPids = pkstate.pidsUpTo(ancestors, termPid); // 터미널 셸까지만 (탭·상태 판정용)
 let termRefined = false;
 
@@ -111,8 +135,10 @@ function stackShift() {
   return Math.round(windowSize().w * STACK_RATIO) * index;
 }
 
-// 훅(pkmon-state.cjs)이 남긴 세션 상태 중 내 터미널 것
-const currentInfo = () => pkstate.sessionInfo(PATHS.state, myPids, matchCwd);
+// 훅(pkmon-state.cjs)이 남긴 세션 상태 중 나를 부른 CLI 것.
+// pkmon 이 띄웠는데 부른 CLI 가 없으면 셸에서 바로 띄운 펫이다 — CLI 상태를 따르지 않는다 (기본 동작만)
+const terminalOnly = session != null && !hostPid;
+const currentInfo = () => pkstate.sessionInfo(PATHS.state, { myPids, matchCwd, hostPid, terminalOnly });
 const currentState = () => currentInfo().state;
 
 const readWindowRecords = () => pkstate.readWindowRecords(windowsDir);
@@ -265,8 +291,10 @@ function watchRecords() {
         buddy?.focus(focusKeyOf(rec, null));
         // 내 창이 포커스면 그게 곧 "화면 맨 앞" — winbounds 를 다시 돌릴 필요가 없다
         frontIsMine = rec.focused === true;
-        // 탭을 옮기면 확장이 즉시 적는다. 폴링(0.4초)에 디바운스(2회)까지 기다리면 스르륵 늦게 사라진다
-        if (!isDragging()) {
+        // 탭을 옮기면 확장이 즉시 적는다. 폴링(0.4초)에 디바운스(2회)까지 기다리면 스르륵 늦게 사라진다.
+        // 실제로 들고 있을 때만 미룬다 — 놓은 뒤 2초 유예(isDragging)까지 기다리면, 끌어 놓고 바로 탭을 옮겼을 때
+        // 그만큼 남아 있다가 사라진다
+        if (!held) {
           applyVisibleNow(decideWant(tab, rec, !!lastTarget));
         }
         place(anchorId != null ? anchorId : lastTarget && lastTarget.id);
@@ -338,6 +366,7 @@ function isDragging() {
 function releaseHeld() {
   if (!held) return;
   held = false;
+  stopFollow();
   roam = { x: 0, y: 0 };
   buddy?.rehome();
 }
@@ -696,6 +725,89 @@ function clearFailure() {
   }
 }
 
+// pkmon 이 만든 내 pid 파일 — pkmon 없이 직접 실행했으면 없다
+const petFile = session ? settings.petFile(session, process.pid, index, config.slug) : null;
+let petFileSeen = false;
+let petFileReady = false;
+
+// 창을 만들었으면 ready 를 적어 pkmon 이 기다림을 끝내게 하고, 파일이 사라졌으면(pkmon stop · 같은 세션에서 다른 펫으로
+// 바꿈) 스스로 끝난다. 한 번도 못 봤으면 끝내지 않는다 — pkmon 이 파일을 못 만든 경우까지 곧바로 끝나지 않게
+function checkPetFile() {
+  if (!petFile) return;
+  if (!fs.existsSync(petFile)) {
+    if (petFileSeen) app.quit();
+    return;
+  }
+  petFileSeen = true;
+  if (petFileReady || !win) return;
+  let fd = null;
+  try {
+    // r+ 는 없는 파일을 만들지 않는다 — 방금 내려진 펫이 파일을 되살리지 않게
+    fd = fs.openSync(petFile, "r+");
+    fs.ftruncateSync(fd);
+    fs.writeSync(fd, `${process.pid}\nready\n`);
+    petFileReady = true;
+  } catch {
+    // 방금 지워졌다 — 다음 확인에서 끝난다
+  } finally {
+    if (fd != null) fs.closeSync(fd);
+  }
+}
+
+// 펫이 끝날 조건 — 펫을 끝내 줄 부모가 없으므로 스스로 본다.
+// 세션(CLI LLM)이 끝남 · 터미널 셸이 끝남(강제로 닫힌 탭) · pid 파일이 사라짐
+function watchLifetime() {
+  const check = () => {
+    if ((hostPid && !pkstate.pidAlive(hostPid)) || (termPid && !pkstate.pidAlive(termPid))) {
+      app.quit();
+      return;
+    }
+    checkPetFile();
+  };
+  check();
+  setInterval(check, LIFE_CHECK_MS);
+  // 내리기는 바로 반응한다 — 같은 펫을 다시 띄울 때 새 펫이 옛 펫이 끝나길 기다린다 (전역 단축키를 넘겨받으려고)
+  if (petFile) {
+    try {
+      fs.watch(path.dirname(petFile), () => checkPetFile());
+    } catch {
+      // 감시 실패해도 주기 확인이 받쳐 준다
+    }
+  }
+}
+
+// 전역 단축키 — 시스템에서 배타적이라 펫이 여러 마리면 먼저 잡은 한 마리만 먹는다.
+// 못 잡은 펫은 가끔 다시 잡아 본다 — 잡고 있던 펫이 내려지면(pkmon stop eevee) 남은 펫이 이어받는다
+const SHORTCUT_RETRY_MS = 3000;
+let shortcutWarned = false;
+function bindShortcuts() {
+  const shortcuts = {
+    "CommandOrControl+Alt+P": () => applyClickThrough(!config.clickThrough),
+    "CommandOrControl+Alt+H": () => {
+      userHidden = !userHidden; // 폴링이 되돌리지 않도록 상태로 남긴다
+      pollAnchor();
+    },
+    "CommandOrControl+Alt+Q": () => app.quit(),
+    // 항상 보이기 — 켜면 크롬 등 다른 앱을 봐도 펫이 남는다 (설정에 저장됨)
+    "CommandOrControl+Alt+K": () => {
+      settings.save(config, { keepVisible: !config.keepVisible });
+      pollAnchor();
+    },
+  };
+  const missed = [];
+  for (const [accel, fn] of Object.entries(shortcuts)) {
+    if (globalShortcut.isRegistered(accel)) continue; // 이미 이 펫이 잡고 있다
+    if (!globalShortcut.register(accel, fn)) missed.push(accel);
+  }
+  if (missed.length && !shortcutWarned) {
+    shortcutWarned = true;
+    process.stderr.write(`단축키 ${missed.join(", ")} 는 다른 펫이 쓰고 있음 — 그 펫이 끝나면 이어받는다\n`);
+  } else if (!missed.length && shortcutWarned && debug) {
+    console.log(JSON.stringify({ shortcuts: "이어받음" }));
+  }
+  return missed.length === 0;
+}
+
 // 펫이 못 뜬 이유를 남긴다 — 실패해도 조용히 넘어간다
 function reportFailure(message) {
   try {
@@ -709,23 +821,51 @@ function reportFailure(message) {
 ipcMain.handle("art", () => art);
 
 // 포인터로 펫을 만졌다 (buddy 전용) — 렌더러는 화면 좌표만 알려 주고, 옮기기·반응은 여기서 한다
+// 들고 있는 동안 커서를 따라간다 — 렌더러의 움직임 이벤트로 옮기지 않는다.
+// Windows 에서 누르기가 먹히면(renderer/pointer.js) OS 가 마우스를 펫 창에 묶어 주지 않아, 커서가 작은 창을
+// 벗어나는 순간 움직임이 끊긴다. 커서를 직접 읽어 따라가면 펫이 늘 커서 밑에 있어 떼기도 펫에 도착한다
+const FOLLOW_MS = 16;
+let follow = null; // { timer, offsetX, offsetY }
+
+function followCursor(offsetX, offsetY) {
+  stopFollow();
+  const step = () => {
+    if (!win || !held) return stopFollow();
+    const p = screen.getCursorScreenPoint();
+    const [cx, cy] = win.getPosition();
+    const { w, h } = windowSize();
+    // 끄는 중에도 창 안에 가둔다 — 가장자리에 붙어 따라오고, 놓을 때 튀어 들어가지 않는다
+    const want = { x: Math.round(p.x - offsetX), y: Math.round(p.y - offsetY) };
+    const { x, y } = lastTarget ? clampToWindow(want.x, want.y, w, h, lastTarget) : want;
+    if (x === cx && y === cy) return undefined;
+    buddy?.drag(x - cx, y - cy);
+    lastUserMoveAt = Date.now();
+    win.setPosition(x, y); // 사용자 이동 — commanded 를 적지 않는다. 저장은 놓을 때 settleUserMove 가 한다
+    return undefined;
+  };
+  follow = { timer: setInterval(step, FOLLOW_MS) };
+  step();
+}
+
+function stopFollow() {
+  if (!follow) return;
+  clearInterval(follow.timer);
+  follow = null;
+}
+
 ipcMain.on("pointer", (_e, msg) => {
+  // 디버그 — 렌더러가 넘긴 포인터가 메인까지 오는지
+  if (debug && msg) console.log(JSON.stringify({ pointer: msg.type, buddy: !!buddy, held }));
   if (!win || !buddy || !msg) return;
   const now = Date.now();
   if (msg.type === "grab") {
     held = true;
     lastUserMoveAt = now;
     buddy.pickup();
-  } else if (msg.type === "drag" && held && Number.isFinite(msg.x) && Number.isFinite(msg.y)) {
-    const [cx, cy] = win.getPosition();
-    const { w, h } = windowSize();
-    // 끄는 중에도 창 안에 가둔다 — 가장자리에 붙어 따라오고, 놓을 때 튀어 들어가지 않는다
-    const { x, y } = lastTarget ? clampToWindow(msg.x, msg.y, w, h, lastTarget) : { x: msg.x, y: msg.y };
-    buddy.drag(x - cx, y - cy);
-    lastUserMoveAt = now;
-    win.setPosition(x, y); // 사용자 이동 — commanded 를 적지 않는다. 저장은 놓을 때 settleUserMove 가 한다
+    followCursor(Number(msg.offsetX) || 0, Number(msg.offsetY) || 0);
   } else if (msg.type === "drop" && held) {
     held = false;
+    stopFollow();
     droppedAt = now;
     lastUserMoveAt = now;
     roam = { x: 0, y: 0 }; // 놓은 자리가 새 집 — 저장하는 오프셋은 실제 창 자리라 산책분이 이미 들어 있다
@@ -765,30 +905,13 @@ app.whenReady().then(async () => {
   clearFailure();
   createWindow();
 
-  // 전역 단축키는 시스템에서 배타적이다 — 펫이 여러 마리면 먼저 등록한 한 마리만 먹는다
-  const bind = (accel, fn) => {
-    if (!globalShortcut.register(accel, fn)) {
-      process.stderr.write(`단축키 ${accel} 는 다른 펫이 이미 쓰고 있음 — 이 펫에는 안 먹는다\n`);
-    }
-  };
-  bind("CommandOrControl+Alt+P", () => applyClickThrough(!config.clickThrough));
-  bind("CommandOrControl+Alt+H", () => {
-    userHidden = !userHidden; // 폴링이 되돌리지 않도록 상태로 남긴다
-    pollAnchor();
-  });
-  bind("CommandOrControl+Alt+Q", () => app.quit());
-  // 항상 보이기 — 켜면 크롬 등 다른 앱을 봐도 펫이 남는다 (설정에 저장됨)
-  bind("CommandOrControl+Alt+K", () => {
-    settings.save(config, { keepVisible: !config.keepVisible });
-    pollAnchor();
-  });
-
-  // 터미널이 강제 종료되면 래퍼의 정리 코드가 돌지 않는다 — 고아로 남지 않게 스스로 끝낸다
-  if (termPid) {
-    setInterval(() => {
-      if (!pkstate.pidAlive(termPid)) app.quit();
-    }, OWN_PID_CHECK_MS);
+  if (!bindShortcuts()) {
+    const retry = setInterval(() => {
+      if (bindShortcuts()) clearInterval(retry);
+    }, SHORTCUT_RETRY_MS);
   }
+
+  watchLifetime();
 
   setInterval(() => {
     const { state, promptAt } = currentInfo();
@@ -804,12 +927,14 @@ app.whenReady().then(async () => {
   setInterval(pollAnchor, ANCHOR_POLL_MS);
 });
 
-// pkmon 래퍼가 명령 종료 후 보내는 신호 — 펫도 같이 종료
+// 밖에서 끝내라는 신호 (kill 등) — 정리하고 끝낸다
 process.on("SIGTERM", () => app.quit());
 process.on("SIGINT", () => app.quit());
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
   servedHelper?.stop();
+  // 떠 있는 펫 목록에서 빠진다 — 남겨 두면 status 가 끝난 펫을 센다 (죽은 번호는 pkmon 이 다음에 청소한다)
+  if (petFile) fs.rmSync(petFile, { force: true });
 });
 app.on("window-all-closed", () => app.quit());

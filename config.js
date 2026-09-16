@@ -21,6 +21,8 @@ const PATHS = {
   windows: path.join(PKMON_HOME, "windows"), // VS Code 창마다 자기 상태를 적는 곳 (창 하나당 파일 하나)
   gifs: path.join(PKMON_HOME, "gifs"), // 원본 GIF 캐시
   pmd: path.join(PKMON_HOME, "pmd"), // PMD 스프라이트 묶음 캐시 (CC BY-NC — 저장소엔 넣지 않는다)
+  // 떠 있는 펫 — 펫마다 pid 파일 하나 (petFile). 재부팅하면 비워지도록 임시 폴더에 둔다
+  pets: path.join(os.tmpdir(), "pkmon-pets"),
 };
 
 // 사용자가 손대는 값 — pkmon.config.json 에 저장된다
@@ -127,9 +129,16 @@ function load() {
   else config.buddy = String(config.buddy).toLowerCase();
   config.fromEnv = fromEnv;
 
-  // pkmon 래퍼가 넘기는 실행 정보 — 설정이 아니라 이번 실행의 맥락이다
+  // pkmon 명령이 넘기는 실행 정보 — 설정이 아니라 이번 실행의 맥락이다
   config.runtime = {
     termPid: Number(env.PKMON_TERM_PID) || null, // 이 터미널 탭에서만 표시
+    hostPid: Number(env.PKMON_HOST_PID) || null, // 이 프로세스(CLI LLM)가 끝나면 펫도 끝난다
+    session: Number(env.PKMON_SESSION) || null, // pid 파일 이름의 세션 번호 (petFile)
+    // pkmon 이 구한 조상 — 펫은 따로 떠서 pkmon 이 곧바로 끝나므로, 펫이 스스로 구하면 부모 관계가 끊겨 있다
+    ancestors: String(env.PKMON_ANCESTORS || "")
+      .split(",")
+      .map(Number)
+      .filter((pid) => pid > 0),
     matchCwd: env.PKMON_MATCH_CWD || null, // 조상 기록이 없을 때 쓰는 대비책
     index: Number(env.PKMON_INDEX) || 0, // 여러 마리를 옆으로 미는 순번
     anchorApp: env.PKMON_ANCHOR_APP || null, // 따라갈 앱 (터미널 종류로 결정)
@@ -168,4 +177,11 @@ function spritePath(config, slug = config.slug) {
   return config.source ? path.join(config.source, "pets", slug, "spritesheet.webp") : null;
 }
 
-module.exports = { PATHS, USER_DEFAULTS, INTERNAL, load, save, spritePath };
+// 펫 하나의 pid 파일 — <세션>-<펫 pid>-<순번>-<펫 이름>.pid. pkmon 이 만들고, 펫이 창을 띄우면 ready 를 적고,
+// 파일이 사라지면 펫이 스스로 끝난다 (pkmon stop · 같은 펫을 옵션만 바꿔 다시 띄움).
+// 이름·순번을 파일 이름에 둔다 — 내용은 펫이 ready 를 적으며 덮어쓰고, 이름은 pkmon stop <펫> 이, 순번은 옆자리 배치가 쓴다
+function petFile(session, pid, index, slug) {
+  return path.join(PATHS.pets, `${session}-${pid}-${index}-${slug}.pid`);
+}
+
+module.exports = { PATHS, USER_DEFAULTS, INTERNAL, load, save, spritePath, petFile };

@@ -1,40 +1,31 @@
-// pkmon <펫> — 명령을 실행하는 동안 펫을 띄우고, 명령이 끝나면 펫도 함께 끝낸다.
-const { execFileSync, spawn } = require("child_process");
+// pkmon <펫> — 이 명령을 실행한 세션에 펫을 붙이고 곧바로 돌아온다.
+//
+//   CLI LLM 안에서  !pkmon eevee   → 그 CLI(claude·codex·gemini…)가 끝나면 펫도 끝난다. 상태 훅이 있으면 상태에 반응한다
+//   셸에서 바로     pkmon eevee    → 그 터미널 셸이 끝나면 펫도 끝난다. 산책·수면 같은 기본 동작만
+//
+// 명령(CLI)을 pkmon 이 띄우지 않는다. 예전처럼 감싸서 띄우면 claude 의 부모가 터미널 셸이 아니라 pkmon(node)이 되는데,
+// 그렇게 뜬 claude 는 화면이 달랐다 (상태줄 이모지가 ♦ 로 나오고 탭 제목이 안 바뀜).
+// 펫은 따로 떠서 스스로 세션이 끝났는지 본다 (main.js)
+const { execFile, spawn } = require("child_process");
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 const settings = require("../config.js");
 const dex = require("../lib/dex.js");
+const state = require("../lib/state.js");
 const { optionEnv, petList } = require("./args.js");
-const { spawnCommand } = require("./spawn.js");
+const { checklist } = require("./checklist.js");
+const { currentSession, livePets } = require("./session.js");
 
 const PROJECT = path.join(__dirname, "..");
-// 떠 있는 펫 목록 — pid 파일로 관리한다 (Electron 은 한 마리가 여러 프로세스를 만들어 프로세스 수로는 셀 수 없음)
-const RUN_DIR = path.join(os.tmpdir(), "pkmon-pets");
+const { PATHS } = settings;
+// 펫이 창을 만들 때까지 기다리는 시간 — 처음 띄우는 펫은 그림(PMD ZIP)을 받느라 몇 초 걸린다.
+// 넘기면 더 기다리지 않고 돌아온다 (펫은 계속 뜨는 중이다)
+const READY_TIMEOUT_MS = 15000;
+// 바꿀 때 옛 펫이 끝나길 기다리는 시간 — 먼저 끝나야 새 펫이 전역 단축키를 가져간다
+const GONE_TIMEOUT_MS = 5000;
+const POLL_MS = 100;
 
-// 이 명령을 친 터미널 탭의 셸 번호 — VS Code 확장이 "활성 터미널"로 알려 주는 번호와 같아야 한다.
-// 보통은 부모 프로세스다. Windows 에서 pkmon.cmd 를 다른 셸이 부르면 사이에 "cmd.exe /c … pkmon" 한 겹이 끼므로
-// 그것만 건너뛴다 (/k 로 뜬 개발자 명령 프롬프트 같은 진짜 셸은 건너뛰지 않는다).
-// 이 값은 첫 추정이다 — 펫이 확장 기록의 터미널 목록과 조상을 대조해 바로잡는다 (main.js).
-// PKMON_TERM_PID 로 직접 줄 수도 있다
-function terminalPid() {
-  const given = Number(process.env.PKMON_TERM_PID);
-  if (given > 0) return given;
-  if (process.platform !== "win32") return process.ppid;
-  try {
-    const out = execFileSync(
-      "powershell",
-      ["-NoProfile", "-Command", `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${process.ppid}"; "$($p.Name)|$($p.ParentProcessId)|$($p.CommandLine)"`],
-      { encoding: "utf8", timeout: 5000, windowsHide: true },
-    );
-    const [name, parent, commandLine = ""] = out.trim().split("|");
-    const shim = /\s\/c\s/i.test(` ${commandLine} `) && /pkmon/i.test(commandLine);
-    if (/^cmd\.exe$/i.test(name) && shim && Number(parent) > 0) return Number(parent);
-  } catch {
-    // 못 알아내면 부모 그대로
-  }
-  return process.ppid;
-}
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // 터미널 종류로 앱 이름을 넘긴다 — 다만 이건 대비책이다.
 // 평소에는 펫이 자기 프로세스 조상에서 창 주인을 직접 찾으므로 여기 없는 프로그램도 동작한다.
@@ -47,33 +38,6 @@ function anchorApp(env = process.env) {
   if (known[term]) return known[term];
   if (process.platform === "win32" && env.WT_SESSION) return "WindowsTerminal";
   return "";
-}
-
-const alive = (pid) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return e.code === "EPERM";
-  }
-};
-
-// 같은 터미널 탭의 펫만 센다 — 다른 창·다른 탭의 펫 때문에 옆으로 밀리지 않도록
-function livePets(termPid) {
-  let count = 0;
-  let names = [];
-  try {
-    names = fs.readdirSync(RUN_DIR).filter((f) => f.startsWith(`${termPid}-`) && f.endsWith(".pid"));
-  } catch {
-    return 0;
-  }
-  for (const name of names) {
-    const file = path.join(RUN_DIR, name);
-    const pid = Number(fs.readFileSync(file, "utf8").trim());
-    if (pid > 0 && alive(pid)) count += 1;
-    else fs.rmSync(file, { force: true }); // 죽은 펫의 흔적 정리
-  }
-  return count;
 }
 
 // 입력 이름 → 펫 이름. 소문자로 맞추고, 모르는 이름이면 비슷한 이름을 알려 준다.
@@ -90,7 +54,7 @@ function resolveSlug(input, source) {
 }
 
 // Electron 실행 파일. require("electron") 은 쓰지 않는다 — Electron 44 는 실행 파일이 없으면 그 자리에서
-// 100MB 를 받기 시작해 대상 명령이 그만큼 늦게 뜨고, 오프라인이면 매번 스택을 찍는다.
+// 100MB 를 받기 시작해 명령이 그만큼 멈추고, 오프라인이면 매번 스택을 찍는다.
 // 받는 일은 설치(postinstall)와 pkmon setup 이 맡고, 여기서는 있는지만 본다
 function electronPath() {
   try {
@@ -106,139 +70,237 @@ function electronPath() {
 // 펫이 스스로 끝났을 때 남긴 이유 (main.js reportFailure) — since 이후 것만
 function lastError(since) {
   try {
-    const e = JSON.parse(fs.readFileSync(settings.PATHS.lastError, "utf8"));
+    const e = JSON.parse(fs.readFileSync(PATHS.lastError, "utf8"));
     return e && e.at >= since ? e : null;
   } catch {
     return null;
   }
 }
 
-function run(opts, command) {
-  const startedAt = Date.now() / 1000;
-  const debug = Boolean(process.env.PKMON_DEBUG);
-  const isWin = process.platform === "win32";
-
-  // ── 1. 명령을 띄우기 전 — 안내 문구는 여기서만 찍는다. 명령(claude)이 화면을 그린 뒤 끼어들면 화면이 깨진다
-  const electron = electronPath();
-  const wanted = []; // { slug, out }
-  if (!electron) {
-    process.stderr.write("펫을 건너뜀 — Electron 이 아직 준비되지 않음. pkmon setup 을 한 번 실행하면 받는다\n");
-  } else {
-    const source = settings.load().source;
-    for (const input of petList(opts.pet)) {
-      const got = resolveSlug(input, source);
-      if (got.error) {
-        process.stderr.write(`펫 이름을 찾을 수 없음: ${input}\n`);
-        if (got.hints.length) process.stderr.write(`  비슷한 이름:\n${got.hints.map((h) => `    ${h}\n`).join("")}`);
-        continue;
-      }
-      // PKMON_DEBUG=1 이면 판정 로그를 파일로 남긴다. 평소에는 버린다
-      let out = "ignore";
-      if (debug) {
-        fs.mkdirSync(RUN_DIR, { recursive: true });
-        const log = path.join(RUN_DIR, `debug-${process.ppid}-${got.slug}.log`);
-        process.stderr.write(`펫 로그: ${log}\n`);
-        out = fs.openSync(log, "w");
-      }
-      wanted.push({ slug: got.slug, out });
-    }
-  }
-
-  // ── 2. 대상 명령 — 펫 준비(Windows 는 프로세스 조회에 1~2초)를 기다리게 하지 않는다
-  const [cmd, ...cmdArgs] = command;
-  const target = spawnCommand(cmd, cmdArgs, { stdio: "inherit" });
-  const pets = []; // { child, pidFile, slug, stopped, failed }
-  let setupError = null;
-
-  let cleaned = false;
-  const cleanup = () => {
-    if (cleaned) return;
-    cleaned = true;
-    for (const pet of pets) {
-      pet.stopped = true;
-      try {
-        pet.child.kill();
-      } catch {
-        // 이미 끝남
-      }
-      fs.rmSync(pet.pidFile, { force: true });
-    }
-    const failed = pets.filter((p) => p.failed).map((p) => p.slug);
-    if (failed.length) {
-      const why = lastError(startedAt);
-      process.stderr.write(`펫이 뜨지 못함: ${failed.join(", ")}${why ? ` — ${why.message}` : ""} (자세히: pkmon status)\n`);
-    }
-    if (setupError) process.stderr.write(`펫을 띄우지 못함: ${setupError}\n`);
-  };
-
-  // Ctrl+C 는 터미널이 같은 프로세스 그룹 전체(대상 명령 포함)에 보낸다 — 여기서 먼저 죽지 않고 명령이 끝나길 기다린다
-  process.on("SIGINT", () => {});
-  for (const sig of ["SIGTERM", "SIGHUP"]) {
-    process.on(sig, () => {
-      try {
-        target.kill(isWin ? "SIGTERM" : sig); // Windows 에는 SIGHUP 이 없다 — 보내면 던지고 아무 일도 안 한다
-      } catch {
-        // 이미 끝남
-      }
-    });
-  }
-  process.on("exit", cleanup);
-
-  target.on("error", (e) => {
-    if (e.code !== "ENOENT") process.stderr.write(`명령 실행 실패: ${e.message}\n`);
-    // PowerShell 이 따옴표 없는 zapdos,pikachu 를 두 인자로 쪼개면 두 번째 펫 이름이 명령 자리에 온다
-    else if (dex.dexOf(cmd) != null) process.stderr.write(`명령을 찾을 수 없음: ${cmd} — 펫 여러 마리는 ${opts.pet}+${cmd} 처럼 + 로 잇는다\n`);
-    else process.stderr.write(`명령을 찾을 수 없음: ${cmd}\n`);
-    cleanup();
-    process.exit(127);
-  });
-  target.on("exit", (code, signal) => {
-    cleanup();
-    const signum = signal ? os.constants.signals[signal] || 0 : 0;
-    process.exit(code ?? 128 + signum);
-  });
-
-  // ── 3. 펫 — 여기서 무엇이 실패해도 명령은 그대로 돈다. 알림은 명령이 끝날 때 한 번
-  if (!wanted.length) return;
-  try {
-    const termPid = terminalPid();
-    fs.mkdirSync(RUN_DIR, { recursive: true });
-    const base = livePets(termPid); // 이미 떠 있는 펫 수 — 그만큼 옆으로 밀어서 배치
-    wanted.forEach(({ slug, out }, slot) => {
-      const child = spawn(electron, [PROJECT], {
-        stdio: ["ignore", out, out],
-        windowsHide: true,
-        // mac·Linux 에서는 따로 프로세스 그룹을 준다. 같은 그룹이면 `pkmon eevee npm run dev` 에서 Ctrl+C 를 눌렀을 때
-        // 명령보다 펫이 먼저 죽는다. 터미널을 닫으면 펫이 터미널 셸이 죽은 것을 보고 스스로 끝난다 (main.js).
-        // Windows 에서 detached 는 새 콘솔을 만들어 쓰지 않는다
-        detached: !isWin,
-        env: {
-          ...process.env,
-          ...optionEnv(opts),
-          PKMON_SLUG: slug,
-          PKMON_MATCH_CWD: process.cwd(),
-          PKMON_INDEX: String(base + slot),
-          PKMON_ANCHOR_APP: anchorApp(),
-          PKMON_TERM_PID: String(termPid),
-        },
-      });
-      const pidFile = path.join(RUN_DIR, `${termPid}-${child.pid}.pid`);
-      const pet = { child, pidFile, slug, stopped: false, failed: false };
-      pets.push(pet);
-      // 우리가 끝내기 전에 스스로 끝났으면(그림을 못 받음 등) 기억해 두었다가 명령이 끝날 때 알린다
-      child.on("error", () => {
-        pet.failed = true;
-      });
-      child.on("exit", (code) => {
-        if (!pet.stopped && code) pet.failed = true;
-      });
-      if (child.pid) fs.writeFileSync(pidFile, String(child.pid));
-    });
-  } catch (e) {
-    setupError = e.message;
-  } finally {
-    for (const { out } of wanted) if (typeof out === "number") fs.closeSync(out); // 자식이 이어받았다
-  }
+// 펫을 내린다 — 죽이지 않고 pid 파일만 지운다. 펫이 그걸 보고 스스로 끝난다.
+// 프로세스를 직접 죽이면 Windows 에서는 정리 없이 끊기고, 이미 끝난 펫의 번호가 다른 프로세스에 재사용됐을 수도 있다
+// 반환: 내린 펫의 pid 목록
+function dismiss(pets) {
+  for (const pet of pets) fs.rmSync(pet.file, { force: true });
+  return pets.map((pet) => pet.pid);
 }
 
-module.exports = { run, terminalPid, RUN_DIR };
+const say = (line = "") => process.stdout.write(`${line}\n`);
+const slugList = (pets) => pets.map((pet) => pet.slug).join(", ");
+// 안내에 적는 명령 — CLI 안이면 ! 를 붙여야 그대로 따라 칠 수 있다
+const commandFor = (session, rest) => `${session.host ? "!" : ""}pkmon ${rest}`;
+// 이 세션의 떠 있는 펫 (순번 차례)
+const sessionPets = (session) => livePets().filter((pet) => pet.key === session.key);
+
+// 펫 프로세스를 따로 띄우고 번호를 돌려준다 (못 띄우면 null). 출력은 물려주지 않는다 — CLI LLM 은 ! 명령의 출력이
+// 닫힐 때까지 기다린다. 따로 띄우는 이유: 이 명령은 곧바로 끝나는데, Windows 는 따로 띄우지 않은 자식을 부모(node)가
+// 끝날 때 함께 끝내고, mac 은 같은 프로세스 그룹이면 세션 쪽 신호에 같이 죽는다.
+//
+// Windows 는 node 가 직접 띄우지 않고 PowerShell Start-Process 로 띄운다. node 의 spawn(CreateProcess)은 상속 가능한 핸들을
+// 전부 넘겨서, 이 명령이 받은 출력 파이프까지 펫이 쥔다. codex 처럼 ! 명령을 PowerShell 로 돌려 출력을 파이프로 받는
+// CLI 는 그 파이프가 닫힐 때까지 — 펫이 끝날 때까지 — 명령이 안 끝난다 (6초 사는 자식에 6.2초 실측).
+// Start-Process 는 ShellExecute 라 핸들을 넘기지 않는다 (0.37초). 환경변수는 PowerShell 에서 그대로 이어진다
+function launchPet(electron, env) {
+  if (process.platform !== "win32") {
+    return new Promise((resolve) => {
+      const child = spawn(electron, [PROJECT], { stdio: "ignore", detached: true, env });
+      child.once("spawn", () => resolve(child.pid));
+      child.once("error", () => resolve(null));
+      child.unref();
+    });
+  }
+  // 경로는 환경변수로 넘긴다 — 명령줄에 끼워 넣으면 사용자 이름의 공백·따옴표가 PowerShell 문법이 된다
+  const script =
+    "(Start-Process -PassThru -FilePath $env:PKMON_LAUNCH_EXE -WorkingDirectory $env:PKMON_LAUNCH_APP" +
+    " -ArgumentList ('\"' + $env:PKMON_LAUNCH_APP + '\"')).Id";
+  return new Promise((resolve) => {
+    execFile(
+      "powershell",
+      ["-NoProfile", "-NonInteractive", "-Command", script],
+      {
+        env: { ...env, PKMON_LAUNCH_EXE: electron, PKMON_LAUNCH_APP: PROJECT },
+        encoding: "utf8",
+        timeout: 20_000,
+        windowsHide: true,
+        // CLI 가 ! 명령을 작업 개체(job)에 넣어 두었다가 한꺼번에 끝내도 펫은 남게
+        detached: true,
+      },
+      (err, stdout) => {
+        const pid = Number(String(stdout).trim());
+        resolve(!err && pid > 0 ? pid : null);
+      },
+    );
+  });
+}
+
+async function waitGone(pids) {
+  const until = Date.now() + GONE_TIMEOUT_MS;
+  while (pids.some((pid) => state.pidAlive(pid)) && Date.now() < until) await sleep(POLL_MS);
+}
+
+// pkmon stop [펫 ...] [all] — 이 세션의 펫 내리기
+//   이름을 주면 그 펫만(eevee+pikachu 처럼 여러 마리도), all 이면 전부.
+//   아무것도 안 주면 한 마리일 때는 바로 내리고, 여러 마리면 체크리스트로 고른다 (cli/checklist.js).
+//   CLI LLM 의 ! 명령은 표준입력이 터미널이 아니라 키를 받을 수 없다 — 그때는 이름으로 고르는 법을 알려 준다
+async function stop(names = [], { all = false } = {}) {
+  const session = currentSession();
+  const pets = sessionPets(session);
+  if (!pets.length) {
+    say("이 세션에 떠 있는 펫이 없음");
+    return;
+  }
+  const words = names.flatMap((name) => petList(name)).map((name) => name.toLowerCase());
+  let chosen;
+  if (all || words.includes("all")) chosen = pets;
+  else if (words.length) {
+    // 스프라이트시트 저장소가 있으면 2D 가 없는 펫은 -3d 로 떠 있다 (resolveSlug)
+    const matches = (pet, name) => pet.slug === name || pet.slug === `${name}-3d`;
+    chosen = pets.filter((pet) => words.some((name) => matches(pet, name)));
+    const missing = words.filter((name) => !pets.some((pet) => matches(pet, name)));
+    if (missing.length) {
+      process.stderr.write(`이 세션에 없는 펫: ${missing.join(", ")} — 떠 있는 펫: ${slugList(pets)}\n`);
+      process.exitCode = 1;
+    }
+  } else if (pets.length === 1) chosen = pets;
+  else if (process.stdin.isTTY && process.stdout.isTTY) {
+    const picked = await checklist({ title: "pkmon stop", items: pets.map((pet) => pet.slug) });
+    chosen = picked.map((i) => pets[i]);
+  } else {
+    say("pkmon stop");
+    say("---");
+    for (const pet of pets) say(pet.slug);
+    say("---");
+    say("여기서는 키 입력을 받을 수 없어 이름으로 고른다:");
+    const one = commandFor(session, `stop ${pets[0].slug}`);
+    const every = commandFor(session, "stop all");
+    const width = Math.max(one.length, every.length) + 4;
+    say(`  ${one.padEnd(width)}한 마리 (여러 마리는 ${pets[0].slug}+${pets[1].slug})`);
+    say(`  ${every.padEnd(width)}전부`);
+    return;
+  }
+  if (!chosen.length) return;
+  await waitGone(dismiss(chosen));
+  const left = pets.filter((pet) => !chosen.includes(pet));
+  say(`내림: ${slugList(chosen)}${left.length ? ` — 남은 펫: ${slugList(left)}` : ""}`);
+}
+
+async function run(opts) {
+  const startedAt = Date.now() / 1000;
+  const debug = Boolean(process.env.PKMON_DEBUG);
+
+  const electron = electronPath();
+  if (!electron) {
+    process.stderr.write("펫을 띄우지 못함 — Electron 이 아직 준비되지 않음. pkmon setup 을 한 번 실행하면 받는다\n");
+    process.exitCode = 1;
+    return;
+  }
+  const source = settings.load().source;
+  const wanted = [];
+  for (const input of petList(opts.pet)) {
+    const got = resolveSlug(input, source);
+    if (got.error) {
+      process.stderr.write(`펫 이름을 찾을 수 없음: ${input}\n`);
+      if (got.hints.length) process.stderr.write(`  비슷한 이름:\n${got.hints.map((h) => `    ${h}\n`).join("")}`);
+      continue;
+    }
+    if (!wanted.includes(got.slug)) wanted.push(got.slug); // eevee+eevee 는 한 마리
+  }
+  if (!wanted.length) {
+    process.exitCode = 1;
+    return;
+  }
+
+  const session = currentSession();
+  // 같은 세션에 펫을 더한다. 이미 떠 있는 펫 이름이면 그 펫만 내리고 같은 자리(순번)에 다시 띄운다 —
+  // 옵션만 바꿀 때 (!pkmon eevee dot=3). 먼저 끝나길 기다려야 새 펫이 옛 펫의 전역 단축키를 이어받는다
+  const live = sessionPets(session);
+  const replaced = live.filter((pet) => wanted.includes(pet.slug));
+  await waitGone(dismiss(replaced));
+  fs.mkdirSync(PATHS.pets, { recursive: true });
+
+  // 순번 — 옆으로 밀어 배치하는 자리. 바꾸는 펫은 제자리, 새 펫은 남은 펫과 겹치지 않는 가장 앞 빈자리
+  const taken = new Set(live.filter((pet) => !replaced.includes(pet)).map((pet) => pet.index));
+  const slotOf = new Map();
+  for (const pet of replaced) {
+    if (slotOf.has(pet.slug) || taken.has(pet.index)) continue;
+    slotOf.set(pet.slug, pet.index);
+    taken.add(pet.index);
+  }
+  for (const slug of wanted) {
+    if (slotOf.has(slug)) continue;
+    let free = 0;
+    while (taken.has(free)) free += 1;
+    slotOf.set(slug, free);
+    taken.add(free);
+  }
+
+  // 여러 마리는 함께 띄운다 — Windows 는 한 마리에 PowerShell 기동(0.2초 안팎)이 든다
+  const pets = await Promise.all(
+    wanted.map(async (slug) => {
+      const index = slotOf.get(slug);
+      const env = {
+        ...process.env,
+        ...optionEnv(opts),
+        PKMON_SLUG: slug,
+        PKMON_MATCH_CWD: process.cwd(),
+        PKMON_INDEX: String(index),
+        PKMON_ANCHOR_APP: anchorApp(),
+        PKMON_TERM_PID: String(session.term),
+        PKMON_HOST_PID: session.host ? String(session.host) : "",
+        PKMON_SESSION: String(session.key),
+        PKMON_ANCESTORS: session.chain.join(","),
+      };
+      // PKMON_DEBUG=1 이면 펫이 판정 로그를 파일로 남긴다. 평소에는 버린다
+      if (debug) {
+        env.PKMON_LOG = path.join(PATHS.pets, `debug-${session.key}-${slug}.log`);
+        process.stderr.write(`펫 로그: ${env.PKMON_LOG}\n`);
+      }
+      const pet = { slug, pid: null, file: null, ready: false, exited: false };
+      try {
+        pet.pid = await launchPet(electron, env);
+      } catch (e) {
+        process.stderr.write(`펫을 띄우지 못함: ${slug} — ${e.message}\n`);
+      }
+      if (!pet.pid) {
+        pet.exited = true;
+        return pet;
+      }
+      pet.file = settings.petFile(session.key, pet.pid, index, slug);
+      fs.writeFileSync(pet.file, `${pet.pid}\n`);
+      return pet;
+    }),
+  );
+
+  // 펫이 창을 만들었다고 적거나(ready) 끝날 때까지 — 펫은 이 명령의 자식이 아니라서(Windows) 번호로 살아 있는지 본다
+  const until = Date.now() + READY_TIMEOUT_MS;
+  for (;;) {
+    for (const pet of pets) {
+      if (pet.ready || pet.exited) continue;
+      try {
+        pet.ready = /\bready\b/.test(fs.readFileSync(pet.file, "utf8"));
+      } catch {
+        // 쓰는 중 — 다음에 다시 본다
+      }
+      if (!pet.ready && !state.pidAlive(pet.pid)) pet.exited = true;
+    }
+    if (pets.every((pet) => pet.ready || pet.exited) || Date.now() >= until) break;
+    await sleep(POLL_MS);
+  }
+
+  const ready = pets.filter((pet) => pet.ready);
+  const failed = pets.filter((pet) => !pet.ready && pet.exited);
+  const pending = pets.filter((pet) => !pet.ready && !pet.exited);
+  const lifetime = session.host ? "이 세션이 끝나면" : "이 셸이 끝나면";
+  if (ready.length) say(`펫을 띄움: ${slugList(ready)} — ${lifetime} 함께 사라진다`);
+  if (pending.length) say(`아직 뜨는 중: ${slugList(pending)} — 한참 안 보이면 ${commandFor(session, "status")}`);
+  if (failed.length) {
+    const why = lastError(startedAt);
+    process.stderr.write(`펫이 뜨지 못함: ${slugList(failed)}${why ? ` — ${why.message}` : ""} (자세히: ${commandFor(session, "status")})\n`);
+    process.exitCode = 1;
+  }
+  const all = sessionPets(session);
+  if (all.length > 1) say(`이 세션의 펫 ${all.length}마리: ${slugList(all)} — 내리기: ${commandFor(session, "stop")} [이름|all]`);
+  else if (all.length === 1) say(`내리기: ${commandFor(session, "stop")}`);
+}
+
+module.exports = { run, stop };

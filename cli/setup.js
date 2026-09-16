@@ -1,14 +1,15 @@
 // pkmon setup / uninstall — 남의 컴퓨터에 설치하는 부분이라 가장 조심스럽게 다룬다.
 //
-//   1. Claude 훅       ~/.claude/scripts/hooks/pkmon-state.cjs 복사 + settings.json 에 7개 이벤트 등록
-//   2. 펫 데이터 폴더   ~/.claude/pkmon — 훅은 이 폴더가 없으면 아무것도 안 한다
+//   1. 펫 데이터 폴더   ~/.claude/pkmon — 훅은 이 폴더가 없으면 아무것도 안 한다
+//   2. 상태 훅         ~/.claude/scripts/hooks/pkmon-state.cjs 복사 + 쓰고 있는 CLI LLM 마다 이벤트 등록
+//                      claude settings.json · gemini settings.json · codex hooks.json
 //   3. 에디터 확장      VS Code 계열에 탭 구분 확장 설치 (에디터 CLI 가 있을 때만)
 //
 // 원칙
-//   - settings.json 은 백업을 남기고, 이미 있는 항목은 건드리지 않고, 몇 번을 돌려도 결과가 같다
-//   - 파싱할 수 없는 settings.json 은 고치려 들지 않고 멈춘다
+//   - 설정 파일은 백업을 남기고, 이미 있는 항목은 건드리지 않고, 몇 번을 돌려도 결과가 같다
+//   - 파싱할 수 없는 설정 파일은 고치려 들지 않고 멈춘다
 //   - --dry-run 이면 무엇을 바꿀지만 보여 준다
-const { execFileSync } = require("child_process");
+const { execFileSync, execSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -21,29 +22,82 @@ const EXTENSION_ID = "local.pkmon-active-terminal";
 
 // Claude Code 는 CLAUDE_CONFIG_DIR 로 설정 폴더를 옮길 수 있다
 const claudeDir = () => process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
-const settingsFile = () => path.join(claudeDir(), "settings.json");
 const hookTarget = () => path.join(claudeDir(), "scripts", "hooks", HOOK_NAME);
 
-// 이벤트별 matcher — 도구 이벤트는 모든 도구, 나머지는 matcher 없이
-const HOOK_EVENTS = {
-  SessionStart: undefined,
-  UserPromptSubmit: "",
-  PreToolUse: ".*",
-  PermissionRequest: ".*",
-  PostToolUseFailure: ".*",
-  Stop: undefined,
-  StopFailure: undefined,
-};
+// 훅을 등록할 CLI — 설정 파일 모양이 셋 다 { hooks: { 이벤트: [{ matcher?, hooks: [{ type: "command", command, … }] }] } } 다.
+//   events   이벤트 → matcher (undefined 면 넣지 않는다 — 모든 경우에 맞는다)
+//   handler  우리 훅 한 항목. 타임아웃 단위가 CLI 마다 다르다 (claude·codex 초, gemini ms)
+//   always   설정 폴더가 없어도 등록한다 — 펫 데이터가 ~/.claude 아래라 claude 만
+const TARGETS = [
+  {
+    cli: "claude",
+    name: "Claude Code",
+    dir: claudeDir,
+    file: "settings.json",
+    always: true,
+    events: {
+      SessionStart: undefined,
+      UserPromptSubmit: "",
+      PreToolUse: ".*",
+      PermissionRequest: ".*",
+      PostToolUseFailure: ".*",
+      Stop: undefined,
+      StopFailure: undefined,
+    },
+    // claude 는 async 훅을 기다리지 않는다
+    handler: (command) => ({ type: "command", command, async: true, timeout: 5 }),
+  },
+  {
+    cli: "gemini",
+    name: "Gemini CLI",
+    dir: () => path.join(os.homedir(), ".gemini"),
+    file: "settings.json",
+    // gemini 는 훅을 모두 기다린다(async 없음) — 도구 전·모델 호출처럼 잦은 이벤트는 빼고 상태가 바뀌는 곳만.
+    // 승인 대기는 Notification(ToolPermission), 승인 뒤 작업으로 돌아가는 건 AfterTool 이 알린다
+    events: {
+      SessionStart: undefined,
+      BeforeAgent: undefined,
+      Notification: undefined,
+      AfterTool: undefined,
+      AfterAgent: undefined,
+      SessionEnd: undefined,
+    },
+    handler: (command) => ({ name: "pkmon-state", type: "command", command, timeout: 5000 }),
+  },
+  {
+    cli: "codex",
+    name: "Codex CLI",
+    dir: () => process.env.CODEX_HOME || path.join(os.homedir(), ".codex"),
+    file: "hooks.json",
+    // 훅은 codex 0.124 부터 (Interrupt 0.150 · SessionEnd 0.145). 옛 버전은 모르는 이벤트 이름을 무시한다.
+    // async 는 넣지 않는다 — 0.148 전에는 async 훅을 "지원 안 함"으로 통째로 건너뛴다
+    events: {
+      SessionStart: undefined,
+      UserPromptSubmit: undefined,
+      PreToolUse: undefined,
+      PermissionRequest: undefined,
+      PostToolUse: undefined,
+      Stop: undefined,
+      Interrupt: undefined,
+      SessionEnd: undefined,
+    },
+    handler: (command) => ({ type: "command", command, timeout: 5 }),
+  },
+];
+const CODEX_HOOKS_SINCE = [0, 124, 0];
+
+const settingsFile = (target) => path.join(target.dir(), target.file);
 
 const isOurs = (hook) => typeof hook?.command === "string" && hook.command.includes(HOOK_NAME);
 
-// 경로에 공백이 있어도(Windows 사용자 이름 등) 깨지지 않게 따옴표로 감싼다
-const hookCommand = () => `node "${hookTarget()}"`;
+// 경로에 공백이 있어도(Windows 사용자 이름 등) 깨지지 않게 따옴표로 감싼다.
+// claude 는 인자 없이 — 예전 등록과 같은 모양이라야 이미 등록됨으로 보인다
+const hookCommand = (target) => `node "${hookTarget()}"${target.cli === "claude" ? "" : ` --cli ${target.cli}`}`;
 
-// settings.json 을 읽는다. 우리가 이해하지 못하는 모양이면 고치려 들지 않고 멈춘다 —
+// 설정 파일을 읽는다. 우리가 이해하지 못하는 모양이면 고치려 들지 않고 멈춘다 —
 // 남의 설정 파일을 "알아서" 바로잡다가 사용자 훅을 날리는 것보다 멈추고 알리는 편이 낫다
-function readSettings() {
-  const file = settingsFile();
+function readSettings(target) {
+  const file = settingsFile(target);
   if (!fs.existsSync(file)) return { data: {}, existed: false };
   const stop = (why) => ({ error: `${file} 을(를) 다룰 수 없음 (${why}) — 손대지 않고 멈춘다` });
   let data;
@@ -64,9 +118,10 @@ function readSettings() {
   return { data, existed: true };
 }
 
-// 등록된 훅 명령이 가리키는 파일 — 정확히 `node <경로>` · `node "<경로>"` 모양일 때만. 그 밖(환경변수·플래그·래퍼)은 null
+// 등록된 훅 명령이 가리키는 파일 — `node <경로>` · `node "<경로>"` (뒤에 --cli 인자) 모양일 때만.
+// 그 밖(환경변수·플래그·래퍼)은 null
 function hookPathOf(command) {
-  const m = command.trim().match(/^node\s+(?:"([^"]+)"|(\S+))$/);
+  const m = command.trim().match(/^node\s+(?:"([^"]+)"|(\S+))(?:\s+--cli\s+\S+)?$/);
   if (!m) return null;
   const p = m[1] || m[2];
   return p.replace(/^~(?=[\\/])/, os.homedir()).replace(/^\$HOME(?=[\\/])/, os.homedir());
@@ -75,11 +130,11 @@ function hookPathOf(command) {
 // 훅 등록을 더한다 — 이미 우리 훅이 있는 이벤트는 그대로 둔다.
 // 단 없는 파일을 가리키는 옛 등록(다른 경로에 설치했다 지운 경우)은 지금 경로로 고친다 — 두면 훅이 조용히 죽는다.
 // 반환: { added: 더한 이벤트, fixed: 경로를 고친 이벤트 }
-function addHooks(data) {
+function addHooks(data, target) {
   const added = [];
   const fixed = [];
   if (!data.hooks) data.hooks = {}; // 모양 검사는 readSettings 가 했다
-  for (const [event, matcher] of Object.entries(HOOK_EVENTS)) {
+  for (const [event, matcher] of Object.entries(target.events)) {
     const groups = data.hooks[event] || [];
     const ours = groups.flatMap((g) => (Array.isArray(g?.hooks) ? g.hooks.filter(isOurs) : []));
     if (ours.length) {
@@ -88,13 +143,13 @@ function addHooks(data) {
         // 모양을 알아볼 수 있고 그 파일이 없을 때만 고친다 — 사용자가 감싼 명령은 그대로 둔다.
         // 지금 설치하는 자리는 setup 이 먼저 복사하므로 있는 것으로 본다 (미리 보기에서도 같은 판정이 나오게)
         if (file && path.resolve(file) !== path.resolve(hookTarget()) && !fs.existsSync(file)) {
-          hook.command = hookCommand();
+          hook.command = hookCommand(target);
           if (!fixed.includes(event)) fixed.push(event);
         }
       }
       continue;
     }
-    const group = { hooks: [{ type: "command", command: hookCommand(), async: true, timeout: 5 }] };
+    const group = { hooks: [target.handler(hookCommand(target))] };
     if (matcher !== undefined) group.matcher = matcher;
     data.hooks[event] = [...groups, group];
     added.push(event);
@@ -132,8 +187,8 @@ function removeHooks(data) {
 //   심링크(dotfiles 저장소로 관리)면 링크가 아니라 실제 파일을 바꾼다 — rename 은 링크를 일반 파일로 덮어쓴다
 //   권한을 유지한다 — API 키가 들어 있을 수 있어 0600 인 파일을 0644 로 만들면 안 된다
 // 실패하면 { error } — 백신이 파일을 잡고 있는 Windows 등
-function writeSettings(data, existed) {
-  const link = settingsFile();
+function writeSettings(target, data, existed) {
+  const link = settingsFile(target);
   try {
     fs.mkdirSync(path.dirname(link), { recursive: true });
     const file = existed ? fs.realpathSync(link) : link;
@@ -276,7 +331,7 @@ function refuseRoot(what) {
 }
 
 // Electron 실행 파일을 받아 둔다. 설치 때(postinstall) 못 받았으면(오프라인·--ignore-scripts) 여기서 받는다.
-// 펫 실행 중에는 받지 않으므로(대상 명령이 늦어진다) setup 이 유일한 두 번째 기회다
+// 펫을 띄울 때는 받지 않으므로(!pkmon 이 그만큼 멈춘다) setup 이 유일한 두 번째 기회다
 function ensureElectron(dryRun) {
   let dir;
   try {
@@ -324,28 +379,36 @@ function setup({ dryRun = false, editor = true } = {}) {
     fs.copyFileSync(HOOK_SOURCE, target);
   }
 
-  // 3. settings.json
-  const read = readSettings();
-  if (read.error) {
-    say(`설정 등록      ${read.error}`);
-    process.exitCode = 1;
-  } else {
-    const { added, fixed } = addHooks(read.data);
+  // 3. CLI 마다 훅 등록 — 쓰고 있는 CLI(설정 폴더가 있는 것)만. 하나가 실패해도 나머지는 계속한다
+  for (const t of TARGETS) {
+    const label = `훅 등록        ${t.name.padEnd(12)}`;
+    if (!t.always && !fs.existsSync(t.dir())) {
+      say(`${label}설치 안 됨 (${t.dir()} 없음) — 건너뜀`);
+      continue;
+    }
+    const read = readSettings(t);
+    if (read.error) {
+      say(`${label}${read.error}`);
+      process.exitCode = 1;
+      continue;
+    }
+    const { added, fixed } = addHooks(read.data, t);
     const what = [
       added.length ? `이벤트 ${added.length}개 추가${dryRun ? " 예정" : ""}: ${added.join(", ")}` : "",
       fixed.length ? `없는 경로를 가리키던 ${fixed.length}개 고침${dryRun ? " 예정" : ""}: ${fixed.join(", ")}` : "",
     ].filter(Boolean);
-    if (!what.length) say(`설정 등록      ${settingsFile()}  이미 등록됨`);
+    if (!what.length) say(`${label}${settingsFile(t)}  이미 등록됨`);
     else {
-      say(`설정 등록      ${settingsFile()}  ${what.join(" · ")}`);
+      say(`${label}${settingsFile(t)}  ${what.join(" · ")}`);
       if (!dryRun) {
-        const wrote = writeSettings(read.data, read.existed);
+        const wrote = writeSettings(t, read.data, read.existed);
         if (wrote.error) {
           say(`               ${wrote.error}`);
           process.exitCode = 1;
         } else if (wrote.backup) say(`               백업: ${wrote.backup}`);
       }
     }
+    for (const note of hookNotes(t, read.data, added.length > 0)) say(`               ${note}`);
   }
 
   // 4. 에디터 확장 — 같은 창의 여러 터미널 탭 중 펫을 띄운 탭에서만 보이게 한다
@@ -381,35 +444,73 @@ function setup({ dryRun = false, editor = true } = {}) {
   say();
   if (dryRun) say("실제로 적용하려면: pkmon setup");
   else if (process.exitCode) say("설치가 덜 끝났다 — 위 메시지를 확인한 뒤 다시 pkmon setup");
-  else say("끝. 새 터미널에서 pkmon eevee 로 띄워 보세요.");
+  else say("끝. CLI(claude·codex·gemini)를 새로 열고 !pkmon eevee 로 띄워 보세요. 일반 터미널에서는 pkmon eevee");
+}
+
+// codex --version → [주, 부, 수]. 못 알아내면 null (설치 안 됨·PATH 밖)
+function codexVersion() {
+  try {
+    // Windows 의 codex 는 npm 이 만든 codex.cmd 라 셸을 거쳐야 한다. 인자가 고정이라 셸에 넘겨도 안전하다
+    const out = execSync("codex --version", { encoding: "utf8", timeout: 15_000, stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+    const m = out.match(/(\d+)\.(\d+)\.(\d+)/);
+    return m ? m.slice(1).map(Number) : null;
+  } catch {
+    return null;
+  }
+}
+const olderThan = (a, b) => (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) < 0;
+
+// 등록은 됐지만 CLI 쪽 사정으로 안 돌 수 있는 경우를 알린다
+function hookNotes(target, data, added) {
+  const notes = [];
+  if (target.cli === "gemini" && data.hooksConfig && data.hooksConfig.enabled === false) {
+    notes.push("hooksConfig.enabled 가 false 라 gemini 훅이 꺼져 있다 — 상태에 반응하지 않는다");
+  }
+  if (target.cli === "codex") {
+    const v = codexVersion();
+    if (v && olderThan(v, CODEX_HOOKS_SINCE)) {
+      notes.push(`codex ${v.join(".")} 에는 훅이 없다 — ${CODEX_HOOKS_SINCE.join(".")} 이상으로 올리면 상태에 반응한다 (npm i -g @openai/codex)`);
+    } else if (v && added && !olderThan(v, [0, 129, 0])) {
+      notes.push("codex 는 새 훅을 한 번 승인해야 돌린다 — codex 에서 /hooks");
+    }
+  }
+  return notes;
 }
 
 function uninstall({ dryRun = false, purge = false, editor = true } = {}) {
   if (refuseRoot("uninstall")) return;
   say(dryRun ? "pkmon uninstall — 미리 보기 (아무것도 바꾸지 않는다)\n" : "pkmon uninstall\n");
 
-  const read = readSettings();
-  if (read.error) {
-    say(`설정 등록      ${read.error}`);
-    process.exitCode = 1;
-  } else {
+  // 설치할 때 폴더가 없어 건너뛴 CLI 도 본다 — 그 뒤에 설정 파일이 생겼을 수 있다
+  for (const t of TARGETS) {
+    const label = `훅 등록        ${t.name.padEnd(12)}`;
+    if (!fs.existsSync(settingsFile(t))) {
+      say(`${label}설정 파일 없음`);
+      continue;
+    }
+    const read = readSettings(t);
+    if (read.error) {
+      say(`${label}${read.error}`);
+      process.exitCode = 1;
+      continue;
+    }
     const removed = removeHooks(read.data);
-    if (!removed.length) say(`설정 등록      ${settingsFile()}  등록된 훅 없음`);
-    else if (dryRun) say(`설정 등록      이벤트 ${removed.length}개에서 뺄 예정: ${removed.join(", ")}`);
+    if (!removed.length) say(`${label}${settingsFile(t)}  등록된 훅 없음`);
+    else if (dryRun) say(`${label}이벤트 ${removed.length}개에서 뺄 예정: ${removed.join(", ")}`);
     else {
-      const wrote = writeSettings(read.data, read.existed);
+      const wrote = writeSettings(t, read.data, read.existed);
       if (wrote.error) {
-        say(`설정 등록      ${wrote.error}`);
+        say(`${label}${wrote.error}`);
         process.exitCode = 1;
       } else {
-        say(`설정 등록      이벤트 ${removed.length}개에서 뺌: ${removed.join(", ")}`);
+        say(`${label}이벤트 ${removed.length}개에서 뺌: ${removed.join(", ")}`);
         if (wrote.backup) say(`               백업: ${wrote.backup}`);
       }
     }
   }
 
   const target = hookTarget();
-  // 등록을 못 뺐으면 훅 파일은 남긴다 — 등록만 남고 파일이 없으면 Claude 이벤트마다 없는 파일을 실행한다
+  // 등록을 못 뺐으면 훅 파일은 남긴다 — 등록만 남고 파일이 없으면 CLI 이벤트마다 없는 파일을 실행한다
   if (process.exitCode) say("훅 파일        설정에서 등록을 빼지 못해 남김");
   else if (fs.existsSync(target)) {
     say(`훅 파일        ${target}  ${dryRun ? "지울 예정" : "지움"}`);
@@ -437,16 +538,24 @@ function uninstall({ dryRun = false, purge = false, editor = true } = {}) {
   }
 }
 
-// 진단용 — 훅이 등록돼 있는가
+// 진단용 — 훅 파일이 최신인가, CLI 마다 등록돼 있는가
+// 반환: { file, current, clis: [{ name, used, error?, registered?, total? }] } — used 가 false 면 그 CLI 를 안 쓴다
 function hookInstalled() {
-  const read = readSettings();
-  if (read.error) return null;
-  const groups = Object.keys(HOOK_EVENTS).map((e) => (read.data.hooks || {})[e]);
-  const registered = groups.filter((g) => Array.isArray(g) && g.some((x) => Array.isArray(x?.hooks) && x.hooks.some(isOurs))).length;
   const file = fs.existsSync(hookTarget());
   // 업데이트 뒤 훅 파일이 옛 버전인지 — 내용이 번들과 다르면 pkmon setup 으로 바꿔야 한다
   const current = file && fs.readFileSync(hookTarget()).equals(fs.readFileSync(HOOK_SOURCE));
-  return { registered, total: groups.length, file, current };
+  const clis = TARGETS.map((t) => {
+    if (!t.always && !fs.existsSync(t.dir())) return { name: t.name, used: false };
+    const read = readSettings(t);
+    if (read.error) return { name: t.name, used: true, error: read.error };
+    const hooks = read.data.hooks || {};
+    const events = Object.keys(t.events);
+    const registered = events.filter(
+      (e) => Array.isArray(hooks[e]) && hooks[e].some((g) => Array.isArray(g?.hooks) && g.hooks.some(isOurs)),
+    ).length;
+    return { name: t.name, used: true, registered, total: events.length };
+  });
+  return { file, current, clis };
 }
 
 module.exports = { setup, uninstall, hookInstalled };

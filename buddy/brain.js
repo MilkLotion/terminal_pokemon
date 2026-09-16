@@ -144,8 +144,8 @@ function createBrain({ have, durOf, mode = "on", speedPx = 54, timeScale = 1, rn
 
   const out = () => ({ roam: { ...roam }, act, phase });
 
-  // 한 틱 — 입력: 시각, Claude 상태, 마지막 사용자 활동 시각, 산책 범위(없으면 null), 보이는지
-  function tick({ now, claude, activeAt, box, visible }) {
+  // 한 틱 — 입력: 시각, CLI 상태, 마지막 사용자 활동 시각, 산책 범위(없으면 null), 보이는지
+  function tick({ now, agent, activeAt, box, visible }) {
     if (nextAt == null) nextAt = now + restDelay(now, activeAt);
     const idle = now - activeAt;
     // 숨어 있다 다시 보이는 순간 밀린 행동이 튀어나오지 않게 — 나타나자마자 걸어가면 어색하다
@@ -161,9 +161,9 @@ function createBrain({ have, durOf, mode = "on", speedPx = 54, timeScale = 1, rn
       return out();
     }
 
-    // Claude 가 일하는 중 — 상태 동작에 맡긴다. 걷던 자리에 멈추고, 자고 있었으면 깬 것으로 친다.
+    // CLI 가 일하는 중 — 상태 동작에 맡긴다. 걷던 자리에 멈추고, 자고 있었으면 깬 것으로 친다.
     // 그 사이 만진 반응은 끝까지 보여 준 뒤 돌려준다
-    if (claude !== "idle") {
+    if (agent !== "idle") {
       if ((phase === "react" || phase === "react-yield") && now < until) return out();
       if (phase !== "yield") {
         phase = "yield";
@@ -255,10 +255,10 @@ function createBrain({ have, durOf, mode = "on", speedPx = 54, timeScale = 1, rn
       heldRow = rowOf(dragAcc.x, dragAcc.y);
       dragAcc = { x: 0, y: 0 };
     },
-    // 내려놓았다 — 놓은 자리가 새 집이다. Claude 가 일하는 중이어도 반응은 보여 준다
-    drop(now, activeAt, claude) {
+    // 내려놓았다 — 놓은 자리가 새 집이다. CLI 가 일하는 중이어도 반응은 보여 준다
+    drop(now, activeAt, agent) {
       roam = { x: 0, y: 0 };
-      if (!react(now, first(MOVES.drop), claude !== "idle" ? "yield" : "rest")) toRest(now, activeAt);
+      if (!react(now, first(MOVES.drop), agent !== "idle" ? "yield" : "rest")) toRest(now, activeAt);
     },
     // 사용자가 창을 직접 옮겼거나 들고 있던 게 풀렸다 — 반응 없이 쉰다
     rehome(now, activeAt) {
@@ -266,7 +266,7 @@ function createBrain({ have, durOf, mode = "on", speedPx = 54, timeScale = 1, rn
       toRest(now, activeAt);
     },
     // 콕 찔렀다 — 자고 있었으면 먼저 깬다. 걷던 중이면 그 자리에 선다. 반응할 동작이 없으면 아무것도 안 바꾼다
-    click(now, claude) {
+    click(now, agent) {
       if (phase === "held") return;
       if (phase === "sleep") {
         const wake = first(MOVES.wake);
@@ -278,7 +278,7 @@ function createBrain({ have, durOf, mode = "on", speedPx = 54, timeScale = 1, rn
           return;
         }
       }
-      react(now, any(MOVES.click), claude !== "idle" ? "yield" : "rest");
+      react(now, any(MOVES.click), agent !== "idle" ? "yield" : "rest");
     },
   };
 }

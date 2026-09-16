@@ -1,7 +1,7 @@
 // buddy 를 메인 프로세스에 붙이는 층 — 신호를 모아 brain 을 돌리고, 결과를 렌더러로 보낸다.
 //
 // 메인이 알려 주는 것
-//   state   Claude 상태와 마지막 프롬프트 시각 (훅 기록)
+//   state   CLI 상태와 마지막 프롬프트 시각 (훅 기록)
 //   focus   창·터미널 포커스가 바뀌었는지 — 바뀐 값 자체가 아니라 "바뀌었다"만 쓴다
 //   pickup · drag · drop · click   펫을 직접 만진 것
 // 돌려주는 것
@@ -27,7 +27,7 @@ function createBuddy({ art, mode, timeScale = 1, send, log }) {
   const brain = createBrain({ have, durOf, mode, speedPx: 18 * art.zoom, timeScale });
 
   let activeAt = Date.now(); // 마지막 사용자 활동 — 막 켰으면 사용자가 있는 것
-  let claude = "idle";
+  let agent = "idle";
   let focusKey = null;
   let sentAct; // 마지막으로 보낸 동작(JSON). undefined 면 아직 안 보냈다
   let lastPhase = null;
@@ -46,9 +46,9 @@ function createBuddy({ art, mode, timeScale = 1, send, log }) {
     //                       4분짜리 작업이 끝나자마자 잠든다 (시뮬레이션: 프롬프트의 46% 가 자는 펫에 도착)
     state(next, promptAt) {
       if (promptAt) bump(promptAt * 1000);
-      if (next !== claude && next === "running" && claude !== "failed") bump();
-      if (next !== claude && next === "idle") bump();
-      claude = next;
+      if (next !== agent && next === "running" && agent !== "failed") bump();
+      if (next !== agent && next === "idle") bump();
+      agent = next;
     },
 
     // 포커스 묶음(포커스·활성 터미널·터미널 목록 등)이 달라졌으면 사용자가 뭔가 한 것.
@@ -68,11 +68,11 @@ function createBuddy({ art, mode, timeScale = 1, send, log }) {
     },
     drop() {
       bump();
-      brain.drop(Date.now(), activeAt, claude);
+      brain.drop(Date.now(), activeAt, agent);
     },
     click() {
       bump();
-      brain.click(Date.now(), claude);
+      brain.click(Date.now(), agent);
     },
     // 펫 드래그가 아닌 경로로 창이 옮겨졌다 — 놓인 자리가 새 집
     rehome() {
@@ -86,7 +86,7 @@ function createBuddy({ art, mode, timeScale = 1, send, log }) {
 
     tick({ box, visible }) {
       const now = Date.now();
-      const o = brain.tick({ now, claude, activeAt, box, visible });
+      const o = brain.tick({ now, agent, activeAt, box, visible });
       const key = JSON.stringify(o.act);
       if (key !== sentAct) {
         sentAct = key;

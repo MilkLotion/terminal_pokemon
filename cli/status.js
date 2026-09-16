@@ -7,7 +7,7 @@ const settings = require("../config.js");
 const state = require("../lib/state.js");
 const dex = require("../lib/dex.js");
 const { parseCredits } = require("../art/pmd-load.js");
-const { terminalPid, RUN_DIR } = require("./run.js");
+const { currentSession, livePets } = require("./session.js");
 const { hookInstalled } = require("./setup.js");
 
 const PROJECT = path.join(__dirname, "..");
@@ -16,29 +16,24 @@ const { PATHS, USER_DEFAULTS } = settings;
 const say = (line = "") => process.stdout.write(`${line}\n`);
 const age = (at) => (Date.now() / 1000 - (at || 0)).toFixed(1);
 
-function alive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return e.code === "EPERM";
-  }
-}
-
 function status(petArg) {
-  const termPid = terminalPid();
+  // 펫을 띄울 때와 같은 규칙으로 세션·터미널을 잡는다 — CLI LLM 안에서 !pkmon status 로 봐야 그 세션이 잡힌다
+  const session = currentSession();
   const config = settings.load();
 
   say(`설정 파일: ${PATHS.config}`);
   say(`  ${Object.keys(USER_DEFAULTS).map((k) => `${k}=${config[k]}`).join(" ")}`);
 
-  // 설치 상태 — pkmon setup 을 안 했으면 상태별 동작·수면 신호가 없다
+  // 설치 상태 — 훅이 없는 CLI 에서는 상태별 동작 없이 기본 동작(산책·수면)만 돈다
   const hooks = hookInstalled();
-  if (!hooks) say("Claude 훅: settings.json 을 읽을 수 없음");
-  else if (hooks.registered < hooks.total || !hooks.file) {
-    say(`Claude 훅: 덜 설치됨 (등록 ${hooks.registered}/${hooks.total}, 파일 ${hooks.file ? "있음" : "없음"}) — pkmon setup`);
-  } else if (!hooks.current) say("Claude 훅: 옛 버전 파일 — pkmon setup 으로 바꾼다");
-  else say(`Claude 훅: 설치됨 (${hooks.registered}/${hooks.total})`);
+  say(`상태 훅 파일: ${!hooks.file ? "없음 — pkmon setup" : hooks.current ? "최신" : "옛 버전 — pkmon setup 으로 바꾼다"}`);
+  for (const cli of hooks.clis) {
+    const head = `  ${cli.name.padEnd(12)}`;
+    if (!cli.used) say(`${head}안 씀 (설정 폴더 없음)`);
+    else if (cli.error) say(`${head}${cli.error}`);
+    else if (cli.registered < cli.total) say(`${head}덜 등록됨 (${cli.registered}/${cli.total}) — pkmon setup`);
+    else say(`${head}등록됨 (${cli.registered}/${cli.total})`);
+  }
 
   // 펫이 스스로 끝난 이유 — 펫의 출력은 평소 버려지므로 여기서만 보인다
   try {
@@ -48,12 +43,21 @@ function status(petArg) {
     // 실패 기록 없음
   }
 
-  // 펫과 같은 규칙으로 내 터미널을 잡는다 — 첫 추정을 확장 기록으로 바로잡는다
-  const records = state.readWindowRecords(PATHS.windows);
-  const chain = state.ancestorPids();
-  const refined = state.terminalFromRecords(chain, records);
-  const term = refined ?? termPid;
-  say(`\n이 터미널 셸 번호: ${term}${refined != null && refined !== termPid ? ` (부모 ${termPid} 에서 확장 기록으로 바로잡음)` : ""}`);
+  const { records, chain, term, guess, termFrom } = session;
+  const how = {
+    ancestors: guess != null && guess !== term ? `확장 기록으로 바로잡음 (추정 ${guess})` : "확장 기록과 조상이 맞음",
+    focus: "조상에서 못 찾아 포커스된 창의 활성 탭으로 잡음 — 부모 관계가 끊긴 체인",
+    given: "PKMON_TERM_PID",
+    guess: records.length
+      ? "추정 — 조상에서 탭을 못 찾았고 포커스된 VS Code 창도 없어 탭 구분이 꺼진다"
+      : "추정 — 확장 기록이 없어 탭 구분이 꺼진다",
+  }[termFrom];
+  say(`\n이 터미널 셸 번호: ${term} (${how})`);
+  say(
+    session.host
+      ? `이 세션: pid ${session.host} — 끝나면 이 세션의 펫도 끝난다`
+      : "이 세션: 셸에서 바로 실행 (CLI LLM 안이면 !pkmon status) — 터미널 셸이 끝나면 펫도 끝난다",
+  );
   const myPids = state.pidsUpTo(chain, term);
   say(`내 프로세스 체인: ${[...myPids].join(" ")}`);
 
@@ -96,7 +100,7 @@ function status(petArg) {
   } catch {
     // 훅이 아직 한 번도 기록하지 않았다
   }
-  say(`\n세션 상태 기록 ${files.length}건 (최신순)${files.length ? "" : " — 훅을 설치한 뒤 Claude 를 한 번 실행하면 생긴다"}`);
+  say(`\n세션 상태 기록 ${files.length}건 (최신순)${files.length ? "" : " — 훅을 설치한 뒤 CLI LLM 을 한 번 실행하면 생긴다"}`);
   for (const file of files.slice(0, 10)) {
     let record;
     try {
@@ -104,15 +108,19 @@ function status(petArg) {
     } catch {
       continue;
     }
-    const isMine = state.stateIsMine(record, myPids, config.runtime.matchCwd);
+    const inTerminal = state.stateIsMine(record, myPids, config.runtime.matchCwd);
+    const bySession = session.host && Array.isArray(record.ancestors) && record.ancestors.includes(session.host);
     const prompt = record.promptAt ? `  프롬프트 ${age(record.promptAt)}초 전` : "";
     say(
-      `  ${path.basename(file).slice(0, 8)}  기록=${record.state}` +
-        ` → 지금=${state.resolveState(record)}  ${age(record.at)}초 전${prompt}  ${isMine ? "← 이 터미널" : "다른 터미널"}`,
+      `  ${path.basename(file).slice(0, 8)}  ${String(record.cli || "claude").padEnd(6)}  기록=${record.state}` +
+        ` → 지금=${state.resolveState(record)}  ${age(record.at)}초 전${prompt}  ` +
+        `${bySession ? "← 이 세션" : inTerminal ? "이 터미널" : "다른 터미널"}`,
     );
   }
-  const info = state.sessionInfo(PATHS.state, myPids, config.runtime.matchCwd);
-  say(`\n이 터미널 펫이 보여야 할 동작: ${info.state}`);
+  // 펫과 같은 규칙 — 셸에서 바로 띄운 펫은 CLI 상태를 따르지 않는다
+  const terminalOnly = !session.host;
+  const info = state.sessionInfo(PATHS.state, { myPids, matchCwd: config.runtime.matchCwd, hostPid: session.host, terminalOnly });
+  say(`\n이 세션 펫이 보여야 할 동작: ${info.state}${terminalOnly ? " (셸에서 띄운 펫은 CLI 상태를 따르지 않고 기본 동작만)" : ""}`);
   // buddy 는 마지막 사용자 활동 3분 뒤에 잠든다 — 프롬프트 시각이 그 근거 중 하나다
   say(`마지막 프롬프트: ${info.promptAt ? `${age(info.promptAt)}초 전` : "기록 없음 (훅이 옛 버전이거나 아직 입력 전)"}`);
 
@@ -137,19 +145,10 @@ function status(petArg) {
   }
 
   // 떠 있는 펫 — pkmon 이 남긴 pid 파일로 센다 (Windows 에는 ps 가 없다)
-  let all = 0;
-  let here = 0;
-  try {
-    for (const name of fs.readdirSync(RUN_DIR).filter((f) => f.endsWith(".pid"))) {
-      const pid = Number(fs.readFileSync(path.join(RUN_DIR, name), "utf8").trim());
-      if (!(pid > 0) || !alive(pid)) continue;
-      all += 1;
-      if (name.startsWith(`${termPid}-`) || name.startsWith(`${term}-`)) here += 1;
-    }
-  } catch {
-    // 아직 한 번도 띄운 적 없음
-  }
-  say(`\n떠 있는 펫: ${all}마리 (이 터미널 ${here}마리)`);
+  const pets = livePets();
+  const here = pets.filter((pet) => pet.key === session.key);
+  say(`\n떠 있는 펫: ${pets.length}마리 (이 세션 ${here.length}마리) — ${PATHS.pets}`);
+  for (const pet of here) say(`  ${pet.slug.padEnd(14)}  순번 ${pet.index}  pid ${pet.pid}  ${pet.ready ? "떠 있음" : "뜨는 중"}`);
 }
 
 module.exports = { status };

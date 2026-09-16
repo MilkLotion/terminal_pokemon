@@ -39,6 +39,13 @@ export function log(obj) {
 }
 
 export function start() {
+  // 디버그 — 마우스가 이 창까지 오는지. 안 오면 창 위에 다른 창이 있거나 OS 가 입력을 막는 것이다
+  // (캡처 단계에서 듣는다 — 포인터 처리보다 먼저, 막히더라도 찍히게)
+  if (opts.debug) {
+    for (const type of ["pointerdown", "pointerup"]) {
+      document.addEventListener(type, (e) => log({ input: type, button: e.button, screen: [e.screenX, e.screenY] }), true);
+    }
+  }
   window.pkmon.getArt().then(async (art) => {
     const loaders = { pmd: () => import("./pmd.js"), gif: () => import("./showdown.js"), sheet: () => import("./sheet.js") };
     const load = loaders[art.kind];

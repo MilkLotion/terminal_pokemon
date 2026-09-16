@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// pkmon — 명령을 실행하는 동안 펫을 띄우고, 명령이 끝나면 펫도 함께 끝낸다.
+// pkmon — 이 명령을 실행한 세션에 펫을 붙인다. claude 안에서 !pkmon eevee 로 띄우면 claude 가 끝날 때 함께 끝난다.
 //
-//   pkmon <펫> [이름=값 ...] [-- <명령> [인자 ...]]
-//   pkmon setup | uninstall | status
+//   pkmon <펫> [이름=값 ...]
+//   pkmon stop [펫 ...|all] | setup | uninstall | status
 //
 // mac·Windows·npm 전역 설치·git clone 모두 이 파일 하나로 돈다.
 // (예전 bash·PowerShell 두 벌은 옵션 해석이 조금씩 어긋나 한 벌로 합쳤다)
@@ -43,10 +43,13 @@ switch (parsed.kind) {
   case "status":
     require("../cli/status.js").status(parsed.rest[0]);
     break;
+  case "stop":
+    require("../cli/run.js").stop(parsed.rest, { all: parsed.flags.has("--all") });
+    break;
   default:
     if (parsed.error) {
       process.stderr.write(`${parsed.error}\n\n${USAGE}\n`);
       process.exit(2);
     }
-    require("../cli/run.js").run(parsed.opts, parsed.command);
+    require("../cli/run.js").run(parsed.opts);
 }
