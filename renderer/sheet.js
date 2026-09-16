@@ -1,79 +1,40 @@
-<!doctype html>
-<html lang="ko">
-  <head>
-    <meta charset="utf-8" />
-    <title>terminal_pkmon</title>
-    <style>
-      html,
-      body {
-        margin: 0;
-        background: transparent;
-        overflow: hidden;
-      }
-      body {
-        -webkit-app-region: drag; /* 창 아무 데나 잡아 이동 */
-        cursor: grab;
-      }
-      canvas,
-      img {
-        display: block;
-        image-rendering: pixelated; /* 도트 뭉개짐 방지 */
-      }
-      canvas {
-        width: 100%;
-        height: 100%;
-      }
+// codex-pokepets 스프라이트시트 — 192x208 칸을 8x9 격자로 담은 한 장.
+// 팩마다 도트 굵기가 제각각이고 여러 줄이 idle 복사본인 경우가 있어,
+// 픽셀을 훑어 빈 칸을 찾고 지문으로 같은 그림인지 가리는 보정이 붙어 있다.
+// PMD 는 메타데이터가 정확해서 이런 추측이 전혀 필요 없다 — 그래서 파일을 나눴다.
+import { canvas, ctx, opts, shared, onStateChange, resize } from "./core.js";
 
-    </style>
-  </head>
-  <body>
-    <canvas id="pkmon"></canvas>
-    <script>
-      const CELL = { w: 192, h: 208 };
-      // Codex 스프라이트시트의 동작 순서 (세로 9칸)
-      const ROWS = [
-        "idle",
-        "running-right",
-        "running-left",
-        "waving",
-        "jumping",
-        "failed",
-        "waiting",
-        "running",
-        "review",
-      ];
-      // 실제로 쓰는 동작 — 좌우 이동·점프는 Codex 앱이 화면을 돌아다닐 때 쓰는 줄이라 여기선 안 쓴다
-      const USED_ROWS = ["idle", "waving", "failed", "waiting", "running", "review"];
-      const params = new URLSearchParams(location.search);
-      const fps = Number(params.get("fps") || 7);
-      const debug = Boolean(params.get("debug"));
-      // auto = 스프라이트가 그 상태를 표현하지 못할 때만 보정 · on = 항상 · off = 안 함
-      const motionAssist = params.get("motionAssist") || "off";
-      const DRAW_MS = 33; // 보정 움직임을 부드럽게 하려고 그리기만 30fps
-      // 펫마다 원본 해상도가 달라 도트 굵기가 2배까지 차이 난다 — 이 값(px)에 맞춰 크기를 조정한다. 0 이면 보정 없음
-      const dotTarget = Number(params.get("dotSize") ?? 2);
-      // 마지막 → 첫 프레임이 튀는 스프라이트는 왕복으로 재생한다 (3D 는 올리는 동작만 담겨 있다)
-      const pingPong = params.get("pingPong") || "auto";
-      const LOOP_BREAK_RATIO = 2.5; // 연속 변화 평균의 이 배를 넘으면 루프가 끊긴 것으로 본다
-      const BASELINE_MARGIN = 6; // 바닥선 여백 — 크기가 달라도 서 있는 선을 맞춘다
+const CELL = { w: 192, h: 208 };
+const { fps, motionAssist, dotTarget, pingPong, debug } = opts;
+const DRAW_MS = 33; // 보정 움직임을 부드럽게 하려고 그리기만 30fps
+const LOOP_BREAK_RATIO = 2.5; // 연속 변화 평균의 이 배를 넘으면 루프가 끊긴 것으로 본다
+const BASELINE_MARGIN = 6; // 바닥선 여백 — 크기가 달라도 서 있는 선을 맞춘다
 
-      const canvas = document.getElementById("pkmon");
-      canvas.width = CELL.w;
-      canvas.height = CELL.h;
-      const ctx = canvas.getContext("2d");
-      ctx.imageSmoothingEnabled = false;
+const ROWS = [
+  "idle",
+  "running-right",
+  "running-left",
+  "waving",
+  "jumping",
+  "failed",
+  "waiting",
+  "running",
+  "review",
+];
+// 실제로 쓰는 동작 — 좌우 이동·점프는 Codex 앱이 화면을 돌아다닐 때 쓰는 줄이라 여기선 안 쓴다
+const USED_ROWS = ["idle", "waving", "failed", "waiting", "running", "review"];
 
-      let sheet = null;
-      let frames = {}; // 동작 → 내용이 있는 프레임 번호 목록
-      const sequences = {}; // 동작 → 실제 재생 순서 (왕복이면 되돌아오는 프레임까지 포함)
-      const fingerprints = {}; // 동작 → 프레임 지문 (동작끼리 같은 그림인지 비교용)
-      let state = "idle";
-      let tick = 0;
-      let stateStartedAt = 0;
-      let draws = 0;
-      let transform = { scale: 1, dx: 0, dy: 0, dot: null };
+resize(CELL.w, CELL.h);
 
-      function scanFrames() {
+let sheet = null;
+let frames = {}; // 동작 → 내용이 있는 프레임 번호 목록
+const sequences = {}; // 동작 → 실제 재생 순서 (왕복이면 되돌아오는 프레임까지 포함)
+const fingerprints = {}; // 동작 → 프레임 지문 (동작끼리 같은 그림인지 비교용)
+let tick = 0;
+let draws = 0;
+let transform = { scale: 1, dx: 0, dy: 0, dot: null };
+
+function scanFrames() {
         // 빈 칸을 걸러내고, 동작끼리 같은 그림인지 비교할 지문도 함께 만든다
         const probe = document.createElement("canvas");
         probe.width = CELL.w;
@@ -239,11 +200,11 @@
       function assistOffset(now) {
         if (motionAssist === "off") return { dx: 0, dy: 0 };
         // auto 는 "그 상태를 스프라이트가 표현하지 못할 때"만 — 대기는 비교 대상이 자기 자신이라 제외
-        if (motionAssist !== "on" && (state === "idle" || !sameAsIdle(state))) return { dx: 0, dy: 0 };
+        if (motionAssist !== "on" && (shared.state === "idle" || !sameAsIdle(shared.state))) return { dx: 0, dy: 0 };
 
         // 위아래로만 움직인다 — 좌우로 흔들면 스프라이트 자체의 움직임과 부딪혀 어색해진다
         const t = now / 1000;
-        switch (state) {
+        switch (shared.state) {
           case "running":
             return { dx: 0, dy: -Math.abs(Math.sin(t * 5)) * 4 };
           case "failed":
@@ -259,7 +220,7 @@
 
       function draw() {
         draws += 1;
-        const row = sequences[state] ? state : "idle";
+        const row = sequences[shared.state] ? shared.state : "idle";
         const cols = sequences[row];
         if (!cols || !cols.length) return;
         const c = cols[tick % cols.length];
@@ -279,81 +240,55 @@
         );
       }
 
-      // 원본 GIF — 프레임 수·간격이 원본 그대로라 계산할 게 없다. 브라우저가 알아서 돌린다
-      function setupGif(art) {
-        canvas.style.display = "none";
-        const img = document.createElement("img");
-        img.src = art.dataUrl;
-        img.style.width = `${art.w * art.scale}px`;
-        img.style.height = `${art.h * art.scale}px`;
-        document.body.appendChild(img);
-        if (debug) {
-          console.log(JSON.stringify({ 그림: "gif", 원본: `${art.w}x${art.h}`, 배율: art.scale }));
-          setInterval(() => console.log(JSON.stringify({ kind: "gif", state, visibility: document.visibilityState })), 2000);
-        }
+function setupSheet(art) {
+  const img = new Image();
+  img.onload = () => {
+    sheet = img;
+    scanFrames();
+    buildSequences();
+    transform = computeTransform();
+    draw();
+
+    // 스프라이트 프레임은 fps 대로 넘기고, 그리기는 30fps — 보정 움직임을 부드럽게
+    const frameMs = Math.round(1000 / fps);
+    const startedAt = performance.now();
+    let lastFrame = -1;
+    setInterval(() => {
+      const nextFrame = Math.floor((performance.now() - startedAt) / frameMs);
+      if (nextFrame !== lastFrame) {
+        lastFrame = nextFrame;
+        tick += 1;
       }
+      draw();
+    }, DRAW_MS);
 
-      // 팩의 스프라이트시트 — 8칸 격자에서 프레임을 골라 직접 돌린다
-      function setupSheet(art) {
-        const img = new Image();
-        img.onload = () => {
-          sheet = img;
-          scanFrames();
-          buildSequences();
-          transform = computeTransform();
-          stateStartedAt = performance.now();
-          draw();
+    if (debug) {
+      console.log(
+        JSON.stringify({
+          그림: "sheet",
+          도트: transform.dot,
+          배율: transform.scale,
+          pingPong,
+          재생순서: Object.fromEntries(
+            Object.keys(sequences).map((row) => [row, `${frames[row].length}장→${sequences[row].length}스텝`]),
+          ),
+        }),
+      );
+      setInterval(
+        () =>
+          console.log(
+            JSON.stringify({ tick, draws, state: shared.state, visibility: document.visibilityState })),
+        2000,
+      );
+    }
+  };
+  img.src = art.dataUrl;
+}
 
-          // 스프라이트 프레임은 fps 대로 넘기고, 그리기는 30fps — 보정 움직임을 부드럽게
-          const frameMs = Math.round(1000 / fps);
-          const startedAt = performance.now();
-          let lastFrame = -1;
-          setInterval(() => {
-            const nextFrame = Math.floor((performance.now() - startedAt) / frameMs);
-            if (nextFrame !== lastFrame) {
-              lastFrame = nextFrame;
-              tick += 1;
-            }
-            draw();
-          }, DRAW_MS);
-
-          if (debug) {
-            console.log(
-              JSON.stringify({
-                그림: "sheet",
-                도트: transform.dot,
-                배율: transform.scale,
-                pingPong,
-                재생순서: Object.fromEntries(
-                  Object.keys(sequences).map((row) => [row, `${frames[row].length}장→${sequences[row].length}스텝`]),
-                ),
-              }),
-            );
-            setInterval(
-              () =>
-                console.log(
-                  JSON.stringify({ tick, draws, state, visibility: document.visibilityState })),
-              2000,
-            );
-          }
-        };
-        img.src = art.dataUrl;
-      }
-
-      window.pkmon.getArt().then((art) => (art.kind === "gif" ? setupGif(art) : setupSheet(art)));
-
-      window.pkmon.onState((next) => {
-        if (next !== state) {
-          // 그림이 같으면 프레임을 이어서 재생 — 되감으면 날갯짓이 중간에 끊겨 보인다
-          if (!sameFrames(next, state)) tick = 0;
-          state = next;
-          stateStartedAt = performance.now();
-        }
-      });
-      window.pkmon.onClickThrough((on) => {
-        document.body.style.webkitAppRegion = on ? "no-drag" : "drag";
-        document.body.style.cursor = on ? "default" : "grab";
-      });
-    </script>
-  </body>
-</html>
+export function setup(art) {
+  setupSheet(art);
+  // 그림이 같으면 프레임을 이어서 재생 — 되감으면 날갯짓이 중간에 끊겨 보인다
+  onStateChange((next, prev) => {
+    if (!sameFrames(next, prev)) tick = 0;
+  });
+}

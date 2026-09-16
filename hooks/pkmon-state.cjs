@@ -98,6 +98,9 @@ process.stdin.on("end", () => {
     if (mapping.state === "running" && prev && prev.state === "failed" && prev.hold && now - prev.at < prev.hold) {
       record = { ...prev, then: "running" };
     }
+    // 마지막 프롬프트 시각은 이어 간다 — 뒤따르는 도구 호출·응답 완료 기록이 덮어쓰면 사라진다.
+    // 펫이 "사용자가 마지막으로 뭔가 한 때"를 알아야 3분 뒤에 잠든다
+    record.promptAt = event === "UserPromptSubmit" ? now : prev && prev.promptAt;
 
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(record));

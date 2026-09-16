@@ -4,15 +4,25 @@
 명령을 실행하는 동안 함께 뜨고, 명령이 끝나면 같이 사라진다. macOS · Windows 에서 동작한다.
 
 ```bash
-pkmon gengar            # 2D 도트 팬텀 — 명령을 생략하면 claude
-pkmon zapdos-3d         # 3D 썬더
+pkmon eevee             # 명령을 생략하면 claude
 pkmon zapdos,pikachu    # 여러 마리
 pkmon eevee -- codex    # 다른 명령을 감쌀 때
 ```
 
-포켓몬 이미지는 이 저장소에 없다. 실행할 때 [Pokémon Showdown](https://play.pokemonshowdown.com/sprites/) 의
-원본 애니메이션 GIF 를 한 번 내려받아 캐시하고, 없으면 [codex-pokepets](https://github.com/dnnyngyen/codex-pokepets)
-스프라이트시트를 읽는다. 이미지 권리는 Nintendo / Game Freak / Creatures Inc. 에 있으며 개인·비상업 팬 용도로만 쓴다.
+펫은 Claude 가 일하는 상태에 따라 동작이 바뀌고(걷기·두리번·쓰러짐…), 한가할 때는 창 안을 가끔 돌아다니다가
+3분 동안 아무 입력이 없으면 잠든다. 집어 들면 아파하고, 콕 찌르면 반응한다 — [buddy](#buddy--돌아다니고-졸고-반응하기).
+
+포켓몬 이미지는 이 저장소에 없다. 실행할 때 한 번 내려받아 캐시한다.
+
+| 그림 (`art=`) | 출처 | 특징 |
+|---|---|---|
+| `pmd` (기본) | [PMDCollab/SpriteCollab](https://sprites.pmdcollab.org) | 동작이 종마다 10~40종 — 상태별 동작·buddy 가 된다. 도트가 작고 각지다 |
+| `showdown` | [Pokémon Showdown](https://play.pokemonshowdown.com/sprites/) 원본 GIF | 화질이 가장 좋지만 동작이 하나뿐 |
+| `sheet` | [codex-pokepets](https://github.com/dnnyngyen/codex-pokepets) 스프라이트시트 | 로컬 파일. 상태별 줄 9개 |
+
+못 받으면 `pmd → showdown → sheet` 순서로 내려간다.
+포켓몬 권리는 Nintendo / Game Freak / Creatures Inc. 에 있으며 개인·비상업 팬 용도로만 쓴다.
+PMD 스프라이트는 **CC BY-NC 4.0** 이다 — [라이선스](#라이선스) 참고.
 
 ## 요구사항
 
@@ -68,7 +78,9 @@ pkmon pikachu                          # 명령을 생략하면 claude
 pkmon charizard-3d -- codex
 pkmon zapdos,pikachu                   # 쉼표로 여러 마리 — 나란히 뜬다
 pkmon eevee pos=free                   # 창 밖에도 둘 수 있게 (기본은 pos=fix)
-pkmon eevee gif=off                    # 스프라이트시트 — 상태마다 진짜 동작이 따로 있다
+pkmon eevee dot=3                      # 크게 — PMD 는 도트가 작아 3~4 를 권한다
+pkmon eevee buddy=calm                 # 덜 돌아다니게 (off 면 제자리)
+pkmon eevee art=showdown               # 원본 GIF — 화질 우선, 동작은 하나
 pkmon eevee -- claude -p "고쳐줘"       # 대상 명령의 인자는 '--' 뒤에
 ```
 
@@ -78,7 +90,7 @@ pkmon eevee -- claude -p "고쳐줘"       # 대상 명령의 인자는 '--' 뒤
 ```
 env    FOO=1        cmd args
 nice   -n 10        cmd args
-pkmon  eevee gif=off -- cmd args
+pkmon  eevee dot=3 -- cmd args
 ```
 
 ### 옵션
@@ -87,9 +99,11 @@ pkmon  eevee gif=off -- cmd args
 |---|---|---|
 | (첫 인자) | 펫 이름 | 쉼표로 여러 마리. `--pet <이름>` 으로도 준다 |
 | `pos=` | `fix`(기본) · `free` | 따라가는 창 안에 가둘지 |
-| `gif=` | `auto`(기본) · `off` | `off` 면 스프라이트시트 — 상태별 동작 9종 |
-| `dot=` | 숫자 | 도트 한 칸을 몇 px 로 볼지 (펫 크기) |
-| `fps=` | 숫자 | 스프라이트시트 모드 재생 속도 |
+| `art=` | `pmd`(기본) · `showdown` · `sheet` | 그림 소스 |
+| `buddy=` | `on`(기본) · `calm` · `off` | 돌아다니기·졸기·만지기 반응. `pmd` 에서만 동작 |
+| `dot=` | 숫자 | 도트 한 칸을 몇 px 로 볼지 (펫 크기). PMD 는 3~4 권장 |
+| `fps=` | 숫자 | `sheet` 재생 속도 |
+| `gif=` | `off` · `on` | 예전 옵션 — `art=sheet` · `art=showdown` 과 같다 |
 | `keep=` | `on` · `off` | 다른 앱을 봐도 숨지 않기 |
 | `click=` | `on` · `off` | 펫 위 클릭을 아래 터미널로 통과 |
 
@@ -102,14 +116,16 @@ pkmon  eevee gif=off -- cmd args
 |---|---|
 | `PKMON_SLUG` | 펫 이름 |
 | `PKMON_POS` | `pos=` |
-| `PKMON_USE_GIF` | `gif=` |
+| `PKMON_ART` | `art=` |
+| `PKMON_BUDDY` | `buddy=` |
 | `PKMON_DOT_SIZE` | `dot=` |
 | `PKMON_FPS` | `fps=` |
 | `PKMON_KEEP_VISIBLE` | `keep=` |
 | `PKMON_CLICK_THROUGH` | `click=` |
 | `PKMON_DEBUG=1` | 판정 로그를 파일로 남긴다 (경로를 알려 준다) |
+| `PKMON_USE_GIF` | `gif=` (예전 옵션) |
 
-- 펫을 드래그해 원하는 자리에 놓으면 위치가 기억된다. 펫마다 따로 기억한다.
+- 펫을 드래그해 원하는 자리에 놓으면 위치가 기억된다. 펫마다 따로 기억한다. buddy 는 거기를 집으로 삼는다.
 - 여러 마리를 띄우면 겹치지 않게 옆으로 밀려서 배치된다.
 
 | 단축키 | 동작 |
@@ -122,6 +138,7 @@ pkmon  eevee gif=off -- cmd args
 ### 펫 이름
 
 [codex-pokepets 의 `pets/` 폴더명](https://github.com/dnnyngyen/codex-pokepets/tree/main/pets)을 쓴다.
+PMD 는 같은 이름을 도감 번호로 바꿔 받는다(`lib/dex.json`) — `gengar` 와 `gengar-3d` 는 PMD 에서 같은 그림이다.
 
 | 입력 | 결과 |
 |---|---|
@@ -142,13 +159,15 @@ pkmon  eevee gif=off -- cmd args
 | 항목 | 기본 | 설명 |
 |---|---|---|
 | `slug` | `pikachu` | 펫 이름 |
-| `dotSize` | `2` | 도트 한 칸을 몇 px 로 볼지 — 펫 크기를 좌우한다. `0` 이면 원본 그대로 |
-| `useGif` | `auto` | 원본 GIF 재생. `off` 면 스프라이트시트 |
+| `dotSize` | `2` | 도트 한 칸을 몇 px 로 볼지 — 펫 크기를 좌우한다. PMD 는 정수 배율(3~4 권장), `sheet` 는 `0` 이면 원본 그대로 |
+| `art` | `pmd` | 그림 소스 — `pmd` · `showdown` · `sheet` |
+| `buddy` | `on` | `on` · `calm`(덜 돌아다님) · `off`(제자리) |
 | `keepVisible` | `false` | `true` 면 다른 앱을 봐도 펫이 남는다 (`Cmd/Ctrl + Alt + K`) |
 | `clickThrough` | `false` | `true` 면 펫 위를 클릭해도 아래 터미널이 눌린다. 대신 드래그로 못 옮긴다 (`Cmd/Ctrl + Alt + P`) |
 | `pos` | `fix` | `fix` 는 따라가는 창 안에만 둔다. `free` 는 화면 아무 데나 |
-| `fps` | `7` | 스프라이트시트 모드에서만 쓰는 프레임 속도 |
+| `fps` | `7` | `sheet` 에서만 쓰는 프레임 속도 |
 
+예전 설정의 `useGif: "off"` 는 `art: "sheet"` 로 읽는다.
 `window` 항목은 드래그할 때 자동으로 저장되는 위치라 직접 적을 일이 없다.
 그 밖의 값(스프라이트 저장소 경로, 따라갈 앱, 왕복 재생, 움직임 보정 등)은 손댈 일이 거의 없어
 `config.js` 의 `INTERNAL` 에 두었다.
@@ -158,7 +177,7 @@ pkmon  eevee gif=off -- cmd args
 
 ```bash
 pkmon gengar keep=on       # 이번만 항상 보이기
-pkmon gengar gif=off       # 이번만 스프라이트시트
+pkmon gengar art=sheet     # 이번만 스프라이트시트
 pkmon gengar dot=3         # 이번만 크게
 ```
 
@@ -166,7 +185,8 @@ pkmon gengar dot=3         # 이번만 크게
 |---|---|
 | `PKMON_SLUG` | `pkmon=` |
 | `PKMON_POS` | `pos=` |
-| `PKMON_USE_GIF` | `gif=` |
+| `PKMON_ART` | `art=` |
+| `PKMON_BUDDY` | `buddy=` |
 | `PKMON_DOT_SIZE` | `dot=` |
 | `PKMON_FPS` | `fps=` |
 | `PKMON_KEEP_VISIBLE` | `keep=` |
@@ -299,45 +319,79 @@ cp hooks/pkmon-state.cjs ~/.claude/scripts/hooks/
 | `UserPromptSubmit` | `matcher` 는 빈 문자열 |
 | `PreToolUse` · `PermissionRequest` · `PostToolUseFailure` | `matcher` 는 `".*"` |
 
-| Claude Code 상태 | 펫 동작 |
-|---|---|
-| 세션 시작 | 손 흔들기 (6초) → 대기 |
-| 프롬프트 입력 · 도구 실행 | 작업 중 |
-| 권한 확인 대기 | 기다림 |
-| 도구 실패 · API 오류 | 실패 (6~10초) |
-| 응답 완료 | 손 흔들기 (4초) → 대기 |
+| Claude Code 상태 | 펫 상태 | PMD 동작 (앞에서부터 가진 것) |
+|---|---|---|
+| 세션 시작 · 응답 완료 | `waving` (6초·4초) → 대기 | `Pose` 한 번 · `Charge` · `Nod` |
+| 프롬프트 입력 · 도구 실행 | `running` | `Walk`(옆모습) · `Hop` |
+| 권한 확인 대기 | `waiting` | `Rotate` · `LookUp` · `Nod` |
+| 도구 실패 · API 오류 | `failed` (6~10초) | `Faint`(쓰러진 채) · `Trip` · `Cringe` · `Hurt` |
+| 그 밖 | `idle` | `Idle` |
+
+동작이 적은 펫은 조용히 다음 후보로 내려가고, 끝까지 없으면 `Idle` 을 쓴다.
 
 훅은 세션마다 `~/.claude/pkmon/state/<세션>.json` 에 상태를 남기고, 자기를 띄운 프로세스 조상
 (훅 → claude → 터미널 셸)도 함께 적는다. 펫은 그 목록에 자기 터미널 셸 번호가 있는 기록만 따라가므로,
 같은 프로젝트를 여러 터미널에서 열어도 섞이지 않는다.
 
-**GIF 모드에서는 그림이 하나뿐이라 상태별 동작 구분이 없다.** 상태에 따라 그림이 바뀌길 원하면
-`useGif` 를 `off` 로 두고 스프라이트시트를 쓴다.
+훅은 마지막 프롬프트 시각(`promptAt`)도 이어서 적는다. buddy 가 "사용자가 마지막으로 뭔가 한 때"를
+알아야 잠들 수 있어서다. **예전에 복사해 둔 훅이 있으면 다시 복사한다.**
+
+`art=showdown` 은 그림이 하나뿐이라 상태별 동작 구분이 없다.
 
 ### 상태에 따라 동작이 달라지는 방식
 
-스프라이트시트 모드는 상태마다 **진짜 그림**이 따로 있다(9줄 격자에서 줄을 바꿔 재생한다).
+- `pmd` — 상태마다 **다른 동작 시트**를 재생한다. 프레임마다 길이가 다른 원본 타이밍(AnimData.xml)을 그대로 쓴다.
+  한 번만 보여 줄 동작(`Pose`)은 끝나면 대기로 돌아가고, 쓰러짐(`Faint`)은 마지막 자세로 멈춰 있다.
+- `sheet` — 9줄 격자에서 상태에 맞는 줄을 재생한다.
+- `showdown` — 원본 GIF 한 장이라 상태와 무관하게 같은 그림이다.
 
-원본 GIF 모드는 애니메이션이 하나뿐이라 그림으로는 상태를 나눌 수 없다. 그래서 GIF 위에
-CSS 동작을 얹는다.
+## buddy — 돌아다니고, 졸고, 반응하기
 
-| 상태 | 동작 |
+`art=pmd` 일 때 기본으로 켜진다. 상태 표시기가 아니라 옆에 있는 친구처럼 보이게 하는 게 목적이다.
+
+| 언제 | 무엇을 |
 |---|---|
-| `idle` | 없음 |
-| `running` | 위아래로 가볍게 눌렸다 펴짐 |
-| `waiting` | 천천히 밝아졌다 어두워짐 (입력 대기라 눈에 띄어야 한다) |
-| `waving` | 좌우로 짧게 눌림 |
-| `failed` | 빠르게 떨림 + 붉은 톤 |
-| `review` | 느리게 좌우로 눌림 + 밝기 변화 |
+| 한가할 때 (Claude `idle`) | 가끔 창 안 아무 데로나 걷는다. 한 번에 260px 까지라 여러 번에 걸쳐 창 전체를 돌아다닌다 |
+| 걷지 않을 때 | 가끔 두리번(`LookUp`·`Rotate`·`Nod`) |
+| 입력 150초 없음 | 새로 움직이지 않는다 |
+| 입력 180초 없음 | 그 자리에서 잔다 (`Sleep`) |
+| 깨는 신호 | 프롬프트 전송 · 작업이 끝남 · 창/터미널 포커스 변화 · 펫을 만짐 · Claude 가 일을 시작함 |
+| 집어 들 때 | 아파한다(`Hurt`) → 끄는 방향을 보며 버둥거린다 |
+| 내려놓을 때 | 폴짝(`Hop`) · 끄덕(`Nod`) · `Pose` 중 가진 첫 것. 놓은 자리가 새 집이 된다 |
+| 콕 누를 때 | `Nod`·`Pose`·`Hop`·`LookUp` 중 하나 (자고 있었으면 먼저 깬다) |
+| Claude 가 일할 때 | 걷던 자리에 멈추고 상태 동작에 맡긴다. 그 사이 만지면 짧게 반응하고 돌아간다 |
 
-창이 그림 크기에 딱 맞아서 **넘치는 변형은 잘린다.** 그래서 위치를 옮기지 않고 줄이는 방향과
-밝기만 쓴다.
+빈도는 일부러 낮다. 한 번 움직인 뒤 최소 20초는 쉬고, 그 뒤 평균 2분쯤 지나 다음 행동을 한다(규칙적으로
+보이지 않게 지수분포로 뽑는다). 최근에 사용자가 뭔가 했으면 조금 자주, 오래 조용했으면 더 드물게 움직인다.
+숨었다 다시 보일 때도 20초는 가만히 있는다. 드래그로 놓은 자리는 집으로 기억되어, 다음에 띄울 때 거기서 시작한다.
+
+- `buddy=calm` — 무작위 대기 시간 2.2배(최소 20초 쉬는 건 같다), 두리번도 절반
+- `Hop` 은 칸이 커서 대부분의 펫에서 빠진다(아래 창 크기 참고) — 그럴 땐 다음 후보를 쓴다
+- `buddy=off` — 제자리에서 상태 동작만
+- 펫이 보이지 않을 때(다른 탭·다른 앱)는 돌아다니지 않는다. 자는 시계는 계속 간다
+- 동작이 부족한 펫은 없는 반응을 조용히 건너뛴다. `Walk` 가 없으면 산책하지 않는다(순간이동은 안 한다)
+- 창 크기는 모든 동작 중 가장 큰 칸으로 고정된다. 점프(`Hop`)처럼 칸이 큰 동작은 창을 키워 IDE 클릭을 막으므로 뺀다
+- **클릭 통과(`click=on`)를 켜면 클릭이 아래로 가서 만지기 반응이 없다.** 옮길 수도 없다
+
+판단은 `buddy/brain.js`(창·Electron 을 모르는 순수 로직), 메인에 붙이는 층은 `buddy/body.js` 에 있다.
+시험할 때는 `PKMON_BUDDY_TIMESCALE=0.05` 로 시간을 20배 빠르게 돌릴 수 있다(9초 만에 잠든다).
 
 ## 그림에 대한 메모
 
 실측해서 정한 동작들이라 근거를 남겨 둔다.
 
-### 원본 GIF 를 기본으로 쓰는 이유
+### PMD 를 기본으로 쓰는 이유
+
+GIF 는 애니메이션이 하나라 상태를 그림으로 나눌 수 없다. CSS 로 누르거나 흔들어 흉내 내 봤지만 어색해서 뺐다.
+PMDCollab 은 종마다 동작이 따로 있는 거의 유일한 오픈 스프라이트 모음이다(1025종 중 979종, 이브이 34종).
+
+- `https://spriteserver.pmdcollab.org/assets/<도감4자리>/sprites.zip` 을 받아 `~/.claude/pkmon/pmd/` 에 캐시한다.
+  풀지 않고 메모리에서 읽는다
+- 스프라이트가 없는 종은 404 가 아니라 **200 + 빈 ZIP** 을 준다. 크기·내용을 검사해 캐시에 눌러앉지 않게 한다
+- 저작자 목록(`credits.txt`)은 ZIP 에 없어 GitHub 에서 따로 받는다 — `pkmon-status <펫>` 이 보여 준다
+- 칸 크기가 동작마다 달라도 기준점이 `(칸너비/2, 칸높이/2+4)` 로 같아서, 고정 캔버스 가운데에 놓으면 발 위치가 맞는다
+
+### 원본 GIF (art=showdown)
 
 스프라이트시트는 8칸 격자에 맞추느라 원본을 6장으로 줄여서 사이클이 잘려 있다.
 
@@ -349,9 +403,9 @@ CSS 동작을 얹는다.
 
 주소는 3D 가 `sprites/ani/<이름>.gif`, 2D 가 `sprites/gen5ani/<슬러그>.gif` 다. 폼도 이름으로 구분된다.
 처음 띄울 때 그 펫 GIF 하나만 받아 `~/.claude/pkmon/gifs/` 에 캐시하고, 이후에는 네트워크를 쓰지 않는다.
-못 받으면(오프라인·404) 스프라이트시트로 넘어간다.
+못 받으면(오프라인·404) 스프라이트시트로 넘어간다. 화질은 가장 좋지만 상태별 동작·buddy 는 없다.
 
-### 도트 굵기 통일 (dotSize)
+### 도트 굵기 통일 (dotSize) — sheet
 
 펫마다 원본 해상도가 다른데 스프라이트시트는 전부 비슷한 크기로 키워 넣어서, 같은 창에서도
 도트 굵기가 최대 2배까지 차이 난다(팬텀 64px→2px, 이브이 33px→4px). `dotSize` 에 맞춰 펫마다
@@ -379,8 +433,9 @@ CSS 동작을 얹는다.
 pkmon-status
 ```
 
-설정 값, 이 터미널의 프로세스 체인, 살아 있는 IDE 창 기록 전부, 탭 축 판정, 세션별 상태,
-"이 터미널 펫이 보여야 할 동작", 떠 있는 펫 수를 한 번에 보여 준다.
+설정 값, 이 터미널의 프로세스 체인, 살아 있는 IDE 창 기록 전부, 탭 축 판정, 세션별 상태와 마지막 프롬프트,
+"이 터미널 펫이 보여야 할 동작", PMD 캐시·저작자, 떠 있는 펫 수를 한 번에 보여 준다.
+`pkmon-status eevee` 처럼 펫 이름을 주면 그 펫의 PMD 저작자를 보여 준다.
 판정 로직은 펫과 **같은 코드**(`lib/state.js`)를 쓰므로 실제 동작과 어긋나지 않는다.
 
 펫이 어느 창에 붙었는지까지 보려면 디버그 모드로 띄운다.
@@ -391,9 +446,16 @@ PKMON_DEBUG=1 pkmon eevee
 
 로그 파일 경로를 알려 준다.
 
-폴링마다 `{want, visible, tab, front, anchorId, head}` 를 찍는다. `tab` 이 `null` 이면 확장
-기록을 못 찾은 것이고, `front` 가 `false` 면 다른 창이 앞에 있다는 뜻이다.
+폴링마다 `{want, visible, tab, anchorId, target, head, state, pos, roam, driftMax}` 를 찍는다.
+`tab` 이 `null` 이면 확장 기록을 못 찾은 것이다. `roam` 은 집에서 산책 나간 거리,
+`driftMax` 는 창을 옮기라고 지시한 자리와 실제 자리의 최대 차이다 — 3 을 넘으면 드래그 판정이 흔들린다.
+buddy 가 켜져 있으면 `{buddy: 단계, act: 동작/방향/방식, idleSec, roam}` 도 단계가 바뀔 때마다 찍는다.
 
 ## 라이선스
 
-MIT. 자세한 내용은 [LICENSE](LICENSE) 참고. 포켓몬 이미지는 이 저장소에 포함되어 있지 않다.
+코드는 MIT. 자세한 내용은 [LICENSE](LICENSE) 참고. 포켓몬 이미지는 이 저장소에 포함되어 있지 않다.
+
+PMD 스프라이트는 [PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab) 기여자들의 작품이며
+**CC BY-NC 4.0**(저작자 표시·비상업) 이다. MIT 와 섞일 수 없어 저장소에 넣지 않고, 실행할 때 사용자 컴퓨터로
+받아 캐시만 한다. 펫별 저작자는 `pkmon-status <펫>` 으로 확인한다. 이 도구로 만든 화면을 공유할 때는
+저작자와 출처를 함께 밝힌다.

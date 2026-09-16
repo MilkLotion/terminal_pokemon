@@ -18,6 +18,14 @@ const STATE_ANIMS = {
 };
 // 옆모습이라 걷는 티가 나는 것만 오른쪽 행. 나머지는 정면
 const ROW_OF = { running: 2 };
+// 상태와 별개로 buddy 가 요청할 수 있는 동작 — 산책·수면·드래그·클릭 반응에 쓴다.
+// 없는 동작은 조용히 빠지고, buddy 쪽이 후보 중 있는 것을 고른다
+const EXTRA_ANIMS = ["Walk", "Sleep", "EventSleep", "Laying", "Wake", "Hurt", "Cringe", "Nod", "Pose", "Hop", "LookUp", "Rotate"];
+// 추가 동작의 칸 크기 상한 — 상태 동작이 정한 칸의 이 배수까지만 받는다.
+// 창 크기는 모든 동작의 최대 칸으로 고정되는데, 투명한 부분도 클릭을 막는다.
+//   Hop  점프 높이까지 칸에 담겨 이브이 48→80, 썬더 104→136 — 빠진다 (반응은 Nod·Pose 로 대신)
+//   Hurt 이브이 40x48 → 48x48 로 가로 20% 늘지만 받는다 — 집어 들 때 아파하는 반응이 buddy 의 핵심이다
+const EXTRA_BUDGET = 1.25;
 const DUR_UNIT = 1000 / 60; // AnimData 의 Duration 은 1/60초 단위
 
 const tag = (block, name) => {
@@ -59,44 +67,70 @@ function pngSize(buf) {
   return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
 }
 
-// 상태별 클립을 고른다. 없는 동작은 조용히 건너뛴다
+// 동작 하나를 시트로 만든다. 시트가 선언과 안 맞으면 null
+function sheetOf(zip, anims, name) {
+  const a = anims.get(name);
+  if (!a) return null;
+  const png = zip.get(`${a.sheet}-Anim.png`);
+  const size = png && pngSize(png);
+  if (!size) return null;
+  const cols = Math.floor(size.w / a.fw);
+  const rows = Math.floor(size.h / a.fh);
+  // 프레임 수가 선언과 다르면 시트가 깨진 것 — 쓰지 않는다
+  if (cols !== a.durations.length || rows < 1) return null;
+  return {
+    fw: a.fw,
+    fh: a.fh,
+    rows,
+    frames: a.durations.map((d, i) => ({ x: i, ms: Math.round(d * DUR_UNIT) })),
+    dataUrl: `data:image/png;base64,${png.toString("base64")}`,
+  };
+}
+
+// 그림 묶음을 만든다.
+//   anims  동작 이름 → 시트 (여러 상태가 같은 동작을 쓰면 한 번만 담긴다)
+//   clips  상태 → { anim, mode, row }
+//   cell   담긴 모든 동작의 최대 칸 — 창 크기가 된다
 function buildClips(zip) {
   const xml = zip.get("AnimData.xml");
   if (!xml) return null;
-  const anims = parseAnimData(xml.toString("utf8"));
+  const parsed = parseAnimData(xml.toString("utf8"));
 
+  const anims = {};
   const clips = {};
-  let cellW = 0;
-  let cellH = 0;
+  const take = (name) => {
+    if (!(name in anims)) anims[name] = sheetOf(zip, parsed, name);
+    return anims[name];
+  };
   for (const [state, candidates] of Object.entries(STATE_ANIMS)) {
     for (const [anim, mode] of candidates) {
-      const a = anims.get(anim);
-      if (!a) continue;
-      const png = zip.get(`${a.sheet}-Anim.png`);
-      const size = png && pngSize(png);
-      if (!size) continue;
-      const cols = Math.floor(size.w / a.fw);
-      const rows = Math.floor(size.h / a.fh);
-      // 프레임 수가 선언과 다르면 시트가 깨진 것 — 쓰지 않는다
-      if (cols !== a.durations.length || rows < 1) continue;
-
-      clips[state] = {
-        anim,
-        mode,
-        fw: a.fw,
-        fh: a.fh,
-        rows,
-        row: Math.min(ROW_OF[state] ?? 0, rows - 1), // 1행짜리 동작 방어
-        frames: a.durations.map((d, i) => ({ x: i, ms: Math.round(d * DUR_UNIT) })),
-        dataUrl: `data:image/png;base64,${png.toString("base64")}`,
-      };
-      cellW = Math.max(cellW, a.fw);
-      cellH = Math.max(cellH, a.fh);
+      const sheet = take(anim);
+      if (!sheet) continue;
+      clips[state] = { anim, mode, row: Math.min(ROW_OF[state] ?? 0, sheet.rows - 1) }; // 1행짜리 동작 방어
       break;
     }
   }
   if (!clips.idle) return null; // idle 도 못 구하면 이 펫은 PMD 로 못 그린다
-  return { cell: { w: cellW, h: cellH }, clips };
+
+  // 후보로 들여다봤지만 시트가 없던 것(null)을 걷어낸다. 채택된 후보에서 멈추므로 성공한 시트는 모두 쓰인다
+  for (const name of Object.keys(anims)) if (!anims[name]) delete anims[name];
+  const cell = { w: 0, h: 0 };
+  for (const a of Object.values(anims)) {
+    cell.w = Math.max(cell.w, a.fw);
+    cell.h = Math.max(cell.h, a.fh);
+  }
+
+  for (const name of EXTRA_ANIMS) {
+    if (anims[name]) continue;
+    const sheet = sheetOf(zip, parsed, name);
+    if (!sheet || sheet.fw > cell.w * EXTRA_BUDGET || sheet.fh > cell.h * EXTRA_BUDGET) continue;
+    anims[name] = sheet;
+  }
+  for (const a of Object.values(anims)) {
+    cell.w = Math.max(cell.w, a.fw);
+    cell.h = Math.max(cell.h, a.fh);
+  }
+  return { cell, anims, clips };
 }
 
 module.exports = { readZipClips: (buf) => buildClips(readZip(buf)), buildClips, parseAnimData, STATE_ANIMS };

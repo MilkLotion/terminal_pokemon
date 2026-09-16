@@ -6,7 +6,7 @@
 #
 # 예:
 #   pkmon eevee                            명령을 생략하면 claude
-#   pkmon eevee gif=off dot=4 -- claude
+#   pkmon eevee buddy=calm dot=4 -- claude
 #
 # 인자 경계는 env(1)·nice(1) 과 같다 — 우리 옵션은 앞에, 대상 명령은 '--' 뒤에.
 # 대상 명령의 인자는 한 글자도 건드리지 않는다.
@@ -19,7 +19,7 @@ if (-not $env:PKMON_HOME -or -not (Test-Path (Join-Path $env:PKMON_HOME "config.
 function Invoke-Pkmon {
   param([string[]]$Arguments)
 
-  $pet = ""; $pos = ""; $gif = ""; $dot = ""; $fps = ""; $keep = ""; $click = ""; $art = ""
+  $pet = ""; $pos = ""; $gif = ""; $dot = ""; $fps = ""; $keep = ""; $click = ""; $art = ""; $buddy = ""
   $i = 0
   # 첫 인자가 옵션도 이름=값 도 아니면 펫 이름으로 받는다
   if ($Arguments.Count -gt 0 -and $Arguments[0] -notmatch '^-' -and $Arguments[0] -notmatch '=') {
@@ -32,6 +32,7 @@ function Invoke-Pkmon {
     elseif ($a -eq '--pos')   { $pos   = $Arguments[$i + 1]; $i += 2 }
     elseif ($a -eq '--gif')   { $gif   = $Arguments[$i + 1]; $i += 2 }
     elseif ($a -eq '--art')   { $art   = $Arguments[$i + 1]; $i += 2 }
+    elseif ($a -eq '--buddy') { $buddy = $Arguments[$i + 1]; $i += 2 }
     elseif ($a -eq '--dot')   { $dot   = $Arguments[$i + 1]; $i += 2 }
     elseif ($a -eq '--fps')   { $fps   = $Arguments[$i + 1]; $i += 2 }
     elseif ($a -eq '--keep')  { $keep  = $Arguments[$i + 1]; $i += 2 }
@@ -40,6 +41,7 @@ function Invoke-Pkmon {
     elseif ($a -match '^pos=(.+)$')   { $pos   = $Matches[1]; $i += 1 }
     elseif ($a -match '^gif=(.+)$')   { $gif   = $Matches[1]; $i += 1 }
     elseif ($a -match '^art=(.+)$')   { $art   = $Matches[1]; $i += 1 }
+    elseif ($a -match '^buddy=(.+)$') { $buddy = $Matches[1]; $i += 1 }
     elseif ($a -match '^dot=(.+)$')   { $dot   = $Matches[1]; $i += 1 }
     elseif ($a -match '^fps=(.+)$')   { $fps   = $Matches[1]; $i += 1 }
     elseif ($a -match '^keep=(.+)$')  { $keep  = $Matches[1]; $i += 1 }
@@ -63,10 +65,6 @@ function Invoke-Pkmon {
     Write-Error "$Command 을(를) 찾을 수 없음"
     return
   }
-  if (-not $pet) {
-    & $real.Source @rest
-    return
-  }
 
   $electron = Join-Path $env:PKMON_HOME "node_modules/.bin/electron.cmd"
   $overlays = @()
@@ -83,40 +81,51 @@ function Invoke-Pkmon {
     }
   }
 
-  if (Test-Path $electron) {
-    # 터미널 종류에 따라 따라갈 앱 — 그 앱 창 모서리에 붙고, 앞에 없을 때는 숨는다
-    $anchor = switch ($env:TERM_PROGRAM) {
-      "vscode" { "Code" }
-      default { if ($env:WT_SESSION) { "WindowsTerminal" } else { "" } }
-    }
-    $env:PKMON_MATCH_CWD = (Get-Location).Path
-    $env:PKMON_ANCHOR_APP = $anchor
-    if ($pos) { $env:PKMON_POS = $pos }
-    if ($gif) { $env:PKMON_USE_GIF = $gif }
-    if ($art) { $env:PKMON_ART = $art }
-    if ($dot) { $env:PKMON_DOT_SIZE = $dot }
-    if ($fps) { $env:PKMON_FPS = $fps }
-    if ($keep) { $env:PKMON_KEEP_VISIBLE = $keep }
-    if ($click) { $env:PKMON_CLICK_THROUGH = $click }
-    # 이 PowerShell 자신이 터미널 탭의 프로세스 — VS Code 가 보는 번호와 같다
-    $env:PKMON_TERM_PID = "$PID"
+  # 이번 호출이 건드리는 환경변수. $env: 는 이 PowerShell 세션 전체에 남으므로 끝나면 원래 값으로 되돌린다 —
+  # 안 그러면 다음 pkmon 호출이 이번 옵션을 물려받는다(이번 gif=off 가 다음 실행의 그림을 바꾼다).
+  # 지우지 않고 되돌리는 건, 사용자가 프로필에 미리 걸어 둔 값(PKMON_POS 등)을 살리기 위해서다. PKMON_HOME 은 손대지 않는다
+  $envNames = @("PKMON_POS", "PKMON_USE_GIF", "PKMON_ART", "PKMON_BUDDY", "PKMON_DOT_SIZE", "PKMON_FPS",
+                "PKMON_KEEP_VISIBLE", "PKMON_CLICK_THROUGH", "PKMON_TERM_PID", "PKMON_SLUG", "PKMON_INDEX",
+                "PKMON_MATCH_CWD", "PKMON_ANCHOR_APP")
+  $savedEnv = @{}
+  foreach ($name in $envNames) { $savedEnv[$name] = [Environment]::GetEnvironmentVariable($name, "Process") }
 
-    $slot = 0
-    foreach ($slug in ($pet -split ',')) {
-      $slug = $slug.Trim()
-      if (-not $slug) { continue }
-      $env:PKMON_SLUG = $slug
-      $env:PKMON_INDEX = "$($base + $slot)"
-      $proc = Start-Process -FilePath $electron -ArgumentList $env:PKMON_HOME -PassThru -WindowStyle Hidden
-      $overlays += $proc
-      Set-Content -Path (Join-Path $runDir "$($proc.Id).pid") -Value $proc.Id
-      $slot += 1
-    }
-  } else {
-    Write-Warning "펫을 건너뜀 — Electron 미설치: $env:PKMON_HOME 에서 npm install 필요"
-  }
-
+  # 설정부터 try 안에 둔다 — $ErrorActionPreference 가 Stop 인 프로필에서 Start-Process 가 실패해도 finally 가 돈다
   try {
+    if (Test-Path $electron) {
+      # 터미널 종류에 따라 따라갈 앱 — 그 앱 창 모서리에 붙고, 앞에 없을 때는 숨는다
+      $anchor = switch ($env:TERM_PROGRAM) {
+        "vscode" { "Code" }
+        default { if ($env:WT_SESSION) { "WindowsTerminal" } else { "" } }
+      }
+      $env:PKMON_MATCH_CWD = (Get-Location).Path
+      $env:PKMON_ANCHOR_APP = $anchor
+      if ($pos) { $env:PKMON_POS = $pos }
+      if ($gif) { $env:PKMON_USE_GIF = $gif }
+      if ($art) { $env:PKMON_ART = $art }
+      if ($buddy) { $env:PKMON_BUDDY = $buddy }
+      if ($dot) { $env:PKMON_DOT_SIZE = $dot }
+      if ($fps) { $env:PKMON_FPS = $fps }
+      if ($keep) { $env:PKMON_KEEP_VISIBLE = $keep }
+      if ($click) { $env:PKMON_CLICK_THROUGH = $click }
+      # 이 PowerShell 자신이 터미널 탭의 프로세스 — VS Code 가 보는 번호와 같다
+      $env:PKMON_TERM_PID = "$PID"
+
+      $slot = 0
+      foreach ($slug in ($pet -split ',')) {
+        $slug = $slug.Trim()
+        if (-not $slug) { continue }
+        $env:PKMON_SLUG = $slug
+        $env:PKMON_INDEX = "$($base + $slot)"
+        $proc = Start-Process -FilePath $electron -ArgumentList $env:PKMON_HOME -PassThru -WindowStyle Hidden
+        $overlays += $proc
+        Set-Content -Path (Join-Path $runDir "$($proc.Id).pid") -Value $proc.Id
+        $slot += 1
+      }
+    } else {
+      Write-Warning "펫을 건너뜀 — Electron 미설치: $env:PKMON_HOME 에서 npm install 필요"
+    }
+
     & $real.Source @rest
   } finally {
     foreach ($o in $overlays) {
@@ -124,6 +133,8 @@ function Invoke-Pkmon {
       if (-not $o.HasExited) { Stop-Process -Id $o.Id -ErrorAction SilentlyContinue }
       Remove-Item (Join-Path $runDir "$($o.Id).pid") -ErrorAction SilentlyContinue
     }
+    # 값이 없던 것은 $null 로 되돌리면 지워진다
+    foreach ($name in $envNames) { [Environment]::SetEnvironmentVariable($name, $savedEnv[$name], "Process") }
   }
 }
 

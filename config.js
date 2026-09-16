@@ -24,6 +24,7 @@ const USER_DEFAULTS = {
   slug: "pikachu", // 펫 이름 (codex-pokepets 의 pets/ 폴더명)
   dotSize: 2, // 도트 한 칸을 몇 px 로 볼지 — 펫 크기를 좌우한다. 0 이면 원본 그대로
   art: "pmd", // 그림 소스 — pmd(동작 여러 개) · showdown(원본 GIF, 동작 하나) · sheet(codex 팩)
+  buddy: "on", // 창 안을 돌아다니고 졸고 만지면 반응 — on · calm(덜 돌아다님) · off. PMD 에서만 동작
   keepVisible: false, // true 면 크롬 등 다른 앱을 봐도 펫이 남는다 (Cmd+Alt+K)
   clickThrough: false, // true 면 펫 위 클릭이 아래 터미널로 통과한다 (Cmd+Alt+P)
   pos: "fix", // fix = 따라가는 창 안에만 있게 가둔다 · free = 화면 아무 데나 둘 수 있다
@@ -91,12 +92,21 @@ function load() {
   if (env.PKMON_SLUG) override("slug", env.PKMON_SLUG);
   if (env.PKMON_DOT_SIZE) override("dotSize", Number(env.PKMON_DOT_SIZE));
   if (env.PKMON_ART) override("art", env.PKMON_ART);
+  // 예전 gif=off·gif=on — art 를 따로 주지 않았을 때만 art 로 옮긴다
+  else if (asBool(env.PKMON_USE_GIF) === false) override("art", "sheet");
+  else if (asBool(env.PKMON_USE_GIF) === true) override("art", "showdown");
+  if (env.PKMON_BUDDY) override("buddy", env.PKMON_BUDDY);
   if (env.PKMON_FPS) override("fps", Number(env.PKMON_FPS) || config.fps);
   boolOverride("keepVisible", env.PKMON_KEEP_VISIBLE);
   boolOverride("clickThrough", env.PKMON_CLICK_THROUGH);
   if (env.PKMON_POS) override("pos", env.PKMON_POS);
   if (env.PKMON_SCALE) override("scale", Number(env.PKMON_SCALE) || config.scale);
   if (env.PKMON_SOURCE) override("source", env.PKMON_SOURCE);
+  // buddy 는 on·calm·off 세 가지. on/off 자리에 true/false·1/0 도 받는다 — 모르는 값이면 켠다(기본)
+  const buddyBool = asBool(config.buddy);
+  if (buddyBool !== null) config.buddy = buddyBool ? "on" : "off";
+  else if (!["on", "calm", "off"].includes(String(config.buddy).toLowerCase())) config.buddy = "on";
+  else config.buddy = String(config.buddy).toLowerCase();
   config.fromEnv = fromEnv;
 
   // pkmon 래퍼가 넘기는 실행 정보 — 설정이 아니라 이번 실행의 맥락이다
@@ -107,6 +117,8 @@ function load() {
     anchorApp: env.PKMON_ANCHOR_APP || null, // 따라갈 앱 (터미널 종류로 결정)
     windowsDir: env.PKMON_WINDOWS_DIR || PATHS.windows,
     debug: Boolean(env.PKMON_DEBUG),
+    // buddy 시간을 한꺼번에 줄인다 — 3분 수면을 몇 초 만에 확인하는 시험용 (0.05 면 20배 빠르게)
+    buddyTimeScale: Number(env.PKMON_BUDDY_TIMESCALE) > 0 ? Number(env.PKMON_BUDDY_TIMESCALE) : 1,
   };
   return config;
 }

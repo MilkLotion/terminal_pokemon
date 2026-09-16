@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # 펫이 이상하게 보일 때 지금 상태를 확인한다
-# 사용: pkmon-status        (이 터미널 기준으로 판정 결과까지 표시)
+# 사용: pkmon-status [펫]    (이 터미널 기준으로 판정 결과까지 표시 · 펫을 주면 그 PMD 그림의 저작자도)
 set -uo pipefail
 
 PROJECT="${PKMON_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 TERM_PID="$PPID"
 
-node - "$PROJECT" "$TERM_PID" <<'NODE'
-const [project, termPidArg] = process.argv.slice(2);
+node - "$PROJECT" "$TERM_PID" "${1:-}" <<'NODE'
+const [project, termPidArg, petArg] = process.argv.slice(2);
 const termPid = Number(termPidArg);
 // 경로·설정·판정은 전부 공통 모듈에서 온다 — 펫과 같은 코드를 쓴다
 const settings = require(`${project}/config.js`);
@@ -77,19 +77,49 @@ for (const file of files.slice(0, 10)) {
     continue;
   }
   const isMine = state.stateIsMine(record, myPids, config.runtime.matchCwd);
+  const prompt = record.promptAt ? `  프롬프트 ${age(record.promptAt)}초 전` : "";
   console.log(
     `  ${require("path").basename(file).slice(0, 8)}  기록=${record.state}` +
-      ` → 지금=${state.resolveState(record)}  ${age(record.at)}초 전  ${isMine ? "← 이 터미널" : "다른 터미널"}`,
+      ` → 지금=${state.resolveState(record)}  ${age(record.at)}초 전${prompt}  ${isMine ? "← 이 터미널" : "다른 터미널"}`,
   );
 }
-console.log(`\n이 터미널 펫이 보여야 할 동작: ${state.sessionState(PATHS.state, myPids, config.runtime.matchCwd)}`);
+const info = state.sessionInfo(PATHS.state, myPids, config.runtime.matchCwd);
+console.log(`\n이 터미널 펫이 보여야 할 동작: ${info.state}`);
+// buddy 는 마지막 사용자 활동 3분 뒤에 잠든다 — 프롬프트 시각이 그 근거 중 하나다
+console.log(`마지막 프롬프트: ${info.promptAt ? `${age(info.promptAt)}초 전` : "기록 없음 (훅이 옛 버전이거나 아직 입력 전)"}`);
+
+// PMD 그림 — CC BY-NC 4.0 이라 저작자 표시가 조건이다. 펫마다 그린 사람이 다르다
+{
+  const fs = require("fs");
+  const path = require("path");
+  const dex = require(`${project}/lib/dex.js`);
+  const { parseCredits } = require(`${project}/art/pmd-load.js`);
+  const slug = petArg || config.slug;
+  const d = dex.dexPath(slug);
+  console.log(`\nPMD 그림 (${slug}${d ? ` · 도감 ${d}` : ""}) — ${PATHS.pmd}`);
+  if (!d) {
+    console.log(`  도감 번호를 모름 — PMD 로는 못 그린다. 비슷한 이름: ${dex.suggest(slug).join(", ") || "없음"}`);
+  } else {
+    const zip = path.join(PATHS.pmd, `${d}.zip`);
+    console.log(`  캐시: ${fs.existsSync(zip) ? `${Math.round(fs.statSync(zip).size / 1024)}KB` : "없음 — 처음 띄울 때 받는다"}`);
+    let authors = [];
+    try {
+      authors = parseCredits(fs.readFileSync(path.join(PATHS.pmd, `${d}.credits.txt`), "utf8"));
+    } catch {
+      // 저작자 목록을 아직 못 받음
+    }
+    const names = [...new Set(authors.map((a) => a.author))];
+    console.log(`  그린 사람: ${names.length ? names.join(", ") : "목록 없음"}`);
+    console.log("  출처: PMDCollab/SpriteCollab (https://sprites.pmdcollab.org) · CC BY-NC 4.0");
+  }
+}
 
 try {
   const out = require("child_process").execFileSync("ps", ["-Ao", "pid=,args="], { encoding: "utf8" });
   const pets = out
     .split("\n")
     .filter((l) => l.includes(project) && !l.includes("--type=") && l.includes("Electron"));
-  console.log(`떠 있는 펫 프로세스: ${pets.length}개`);
+  console.log(`\n떠 있는 펫 프로세스: ${pets.length}개`);
 } catch {
   // 프로세스 조회 실패는 무시
 }

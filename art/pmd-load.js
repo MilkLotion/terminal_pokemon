@@ -59,6 +59,7 @@ async function loadPmd(config, PATHS) {
     kind: "pmd",
     cell: built.cell,
     zoom,
+    anims: built.anims,
     clips: built.clips,
     credits: parseCredits(credText && credText.toString("utf8")),
     dex: d,
