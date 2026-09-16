@@ -45,6 +45,8 @@ const TARGETS = [
       UserPromptSubmit: "",
       PreToolUse: ".*",
       PermissionRequest: ".*",
+      // 승인한 도구가 끝나면 작업 중으로 돌아간다 — 없으면 긴 명령이 도는 내내 기다리는 것처럼 보인다
+      PostToolUse: ".*",
       PostToolUseFailure: ".*",
       Stop: undefined,
       StopFailure: undefined,

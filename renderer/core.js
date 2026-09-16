@@ -12,7 +12,8 @@ export const opts = {
 };
 
 export const canvas = document.getElementById("termimon");
-export const ctx = canvas.getContext("2d");
+// 커서 밑이 그림인지 픽셀을 자주 읽는다(pointer.js) — GPU 에서 되읽지 않게 처음부터 메모리 캔버스로
+export const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
 // 캔버스 크기를 정한다. 반드시 이 함수로만 정한다.
 // canvas.width/height 를 대입하면 2D 컨텍스트가 기본값으로 리셋돼 imageSmoothingEnabled 가

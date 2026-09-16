@@ -10,4 +10,7 @@ contextBridge.exposeInMainWorld("termimon", {
   onAct: (cb) => ipcRenderer.on("act", (_e, req) => cb(req)),
   // 펫을 잡고·끌고·놓고·찌른 것 { type: grab|drag|drop|click, x, y } (buddy 만)
   pointer: (msg) => ipcRenderer.send("pointer", msg),
+  // 커서가 창 위에 있는 자리 { x, y } (창 안 좌표) — 그 자리가 그림 위인지 hit 으로 답한다 (buddy 만)
+  onHover: (cb) => ipcRenderer.on("hover", (_e, p) => cb(p)),
+  hit: (on) => ipcRenderer.send("hit", on),
 });

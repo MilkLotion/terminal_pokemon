@@ -38,7 +38,8 @@ async function loadPmd(config, PATHS) {
   const hit = await cached(zipFile, ZIP_URL(d), looksLikeSprites);
   if (!hit) return null; // 없는 종이거나 못 받음 — 호출한 쪽이 다른 그림으로 넘어간다
 
-  const built = readZipClips(hit.buf);
+  // 작업 동작은 buddy 가 켜져 있을 때만 — 꺼져 있으면 상태 동작만 돌아 쓸 일이 없다
+  const built = readZipClips(hit.buf, { work: config.buddy !== "off" });
   if (!built) return null;
 
   // 저작자 표시 — 받아두되 실패해도 그림은 보여준다
@@ -52,12 +53,16 @@ async function loadPmd(config, PATHS) {
     }
   }
 
-  // PMD 프레임은 gen5 GIF 보다 작아서 같은 dotSize 면 작아 보인다 — 3~4 를 권한다
-  const zoom = Math.max(1, Math.min(Math.round(config.dotSize) || 2, Math.floor(480 / built.cell.w), Math.floor(420 / built.cell.h)));
+  // PMD 프레임은 gen5 GIF 보다 작아서 같은 dotSize 면 작아 보인다 — 3~4 를 권한다.
+  // 상한은 몸 칸으로 잰다 — 작업 동작이 칸을 키웠다고 펫이 작아지지 않게 (창은 몸의 최대 2배까지 커진다)
+  const zoom = Math.max(1, Math.min(Math.round(config.dotSize) || 2, Math.floor(480 / built.body.w), Math.floor(420 / built.body.h)));
 
   return {
     kind: "pmd",
     cell: built.cell,
+    body: built.body,
+    work: built.work,
+    workOnly: built.workOnly,
     zoom,
     anims: built.anims,
     clips: built.clips,

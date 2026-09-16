@@ -33,19 +33,37 @@ function toolFailed(data) {
   return typeof code === "number" && code !== 0;
 }
 
-// 이벤트 → 펫 동작. hold 가 있으면 그 초 동안 보여준 뒤 then 으로 전환.
-// 함수면 입력을 보고 고른다 (null 이면 기록하지 않음). 이름이 같은 claude·codex 이벤트는 뜻도 같다
 const FAILED_TOOL = { state: "failed", hold: 6, then: "running" };
 // 응답 완료는 waving — review 줄은 프레임 6개 중 서로 다른 그림이 3개뿐이라 멈춘 것처럼 보인다
 const TURN_DONE = { state: "waving", hold: 4, then: "idle" };
+
+// claude 도구 실패 중 실패로 치지 않는 것 (입력 실측 — { error, is_interrupt })
+//   셸 명령이 0 아닌 코드로 끝남  error 가 "Exit code N" 으로 시작한다. test·diff 같은 검사 명령의 흔한 결과라
+//                                작업이 이어진다 — 쓰러뜨리면 한 턴에 몇 번씩 쓰러져 진짜 실패가 묻힌다
+//                                (grep 이 못 찾은 것은 claude 가 실패로 알리지도 않는다)
+//   사용자가 도구를 멈춤(Esc)      턴이 끝났는데 Stop 이 오지 않는다 — 대기로 돌린다
+const SHELL_TOOLS = new Set(["Bash", "PowerShell"]);
+function claudeToolFailure(data) {
+  if (data.is_interrupt === true) return { state: "idle" };
+  if (SHELL_TOOLS.has(data.tool_name) && /^Exit code \d+/.test(String(data.error || ""))) return { state: "running" };
+  return FAILED_TOOL;
+}
+
+// 사용자에게 묻고 답을 기다리는 도구 — 도구 호출이지만 일하는 중이 아니라 기다리는 중이다
+const ASK_TOOLS = new Set(["AskUserQuestion", "ExitPlanMode"]);
+
+// 이벤트 → 펫 동작. hold 가 있으면 그 초 동안 보여준 뒤 then 으로 전환.
+// 함수면 입력을 보고 고른다 (null 이면 기록하지 않음). 이름이 같은 claude·codex 이벤트는 뜻도 같다
 const EVENT_STATES = {
   // claude · codex
   SessionStart: { state: "waving", hold: 6, then: "idle" },
   UserPromptSubmit: { state: "running", prompt: true },
-  PreToolUse: { state: "running" },
+  PreToolUse: (data) => (ASK_TOOLS.has(data.tool_name) ? { state: "waiting" } : { state: "running" }),
   PermissionRequest: { state: "waiting" },
-  PostToolUse: (data) => (toolFailed(data) ? FAILED_TOOL : { state: "running" }), // codex (claude 는 PostToolUseFailure)
-  PostToolUseFailure: FAILED_TOOL, // claude
+  // 도구가 끝남 — 승인 대기에서 작업으로 돌아가는 신호이기도 하다.
+  // claude 는 실패를 PostToolUseFailure 로 따로 알리므로 결과 모양을 보지 않는다 (codex 는 여기서 실패를 가린다)
+  PostToolUse: (data) => (CLI !== "claude" && toolFailed(data) ? FAILED_TOOL : { state: "running" }),
+  PostToolUseFailure: claudeToolFailure, // claude
   Stop: TURN_DONE,
   StopFailure: { state: "failed", hold: 10, then: "idle" }, // claude
   Interrupt: { state: "idle" }, // codex — 사용자가 턴을 멈춤

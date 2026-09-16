@@ -440,13 +440,22 @@ CLI LLM 안에서 `!termimon` 으로 띄우면, 그 CLI 의 훅이 알려 주는
 
 | 펫 상태 | Claude Code | Codex CLI (0.124+) | Gemini CLI (0.26+) | PMD 동작 (앞에서부터 가진 것) |
 |---|---|---|---|---|
-| `waving` (6초·4초) → 대기 | `SessionStart` · `Stop` | `SessionStart` · `Stop` | `SessionStart` · `AfterAgent` | `Pose` 한 번 · `Charge` · `Nod` |
-| `running` | `UserPromptSubmit` · `PreToolUse` | `UserPromptSubmit` · `PreToolUse` · `PostToolUse` | `BeforeAgent` · `AfterTool` | `Walk`(옆모습) · `Hop` |
-| `waiting` | `PermissionRequest` | `PermissionRequest` | `Notification`(`ToolPermission`) | `Rotate` · `LookUp` · `Nod` |
-| `failed` (6~10초) | `PostToolUseFailure` · `StopFailure` | `PostToolUse`(종료 코드·오류 표시가 있을 때) | `AfterTool`(`tool_response.error`) | `Faint`(쓰러진 채) · `Trip` · `Cringe` · `Hurt` |
-| `idle` | 그 밖 | `Interrupt` · `SessionEnd` | `SessionEnd` | `Idle` |
+| `waving` (6초·4초) → 대기 | `SessionStart` · `Stop` | `SessionStart` · `Stop` | `SessionStart` · `AfterAgent` | `Pose`(2초 되풀이) · `Charge` · `Nod` |
+| `running` | `UserPromptSubmit` · `PreToolUse` · `PostToolUse` · `PostToolUseFailure`(셸 명령의 0 아닌 종료 코드) | `UserPromptSubmit` · `PreToolUse` · `PostToolUse` | `BeforeAgent` · `AfterTool` | buddy 의 [작업 모드](#buddy--돌아다니고-졸고-반응하기). `buddy=off` 면 `Walk`(옆모습) · `Hop` |
+| `waiting` | `PermissionRequest` · `PreToolUse`(`AskUserQuestion` · `ExitPlanMode`) | `PermissionRequest` | `Notification`(`ToolPermission`) | `Rotate` · `LookUp` · `Nod` |
+| `failed` (6~10초) | `PostToolUseFailure`(그 밖) · `StopFailure` | `PostToolUse`(종료 코드·오류 표시가 있을 때) | `AfterTool`(`tool_response.error`) | `Faint`(쓰러진 채) · `Trip` · `Cringe` · `Hurt` |
+| `idle` | 그 밖 · `PostToolUseFailure`(`is_interrupt` — Esc) | `Interrupt` · `SessionEnd` | `SessionEnd` | `Idle` |
 
 동작이 적은 펫은 조용히 다음 후보로 내려가고, 끝까지 없으면 `Idle` 을 쓴다.
+
+Claude Code 의 도구 실패(`PostToolUseFailure`)는 입력의 `error` · `is_interrupt` 로 가른다(실측).
+
+- 셸 명령(Bash · PowerShell)이 0 아닌 코드로 끝나면 `error` 가 `Exit code N` 으로 시작한다. 검사 명령(`test` · `diff` 등)의
+  흔한 결과라 작업이 이어지는 것으로 본다 — 실패로 치면 한 턴에 몇 번씩 쓰러져 진짜 실패가 묻힌다(최근 대화 74턴 중 53턴에 한 번 이상).
+  grep 이 못 찾은 것(종료 코드 1)은 claude 가 실패로 알리지도 않는다
+- `is_interrupt` 는 Esc 로 도구를 멈춘 것이다. 턴이 끝났는데 `Stop` 이 오지 않으므로 대기로 돌린다.
+  도구가 돌지 않을 때(응답을 쓰는 중) Esc 를 누르면 알리는 이벤트가 없어, 작업 중이 10분 뒤에야 대기로 풀린다
+- 승인한 도구가 끝나면 `PostToolUse` 가 작업 중으로 되돌린다. 없으면 긴 명령이 도는 내내 기다리는 것처럼 보인다
 
 CLI 마다 다른 점:
 
@@ -473,7 +482,8 @@ Windows 는 조상을 구하는 데 PowerShell 을 띄워야 해서(수백 ms) �
 ### 상태에 따라 동작이 달라지는 방식
 
 - `pmd` — 상태마다 **다른 동작 시트**를 재생한다. 프레임마다 길이가 다른 원본 타이밍(AnimData.xml)을 그대로 쓴다.
-  한 번만 보여 줄 동작(`Pose`)은 끝나면 대기로 돌아가고, 쓰러짐(`Faint`)은 마지막 자세로 멈춰 있다.
+  한 번만 보여 줄 동작(`Pose`)은 2초가 될 때까지 되풀이한 뒤 대기로 돌아가고(인사 한 번이 0.4초라 한 번만 틀면 못 본다),
+  쓰러짐(`Faint`)은 마지막 자세로 멈춰 있다. 작업 중(`running`)은 buddy 가 동작을 고른다.
 - `sheet` — 9줄 격자에서 상태에 맞는 줄을 재생한다.
 - `showdown` — 원본 GIF 한 장이라 상태와 무관하게 같은 그림이다.
 
@@ -482,35 +492,63 @@ Windows 는 조상을 구하는 데 PowerShell 을 띄워야 해서(수백 ms) �
 `art=pmd` 일 때 기본으로 켜진다. 상태 표시기가 아니라 옆에 있는 친구처럼 보이게 하는 게 목적이다.
 **일반 터미널에서도, CLI LLM 안에서도 똑같이 돈다** — CLI 의 상태가 없으면 늘 한가한(`idle`) 것으로 본다.
 
+두 모드로 움직인다. **작업 동작은 한가할 때 쓰지 않는다** — 보기만 해도 CLI 가 일하는 중인지 갈리게 하려는 것이다.
+
+| | 한가 (CLI `idle` · 일반 터미널) | 작업 (CLI `running`) |
+|---|---|---|
+| 리듬 | 3~7초 걷고, 걸어온 쪽을 잠깐 돌아본 뒤 7~20초 쉰다 | 0.5~1.8초만 숨을 고르고, 걷기와 작업 동작을 이어 간다 |
+| 걷기 | 속도 0.6~1.0배. 셋 중 한 번쯤은 서지 않고 방향을 튼다 | 속도 1.3~1.8배, 1.5~4초. 묶음마다 55% 확률로 먼저 걸어간다 |
+| 제자리 동작 | 쉬는 동안 0~3번 — `LookUp` · `Rotate` · `Nod` · `Sit` · `DeepBreath` · 두리번 | 한 묶음에 1~3개 — 공격(`Attack` · `Strike` · `Swing` · `Shoot` · `Hop` …)은 한 번 내지르고 0.3~0.8초 서 있고, 부드러운 동작(`Charge` · `Pull` · `Twirl` · `Appeal` …)은 1.2~2.6초 반복한다 |
+| 잠 | 입력 270초 없으면 새로 움직이지 않고, 300초면 잔다(`Sleep`) | 자지 않는다. 자고 있었으면 깨서 곧바로 움직인다 |
+
 | 언제 | 무엇을 |
 |---|---|
-| 한가할 때 (CLI `idle` · 일반 터미널) | 가끔 창 안 아무 데로나 걷는다. 한 번에 260px 까지라 여러 번에 걸쳐 창 전체를 돌아다닌다 |
-| 걷지 않을 때 | 가끔 두리번(`LookUp`·`Rotate`·`Nod`·`Charge`) |
-| 입력 270초 없음 | 새로 움직이지 않는다 |
-| 입력 300초 없음 | 그 자리에서 잔다 (`Sleep`) |
+| 한가 → 작업 | 쉬던 것 · 둘러보던 것을 접고 곧바로 작업 동작을 한다. 걷던 중이면 도착한 뒤 이어 간다 |
+| 작업 → 한가 | 작업 동작을 접고 쉰다 |
 | 깨는 신호 | 창/터미널 포커스 변화 · 펫을 만짐 · (CLI 훅이 있으면) 프롬프트 전송 · 작업이 끝남 · CLI 가 일을 시작함 |
 | 집어 들 때 | 아파한다(`Hurt`) → 끄는 방향을 보며 버둥거린다 |
 | 내려놓을 때 | 폴짝(`Hop`) · 끄덕(`Nod`) · `Pose` 중 가진 첫 것. 놓은 자리가 새 집이 된다 |
 | 콕 누를 때 | `Nod`·`Pose`·`Hop`·`LookUp` 중 하나 (자고 있었으면 먼저 깬다) |
-| CLI 가 일할 때 (`running`) | 제자리에서는 상태 동작(걷기)을 하면서 가끔 창 안을 걷는다. 두리번은 하지 않고 잠들지도 않는다 |
+| 만지기 반응의 `Hop` | 몸 칸에 들어가는 펫만 쓴다. 작업 동작으로만 담긴 동작은 반응에 쓰지 않는다 — 한가할 때 작업 동작이 보이지 않게 |
 | 승인 대기 · 턴 끝 · 실패 | 알림이라 걷던 자리에 멈추고 상태 동작에 맡긴다. 그 사이 만지면 짧게 반응하고 돌아간다 |
 
 일반 터미널에서는 타이핑을 알 방법이 없다 — 입력으로 치는 건 포커스 변화와 펫을 만진 것뿐이라, 한 터미널에서 계속
 치고 있어도 5분이 지나면 잠든다.
 
-3~7초 걷고, 걸어온 쪽을 잠깐 돌아본 뒤 7~20초 쉬는 것을 되풀이한다. 걸을 때마다 속도가 0.6~1.5배로 달라지고
-(걷는 그림도 그 속도로 재생된다), 셋 중 한 번쯤은 걷다가 서지 않고 방향을 튼다. 쉬는 동안에는 제자리 동작
-(`Rotate`·`LookUp` 등, 아무 쪽이나 보는 두리번 포함)을 0~3번, 방향과 길이를 바꿔 가며 한다.
-시간·속도·동작은 모두 범위 안에서 무작위로 뽑아 규칙적으로 보이지 않게 한다.
-숨었다 다시 보일 때도 7초는 가만히 있는다. 드래그로 놓은 자리는 집으로 기억되어, 다음에 띄울 때 거기서 시작한다.
+걸을 때마다 속도를 새로 뽑고 걷는 그림도 그 속도로 재생한다. 제자리 동작은 방향과 길이를 바꿔 가며 한다
+(작업 동작은 공격이 보이게 옆모습까지). 시간·속도·동작은 모두 범위 안에서 무작위로 뽑아 규칙적으로 보이지 않게 한다.
+숨었다 다시 보일 때도 잠깐(한가 7초 · 작업 0.5초)은 가만히 있는다. 드래그로 놓은 자리는 집으로 기억되어, 다음에 띄울 때 거기서 시작한다.
 
-- `buddy=calm` — 쉬는 시간 2.2배(15~44초), 제자리 동작 확률 절반
-- `Hop` 은 칸이 커서 대부분의 펫에서 빠진다(아래 창 크기 참고) — 그럴 땐 다음 후보를 쓴다
-- `buddy=off` — 제자리에서 상태 동작만
+작업 동작은 펫마다 가진 것이 다르다 — 피카츄는 `Attack` · `Swing` · `Shoot` · `Hop`(한 번) · `Charge` · `Pull`(반복),
+썬더는 `Attack` · `Strike` · `Swing` · `Shoot` · `SpAttack` · `Hop`(한 번) · `Charge`(반복).
+한가할 때 동작은 표본 50종 중 27종이 5개를 다 가졌고, 나머지 23종은 `Rotate` 와 두리번뿐이다.
+
+PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이라 프레임이 17~33ms 이고 캐릭터가 칸 안에서 크게 움직인다.
+그대로 반복하면 떨리거나 갈라져 보여서, 19종의 시트를 재서 동작마다 재생 방식을 정했다(`art/pmd.js` `WORK_PLAY`).
+같은 이름의 동작은 종이 달라도 거의 같게 나왔다.
+
+| 동작 | 실측 (50ms 이하 프레임 사이 중심 이동) | 처리 |
+|---|---|---|
+| `Attack` · `Strike` · `Swing` · `Hop` · `Shoot` | 15~22px · 11~16px · 12px · 0~17px — 내지르고 제자리로 온다 | 한 번 재생하고 서 있기 |
+| `Charge` · `Pull` · `Twirl` · `Appeal` · `TailWhip` | 0~3px (`Charge` 19종 · `Pull` 11종 모두) | 반복 |
+| `Double` | 33ms 마다 좌우 두 자리(37px)를 번갈아 그린다 — 19종 모두. 반복하면 두 마리로 보였다 | 쓰지 않는다 |
+| `Shock` | 번개 효과로 그림 면적이 2.2배를 오간다 — 도트가 흩어져 보인다 | 쓰지 않는다 |
+| `QuickStrike` | 한 프레임에 27~56px 순간이동 | 쓰지 않는다 |
+| `LeapForth` | 앞으로 뛰쳐나간 자세로 끝난다(끝이 시작에서 16~25px) — 제자리로 돌아올 때 튄다 | 쓰지 않는다 |
+| `Emit` | 2종 중 1종이 떤다(좌우로 5번 뒤집힘) | 쓰지 않는다 |
+
+- `buddy=calm` — 쉬는 시간 2.2배(한가 15~44초 · 작업 1.1~4초), 한가할 때 제자리 동작 확률 절반
+- `buddy=off` — 제자리에서 상태 동작만. 작업 동작을 불러오지 않아 창도 커지지 않는다
 - 펫이 보이지 않을 때(다른 탭·다른 앱)는 돌아다니지 않는다. 자는 시계는 계속 간다
 - 동작이 부족한 펫은 없는 반응을 조용히 건너뛴다. `Walk` 가 없으면 산책하지 않는다(순간이동은 안 한다)
-- 창 크기는 모든 동작 중 가장 큰 칸으로 고정된다. 점프(`Hop`)처럼 칸이 큰 동작은 창을 키워 IDE 클릭을 막으므로 뺀다
-- **클릭 통과(`click=on`)를 켜면 클릭이 아래로 가서 만지기 반응이 없다.** 옮길 수도 없다
+- **창은 몸보다 크다.** 공격 동작은 몸을 내밀어 칸이 크다(피카츄 `Idle` 40x56 · `Attack` 80x80 · `Swing` 80x96).
+  상태 동작 칸의 2배까지 받는다 — 표본 50종에서 `Attack` 40종 · `Swing` 31종이 들어오고 창 면적은 중앙값 2.7배(최대 4배).
+  1.5배로는 `Attack` 이 9종뿐이었다. 몸(작업 동작을 뺀 칸, 상태 동작의 1.25배까지)은 예전 창 크기 그대로이고,
+  집 · 산책 범위 · 창 안에 가두기 · 저장하는 자리 · 여러 마리 간격은 모두 몸으로 계산한다 — 창이 커져도 펫이 서는 자리는 같다
+- **그림이 없는 곳의 클릭은 아래 창으로 통과한다.** 커서가 창 위에 있으면 메인이 40ms 마다 렌더러에 자리를 묻고, 렌더러가
+  그 둘레 3px 안에 투명하지 않은 픽셀이 있는지 답한다. 통과 중에는 마우스 이벤트가 오지 않고, 펫이 걷거나 그림이 바뀌어
+  커서 밑이 달라져도 이벤트는 생기지 않아서 메인이 주기적으로 묻는다. 누르고 · 들고 있는 동안은 통과로 바꾸지 않는다 — 떼기가 아래 창으로 가서 들린 채 남는다
+- **클릭 통과(`click=on`)를 켜면 그림 위 클릭도 아래로 가서 만지기 반응이 없다.** 옮길 수도 없다
 - Windows 는 `backgroundThrottling` 을 켜 둔다. 끄면 렌더러가 숨김 상태로 가지 않아, 창을 숨길 때 내려간 입력용 자식 창
   (`Chrome_RenderWidgetHostHWND`)이 다시 보일 때 올라오지 않는다. 누르기가 부모 창에 떨어지고, 포커스를 받지 않는 창
   (`focusable: false`)이라 Chromium 이 누르기를 버려 떼기만 온다 — 탭을 한 번 옮기면 잡기·클릭이 안 되던 원인이다(최소 시험 창으로 재현).
@@ -594,7 +632,8 @@ PMDCollab 은 종마다 동작이 따로 있는 거의 유일한 오픈 스프�
 폴링마다 `{want, visible, tab, anchorId, target, head, state, pos, roam, driftMax}` 를 찍는다.
 `tab` 이 `null` 이면 확장 기록을 못 찾은 것이다. `roam` 은 집에서 산책 나간 거리,
 `driftMax` 는 창을 옮기라고 지시한 자리와 실제 자리의 최대 차이다 — 3 을 넘으면 드래그 판정이 흔들린다.
-buddy 가 켜져 있으면 `{buddy: 단계, act: 동작/방향/방식, idleSec, roam}` 도 단계가 바뀔 때마다 찍는다.
+buddy 가 켜져 있으면 `{buddy: 단계, rhythm: idle|work, act: 동작/방향/방식, idleSec, roam}` 도 단계나 동작이 바뀔 때마다 찍고,
+그림 밖 클릭 통과가 바뀔 때마다 `{passing: true|false}` 를 찍는다.
 
 ## 배포 (관리자용)
 

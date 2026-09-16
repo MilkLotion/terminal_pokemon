@@ -71,7 +71,7 @@ const config = settings.load();
 const { debug, matchCwd, index, anchorApp, windowsDir, hostPid, session } = config.runtime;
 let { termPid } = config.runtime; // termimon 이 넘긴 첫 추정 — 확장 기록으로 바로잡을 수 있다 (refineTermPid)
 let win = null;
-let art = null; // gif·sheet: { kind, dataUrl, w, h, scale, from } / pmd: { kind, cell, zoom, anims, clips, credits, dex, from }
+let art = null; // gif·sheet: { kind, dataUrl, w, h, scale, from } / pmd: { kind, cell, body, zoom, anims, clips, credits, dex, from }
 let lastState = null;
 let lastTarget = null; // 마지막으로 따라간 창의 위치·크기
 let anchorId = null; // 확정된 내 창 ID — 정해지면 이 창만 따라간다
@@ -137,8 +137,25 @@ function windowSize() {
   return { w: Math.round(CELL.w * config.scale), h: Math.round(CELL.h * config.scale) };
 }
 
+// 펫 몸 — 창 가운데에서 그림이 평소 차지하는 칸. 자리(집·산책·가두기·저장·나란히 놓기)는 전부 몸으로 계산한다.
+// PMD 는 작업 동작(공격 등)을 담으면 창이 몸보다 커진다(art/pmd.js WORK_BUDGET). 창으로 계산하면 커진 만큼
+// 펫이 따라가는 창 가장자리에서 떨어지고, 저장해 둔 자리도 어긋난다. 몸은 작업 동작을 담기 전의 창과 같다
+function bodySize() {
+  if (art && art.kind === "pmd" && art.body) return { w: art.body.w * art.zoom, h: art.body.h * art.zoom };
+  return windowSize();
+}
+
+// 창 좌상단 → 몸 좌상단. 그림은 칸 가운데에 그린다 — renderer/pmd.js paint 와 같은 반올림
+function bodyInset() {
+  if (!(art && art.kind === "pmd" && art.body)) return { x: 0, y: 0 };
+  return {
+    x: Math.round((art.cell.w - art.body.w) / 2) * art.zoom,
+    y: Math.round((art.cell.h - art.body.h) / 2) * art.zoom,
+  };
+}
+
 function stackShift() {
-  return Math.round(windowSize().w * STACK_RATIO) * index;
+  return Math.round(bodySize().w * STACK_RATIO) * index;
 }
 
 // 훅(termimon-state.cjs)이 남긴 세션 상태 중 나를 부른 CLI 것.
@@ -320,11 +337,11 @@ function watchRecords() {
   }
 }
 
-// 집 — 따라가는 창의 오른쪽 아래 모서리 기준으로 사용자가 놓아 둔 자리.
+// 집 — 따라가는 창의 오른쪽 아래 모서리 기준으로 사용자가 놓아 둔 몸 자리.
 // pos=fix 면 창 안에 가둔 자리가 집이다. 가두기 전 자리를 집으로 삼으면, 창을 줄여 집이 밖에 걸렸을 때
 // 산책 오프셋이 가두기에 먹혀 걷는 그림만 나오고 제자리인 구간이 생긴다 (pos=free 는 가두지 않는다)
 function homeSpot(target) {
-  const { w, h } = windowSize();
+  const { w, h } = bodySize();
   return clampToWindow(
     target.x + target.w - w + config.window.dx - stackShift(),
     target.y + target.h - h + config.window.dy,
@@ -334,19 +351,18 @@ function homeSpot(target) {
   );
 }
 
-// 펫이 놓일 자리 — 집에서 산책 오프셋만큼 옮긴 뒤 창 안에 가둔다
+// 몸이 놓일 자리 — 집에서 산책 오프셋만큼 옮긴 뒤 창 안에 가둔다
 function petSpot(target) {
-  const { w, h } = windowSize();
+  const { w, h } = bodySize();
   const home = homeSpot(target);
-  const { x, y } = clampToWindow(home.x + roam.x, home.y + roam.y, w, h, target);
-  return { x, y, w, h };
+  return clampToWindow(home.x + roam.x, home.y + roam.y, w, h, target);
 }
 
-// 산책할 수 있는 오프셋 범위 — 펫이 따라가는 창 안에 머무는 만큼.
+// 산책할 수 있는 오프셋 범위 — 몸이 따라가는 창 안에 머무는 만큼.
 // 집이 창 밖이면(pos=free 로 끌어다 놓은 경우) 0 을 포함하게 넓혀 집에는 늘 돌아올 수 있다.
 // 펫이 창보다 크면 범위가 [0,0] 이 되어 걷지 않는다
 function roamBox(target) {
-  const { w, h } = windowSize();
+  const { w, h } = bodySize();
   const home = homeSpot(target);
   return {
     minX: Math.min(0, target.x - home.x),
@@ -384,15 +400,51 @@ function releaseHeld() {
 // 창 추적(pollAnchor)이 알아낸 마지막 창을 기준으로 한다. 드래그 중에는 사용자 손에 맡긴다
 function buddyTick() {
   if (!buddy || !win) return;
+  hoverTick();
   const dragging = isDragging();
   const next = buddy.tick({ box: lastTarget ? roamBox(lastTarget) : null, visible: visible && !!lastTarget });
   if (dragging) return;
   roam = next;
   if (lastTarget && visible) {
     const spot = petSpot(lastTarget);
-    moveSelf(spot.x, spot.y);
+    moveBody(spot.x, spot.y);
   }
 }
+
+// 그림 위만 클릭을 받는다 (buddy) — 창이 몸보다 커서(작업 동작) 투명한 곳이 IDE 클릭을 막지 않게.
+// 커서가 창 위에 있으면 렌더러에 자리를 묻고, 그림 위가 아니라는 답이면 클릭을 아래 창으로 통과시킨다.
+// 렌더러의 마우스 이벤트를 기다리지 않고 메인이 커서를 본다 — 통과 중에는 마우스 이벤트가 오지 않고,
+// 펫이 걷거나 그림이 바뀌어 커서 밑이 달라져도 이벤트는 생기지 않는다
+let passing = null; // 지금 클릭을 아래 창으로 통과시키는 중인가 — setIgnoreMouseEvents 의 마지막 값
+
+function setPassing(on) {
+  if (!win || on === passing) return;
+  passing = on;
+  win.setIgnoreMouseEvents(on, { forward: true });
+  if (debug) console.log(JSON.stringify({ passing: on }));
+}
+
+function hoverTick() {
+  // 클릭 통과를 켰으면 늘 통과다. 숨어 있으면 입력이 오지 않으니 건드리지 않는다
+  if (!win || !buddy || config.clickThrough || !win.isVisible()) return;
+  if (held) {
+    setPassing(false); // 들고 있는 동안 통과로 바뀌면 떼기가 아래 창으로 간다
+    return;
+  }
+  const p = screen.getCursorScreenPoint();
+  const b = win.getBounds();
+  if (p.x < b.x || p.y < b.y || p.x >= b.x + b.width || p.y >= b.y + b.height) {
+    setPassing(true);
+    return;
+  }
+  win.webContents.send("hover", { x: p.x - b.x, y: p.y - b.y });
+}
+
+// 렌더러의 답 — 커서 밑이 그림인가
+ipcMain.on("hit", (_e, hit) => {
+  if (!win || !buddy || config.clickThrough) return;
+  setPassing(held ? false : !hit);
+});
 
 // 프로그램이 창을 옮기는 유일한 길 — commanded 를 같이 적어야 move 이벤트가 사용자 드래그로 오인되지 않는다
 // mac 은 화면 가장자리에서 창 자리를 제약한다 — 지시한 자리와 실제 자리가 수십 px 어긋날 수 있다(아래쪽에서 54px 실측).
@@ -413,6 +465,19 @@ function moveSelf(x, y) {
   const [ax, ay] = win.getPosition();
   commanded = { x, y, ax, ay };
   if (debug) driftMax = Math.max(driftMax, Math.abs(ax - x), Math.abs(ay - y));
+}
+
+// 몸을 (x, y) 에 놓도록 창을 옮긴다 — 창은 몸보다 bodyInset 만큼 왼쪽 위에서 시작한다
+function moveBody(x, y) {
+  const inset = bodyInset();
+  moveSelf(x - inset.x, y - inset.y);
+}
+
+// 지금 몸 자리
+function bodyPosition() {
+  const [x, y] = win.getPosition();
+  const inset = bodyInset();
+  return { x: x + inset.x, y: y + inset.y };
 }
 
 // 지금 창 자리가 우리가 지시한 그 자리인가 — 시간이 아니라 좌표로 가린다.
@@ -582,7 +647,7 @@ function pollAnchor() {
 
     if (target && spot && !dragging) {
       lastTarget = target;
-      moveSelf(spot.x, spot.y);
+      moveBody(spot.x, spot.y);
     }
 
     applyVisible(want);
@@ -613,7 +678,9 @@ function applyClickThrough(on, persist = true) {
   else config.clickThrough = on;
   // 들고 있는 중에 클릭 통과를 켜면 pointerup 이 영영 안 온다 — 커서에 붙은 채로 남지 않게 놓는다
   if (on) releaseHeld();
-  win.setIgnoreMouseEvents(on, { forward: true });
+  // 끄면 buddy 는 통과로 시작해 그림 위에서만 받는다 — 커서 밑은 다음 hoverTick 이 본다.
+  // buddy 가 없으면(app-region 으로 OS 가 끈다) 창 전체가 받는다
+  setPassing(on || !!buddy);
   win.webContents.send("click-through", on);
 }
 
@@ -665,7 +732,7 @@ function createWindow() {
     win.webContents.on("console-message", (details) => console.log(`[renderer] ${details.message}`));
     const info =
       art.kind === "pmd"
-        ? { 그림: art.kind, 크기: `${art.cell.w}x${art.cell.h}`, 배율: art.zoom, 출처: art.from,
+        ? { 그림: art.kind, 크기: `${art.cell.w}x${art.cell.h}`, 몸: `${art.body.w}x${art.body.h}`, 배율: art.zoom, 출처: art.from,
             동작: Object.entries(art.clips).map(([k, c]) => `${k}=${c.anim}`).join(" ") }
         : { 그림: art.kind, 크기: `${art.w}x${art.h}`, 배율: art.scale, 출처: art.from };
     console.log(JSON.stringify(info));
@@ -717,13 +784,13 @@ function settleUserMove() {
   // 숨어 있을 때 옛 좌표를 기준으로 오프셋을 저장하면 그 값이 영구히 어긋난다
   if (!win || !lastTarget || !visible) return;
 
-  const [rawX, rawY] = win.getPosition();
-  const { w, h } = windowSize();
+  const raw = bodyPosition();
+  const { w, h } = bodySize();
   // 창 밖으로 끌었으면 경계 안으로 되돌린다
-  const { x, y } = clampToWindow(rawX, rawY, w, h, lastTarget);
-  moveSelf(x, y);
+  const { x, y } = clampToWindow(raw.x, raw.y, w, h, lastTarget);
+  moveBody(x, y);
 
-  // 창 위치는 따라가는 창의 오른쪽 아래 모서리 기준 오프셋으로 기억한다
+  // 몸 자리는 따라가는 창의 오른쪽 아래 모서리 기준 오프셋으로 기억한다 — 작업 동작이 창을 키우기 전과 같은 값이다
   settings.save(config, {
     window: {
       dx: x - (lastTarget.x + lastTarget.w - w) + stackShift(),
@@ -849,13 +916,17 @@ ipcMain.on("pointer", (_e, msg) => {
     lastUserMoveAt = now;
     buddy.pickup();
   } else if (msg.type === "drag" && held && Number.isFinite(msg.x) && Number.isFinite(msg.y)) {
-    const [cx, cy] = win.getPosition();
-    const { w, h } = windowSize();
+    // 렌더러가 넘긴 건 창 좌상단 — 몸 자리로 바꿔 가둔다
+    const cur = bodyPosition();
+    const inset = bodyInset();
+    const { w, h } = bodySize();
+    const want = { x: msg.x + inset.x, y: msg.y + inset.y };
     // 끄는 중에도 창 안에 가둔다 — 가장자리에 붙어 따라오고, 놓을 때 튀어 들어가지 않는다
-    const { x, y } = lastTarget ? clampToWindow(msg.x, msg.y, w, h, lastTarget) : { x: msg.x, y: msg.y };
-    buddy.drag(x - cx, y - cy);
+    const { x, y } = lastTarget ? clampToWindow(want.x, want.y, w, h, lastTarget) : want;
+    buddy.drag(x - cur.x, y - cur.y);
     lastUserMoveAt = now;
-    win.setPosition(x, y); // 사용자 이동 — commanded 를 적지 않는다. 저장은 놓을 때 settleUserMove 가 한다
+    // 사용자 이동 — commanded 를 적지 않는다. 저장은 놓을 때 settleUserMove 가 한다
+    win.setPosition(Math.round(x - inset.x), Math.round(y - inset.y));
   } else if (msg.type === "drop" && held) {
     held = false;
     droppedAt = now;

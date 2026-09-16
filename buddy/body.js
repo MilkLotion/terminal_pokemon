@@ -24,13 +24,21 @@ function createBuddy({ art, mode, timeScale = 1, send, log }) {
   if (!art || art.kind !== "pmd" || !art.anims || mode === "off") return null;
   const { have, durOf } = capabilities(art);
   // 걷는 속도는 도트 배율에 비례 — 큰 펫이 같은 속도로 걸으면 제자리걸음처럼 보인다
-  const brain = createBrain({ have, durOf, mode, speedPx: 18 * art.zoom, timeScale });
+  const brain = createBrain({
+    have,
+    durOf,
+    work: art.work || {},
+    workOnly: new Set(art.workOnly || []),
+    mode,
+    speedPx: 18 * art.zoom,
+    timeScale,
+  });
 
   let activeAt = Date.now(); // 마지막 사용자 활동 — 막 켰으면 사용자가 있는 것
   let agent = "idle";
   let focusKey = null;
   let sentAct; // 마지막으로 보낸 동작(JSON). undefined 면 아직 안 보냈다
-  let lastPhase = null;
+  let lastLogged = null; // 마지막으로 찍은 단계·동작 — 작업 동작은 같은 단계(work)에서 동작만 바뀐다
 
   const bump = (at = Date.now()) => {
     if (at > activeAt) activeAt = at;
@@ -92,9 +100,10 @@ function createBuddy({ art, mode, timeScale = 1, send, log }) {
         sentAct = key;
         send(o.act);
       }
-      if (log && o.phase !== lastPhase) {
-        lastPhase = o.phase;
-        log({ buddy: o.phase, act: o.act ? `${o.act.anim}/${o.act.row}/${o.act.mode}` : null,
+      const logKey = `${o.phase}|${o.act ? o.act.anim : ""}`;
+      if (log && logKey !== lastLogged) {
+        lastLogged = logKey;
+        log({ buddy: o.phase, rhythm: o.rhythm, act: o.act ? `${o.act.anim}/${o.act.row}/${o.act.mode}` : null,
               idleSec: Math.round((now - activeAt) / 1000), roam: o.roam });
       }
       return o.roam;

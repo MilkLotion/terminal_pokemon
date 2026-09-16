@@ -18,14 +18,38 @@ const STATE_ANIMS = {
 };
 // 옆모습이라 걷는 티가 나는 것만 오른쪽 행. 나머지는 정면
 const ROW_OF = { running: 2 };
-// 상태와 별개로 buddy 가 요청할 수 있는 동작 — 산책·수면·드래그·클릭 반응에 쓴다.
+// 상태와 별개로 buddy 가 요청할 수 있는 동작 — 산책·수면·드래그·클릭 반응·한가할 때의 제자리 동작에 쓴다.
 // 없는 동작은 조용히 빠지고, buddy 쪽이 후보 중 있는 것을 고른다
-const EXTRA_ANIMS = ["Walk", "Sleep", "EventSleep", "Laying", "Wake", "Hurt", "Cringe", "Nod", "Pose", "Hop", "LookUp", "Rotate"];
-// 추가 동작의 칸 크기 상한 — 상태 동작이 정한 칸의 이 배수까지만 받는다.
-// 창 크기는 모든 동작의 최대 칸으로 고정되는데, 투명한 부분도 클릭을 막는다.
-//   Hop  점프 높이까지 칸에 담겨 이브이 48→80, 썬더 104→136 — 빠진다 (반응은 Nod·Pose 로 대신하고, 그것도 없으면 buddy/brain.js 의 reactFallback)
+const EXTRA_ANIMS = [
+  "Walk", "Sleep", "EventSleep", "Laying", "Wake", "Hurt", "Cringe", "Nod", "Pose", "Hop", "LookUp", "Rotate", "Sit", "DeepBreath",
+];
+// 추가 동작의 칸 크기 상한 — 상태 동작이 정한 칸의 이 배수까지만 받는다. 여기까지가 펫 "몸"이다.
+// 자리(집·산책·가두기·저장)는 몸 칸으로 계산한다 — 작업 동작이 창을 키워도 펫이 서는 자리는 그대로다 (main.js bodySize)
+//   Hop  점프 높이까지 칸에 담겨 이브이 48→80, 썬더 104→136 — 몸에서는 빠지고 작업 동작으로만 들어온다
 //   Hurt 이브이 40x48 → 48x48 로 가로 20% 늘지만 받는다 — 집어 들 때 아파하는 반응이 buddy 의 핵심이다
 const EXTRA_BUDGET = 1.25;
+// 작업 중(running)에만 하는 동작 → 재생 방식. 한가할 때는 쓰지 않아 일하는 중인지 한눈에 갈린다 (buddy/brain.js)
+//   once  한 번 내지르고 숨을 고른다 — PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이라 프레임이 17~33ms 이고
+//         캐릭터가 칸 안에서 크게 움직인다. 이어서 반복하면 쪼는 것처럼 떨린다
+//   loop  이어서 반복한다 — 움직임이 부드러운 것만
+// 19종 시트를 재서 정했다 (50ms 이하 프레임 사이 중심 이동 · 좌우 뒤집힘). 동작 이름마다 종이 달라도 거의 같게 나온다
+//   Attack·Strike 15~22px · Swing 11~16px · Hop 12px · Shoot 0~17px — 내지르고 제자리로 온다 → once
+//   Charge 1px(19종) · Pull 0px(11종) · Twirl·Appeal·TailWhip 0~3px — 부드럽다 → loop
+// 넣지 않는 것
+//   Double       좌우 두 자리를 33ms 마다 번갈아 그린다(37px · 14번 뒤집힘, 19종 모두) — 두 마리로 보였다
+//   Shock        번개 효과로 그림 면적이 2.2배를 오간다 — 도트가 흩어져 보인다
+//   QuickStrike  한 프레임에 27~56px 순간이동한다
+//   LeapForth    앞으로 뛰쳐나간 자세로 끝난다(끝이 시작에서 16~25px) — 제자리로 돌아올 때 튄다
+//   Emit         2종 중 1종이 떨린다(5번 뒤집힘)
+// 공격 동작은 몸을 내밀어 칸이 크다(피카츄 Idle 40x56 · Attack 80x80 · Swing 80x96). 그래서 몸보다 넉넉한 WORK_BUDGET 까지 받는다.
+// 창은 이 칸만큼 커지지만 그림이 없는 투명한 곳의 클릭은 아래 창으로 통과한다 (main.js hoverTick)
+// 표본 50종 실측 — 2배면 Attack 40종 · Swing 31종이 들어오고 창 면적은 중앙값 2.7배(최대 4배). 1.5배는 Attack 9종뿐이다
+const WORK_PLAY = {
+  Attack: "once", Strike: "once", MultiStrike: "once", Kick: "once", Punch: "once", Slam: "once", Stomp: "once",
+  Swing: "once", Shoot: "once", SpAttack: "once", Rumble: "once", RearUp: "once", Hop: "once",
+  Charge: "loop", Pull: "loop", Twirl: "loop", Appeal: "loop", TailWhip: "loop", Dance: "loop", Shake: "loop",
+};
+const WORK_BUDGET = 2;
 const DUR_UNIT = 1000 / 60; // AnimData 의 Duration 은 1/60초 단위
 
 const tag = (block, name) => {
@@ -88,10 +112,15 @@ function sheetOf(zip, anims, name) {
 }
 
 // 그림 묶음을 만든다.
-//   anims  동작 이름 → 시트 (여러 상태가 같은 동작을 쓰면 한 번만 담긴다)
-//   clips  상태 → { anim, mode, row }
-//   cell   담긴 모든 동작의 최대 칸 — 창 크기가 된다
-function buildClips(zip) {
+//   anims     동작 이름 → 시트 (여러 상태가 같은 동작을 쓰면 한 번만 담긴다)
+//   clips     상태 → { anim, mode, row }
+//   cell      담긴 모든 동작의 최대 칸 — 창 크기가 된다
+//   body      작업 동작을 빼고 잰 칸 — 펫 몸. 자리 계산의 기준이다
+//   work      가진 작업 동작 이름 → 재생 방식 (WORK_PLAY). 상태 동작으로 이미 담긴 Charge 등도 들어간다
+//   workOnly  작업 동작으로만 담긴 이름 — 만지기 반응에는 쓰지 않는다. 예전에 칸이 커서 빠지던 Hop 이
+//             작업 동작으로 담기면서 내려놓기·클릭 반응이 끄덕임에서 연속 점프로 바뀌었다
+// work 옵션이 false 면 작업 동작을 담지 않는다 — buddy 가 꺼져 있으면 쓸 일이 없는데 창만 커진다
+function buildClips(zip, { work = true } = {}) {
   const xml = zip.get("AnimData.xml");
   if (!xml) return null;
   const parsed = parseAnimData(xml.toString("utf8"));
@@ -114,23 +143,46 @@ function buildClips(zip) {
 
   // 후보로 들여다봤지만 시트가 없던 것(null)을 걷어낸다. 채택된 후보에서 멈추므로 성공한 시트는 모두 쓰인다
   for (const name of Object.keys(anims)) if (!anims[name]) delete anims[name];
-  const cell = { w: 0, h: 0 };
-  for (const a of Object.values(anims)) {
-    cell.w = Math.max(cell.w, a.fw);
-    cell.h = Math.max(cell.h, a.fh);
-  }
+  // 담긴 동작 전부를 덮는 칸
+  const fitAll = () => {
+    const box = { w: 0, h: 0 };
+    for (const a of Object.values(anims)) {
+      box.w = Math.max(box.w, a.fw);
+      box.h = Math.max(box.h, a.fh);
+    }
+    return box;
+  };
+  // 상태 동작의 칸 — 추가 동작의 상한은 이것을 기준으로 잰다
+  const base = fitAll();
+  const fits = (sheet, budget) => sheet.fw <= base.w * budget && sheet.fh <= base.h * budget;
 
   for (const name of EXTRA_ANIMS) {
     if (anims[name]) continue;
     const sheet = sheetOf(zip, parsed, name);
-    if (!sheet || sheet.fw > cell.w * EXTRA_BUDGET || sheet.fh > cell.h * EXTRA_BUDGET) continue;
-    anims[name] = sheet;
+    if (sheet && fits(sheet, EXTRA_BUDGET)) anims[name] = sheet;
   }
-  for (const a of Object.values(anims)) {
-    cell.w = Math.max(cell.w, a.fw);
-    cell.h = Math.max(cell.h, a.fh);
+  const body = fitAll();
+
+  const workPlay = {};
+  const workOnly = [];
+  if (work) {
+    for (const [name, play] of Object.entries(WORK_PLAY)) {
+      if (!anims[name]) {
+        const sheet = sheetOf(zip, parsed, name);
+        if (!sheet || !fits(sheet, WORK_BUDGET)) continue;
+        anims[name] = sheet;
+        workOnly.push(name);
+      }
+      workPlay[name] = play;
+    }
   }
-  return { cell, anims, clips };
+  return { cell: fitAll(), body, anims, clips, work: workPlay, workOnly };
 }
 
-module.exports = { readZipClips: (buf) => buildClips(readZip(buf)), buildClips, parseAnimData, STATE_ANIMS };
+module.exports = {
+  readZipClips: (buf, opts) => buildClips(readZip(buf), opts),
+  buildClips,
+  parseAnimData,
+  STATE_ANIMS,
+  WORK_PLAY,
+};

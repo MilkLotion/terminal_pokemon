@@ -5,10 +5,29 @@
 // 그래서 buddy 에서는 직접 끈다 — 눌렀다 떼면 클릭, 조금이라도 끌면 드래그.
 //
 // 메인에는 화면 좌표만 넘긴다. 창을 옮기고 반응을 고르는 건 메인이 한다
-import { shared } from "./core.js";
+//
+// 그림 위만 클릭을 받는다. 작업 동작(공격 등)이 칸을 키워 창이 몸보다 크다 — 투명한 곳까지 받으면 그만큼 IDE 를 못 누른다.
+// 커서 밑이 그림인지 답하면 메인이 클릭 통과를 켜고 끈다 (main.js hoverTick)
+import { canvas, ctx, shared } from "./core.js";
 
 const DRAG_START_PX = 4; // 이만큼 움직여야 드래그 — 손 떨림을 클릭으로 친다
 const CLICK_MAX_MS = 500; // 이보다 오래 누르고 있다 떼면 클릭이 아니다
+const HIT_PAD_PX = 3; // 그림 가장자리에서 이만큼 떨어진 곳까지 그림으로 친다 — 도트 사이 틈에서 클릭이 새지 않게
+
+// 창 안 좌표 (x, y) 가 그림 위인가 — 둘레 HIT_PAD_PX 안에 투명하지 않은 픽셀이 하나라도 있으면
+function opaqueNear(x, y) {
+  // 캔버스는 창을 가득 채운다. 창 좌표와 캔버스 픽셀이 다를 때(배율)를 대비해 비율로 옮긴다
+  const cx = Math.floor((x * canvas.width) / (canvas.clientWidth || canvas.width));
+  const cy = Math.floor((y * canvas.height) / (canvas.clientHeight || canvas.height));
+  const x0 = Math.max(0, cx - HIT_PAD_PX);
+  const y0 = Math.max(0, cy - HIT_PAD_PX);
+  const w = Math.min(canvas.width, cx + HIT_PAD_PX + 1) - x0;
+  const h = Math.min(canvas.height, cy + HIT_PAD_PX + 1) - y0;
+  if (w <= 0 || h <= 0) return false;
+  const { data } = ctx.getImageData(x0, y0, w, h);
+  for (let i = 3; i < data.length; i += 4) if (data[i] > 0) return true;
+  return false;
+}
 
 export function enablePointer() {
   shared.pointer = true; // 클릭 통과를 끌 때 app-region 을 되살리지 않게 core 가 본다
@@ -58,4 +77,8 @@ export function enablePointer() {
   window.termimon.onClickThrough((on) => {
     if (on && press) release({ pointerId: press.id }, true);
   });
+
+  // 메인이 묻는 커서 자리가 그림 위인지 답한다. 누르고 있는 동안은 늘 그림 위로 답한다 —
+  // 도중에 통과로 바뀌면 떼기가 아래 창으로 가서 펫이 들린 채 남는다
+  window.termimon.onHover((p) => window.termimon.hit(press != null || opaqueNear(p.x, p.y)));
 }

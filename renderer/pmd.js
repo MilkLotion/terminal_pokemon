@@ -17,6 +17,9 @@ import { canvas, ctx, shared, onStateChange, onAct, log, resize } from "./core.j
 const TICK_MS = 16;
 // 창이 숨었다 돌아오면 밀린 시간이 쌓여 있다. 따라잡지 않고 지금부터 다시 센다
 const CATCHUP_LIMIT_MS = 250;
+// 한 번만 재생하는 상태 동작(턴 끝 인사 Pose 등)의 최소 길이 — 인사 한 번이 0.4초라 한 번만 틀면 못 본다.
+// 이 길이가 될 때까지 처음부터 되풀이한 뒤 대기로 돌아간다
+const ONCE_MIN_MS = 2000;
 
 export function setup(art) {
   const { cell, zoom, anims, clips } = art;
@@ -33,6 +36,7 @@ export function setup(art) {
   // act 가 끼어들었다 null 로 돌아와도 다시 재생하지 않는다 — 또 인사하고, 또 쓰러지면 이상하다.
   // 상태가 바뀌면 지운다
   let doneState = null;
+  let onceUntil = 0; // 한 번만 재생하는 상태 동작을 되풀이할 끝 시각 (ONCE_MIN_MS)
 
   // 불러오는 중에 온 act 는 core 가 shared.act 에 남겨 둔다 — 다 불러온 뒤 그걸로 시작한다
   onAct((req) => {
@@ -88,6 +92,7 @@ export function setup(art) {
       frozen = true;
     }
     due = performance.now() + msOf(anims[next.anim], frame);
+    if (next.mode === "once") onceUntil = performance.now() + ONCE_MIN_MS;
     paint();
     log({ pmd: act ? "act" : shared.state, anim: next.anim, row: next.row, mode: next.mode, rate: next.rate });
   }
@@ -115,8 +120,10 @@ export function setup(art) {
         frozen = true; // 쓰러진 채로·반응 끝 자세로 있는다. act 면 메인이 다음 동작을 보낸다
         if (!act) doneState = shared.state;
         return;
+      } else if (now < onceUntil) {
+        frame = 0; // once — 최소 길이가 안 됐다. 처음부터 한 번 더
       } else {
-        // once — 상태 동작(waving=Pose)만 쓴다. 한 번 보여주고 돌아온다.
+        // once — 상태 동작(waving=Pose)만 쓴다. 보여주고 돌아온다.
         // 끝났다고 적어 두어, 상태가 그대로여도 다시 고르지 않게 한다
         doneState = shared.state;
         play(wanted());
