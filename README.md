@@ -376,7 +376,7 @@ CSS 동작을 얹는다.
 ## 문제 확인
 
 ```bash
-bin/pkmon-status
+pkmon-status
 ```
 
 설정 값, 이 터미널의 프로세스 체인, 살아 있는 IDE 창 기록 전부, 탭 축 판정, 세션별 상태,
@@ -386,8 +386,10 @@ bin/pkmon-status
 펫이 어느 창에 붙었는지까지 보려면 디버그 모드로 띄운다.
 
 ```bash
-PKMON_DEBUG=1 node_modules/.bin/electron .
+PKMON_DEBUG=1 pkmon eevee
 ```
+
+로그 파일 경로를 알려 준다.
 
 폴링마다 `{want, visible, tab, front, anchorId, head}` 를 찍는다. `tab` 이 `null` 이면 확장
 기록을 못 찾은 것이고, `front` 가 `false` 면 다른 창이 앞에 있다는 뜻이다.
