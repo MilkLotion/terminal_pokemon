@@ -23,7 +23,7 @@ const ROW_OF = { running: 2 };
 const EXTRA_ANIMS = ["Walk", "Sleep", "EventSleep", "Laying", "Wake", "Hurt", "Cringe", "Nod", "Pose", "Hop", "LookUp", "Rotate"];
 // 추가 동작의 칸 크기 상한 — 상태 동작이 정한 칸의 이 배수까지만 받는다.
 // 창 크기는 모든 동작의 최대 칸으로 고정되는데, 투명한 부분도 클릭을 막는다.
-//   Hop  점프 높이까지 칸에 담겨 이브이 48→80, 썬더 104→136 — 빠진다 (반응은 Nod·Pose 로 대신)
+//   Hop  점프 높이까지 칸에 담겨 이브이 48→80, 썬더 104→136 — 빠진다 (반응은 Nod·Pose 로 대신하고, 그것도 없으면 buddy/brain.js 의 reactFallback)
 //   Hurt 이브이 40x48 → 48x48 로 가로 20% 늘지만 받는다 — 집어 들 때 아파하는 반응이 buddy 의 핵심이다
 const EXTRA_BUDGET = 1.25;
 const DUR_UNIT = 1000 / 60; // AnimData 의 Duration 은 1/60초 단위

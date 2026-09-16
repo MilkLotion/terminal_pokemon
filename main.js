@@ -366,7 +366,6 @@ function isDragging() {
 function releaseHeld() {
   if (!held) return;
   held = false;
-  stopFollow();
   roam = { x: 0, y: 0 };
   buddy?.rehome();
 }
@@ -626,8 +625,12 @@ function createWindow() {
     focusable: false, // 클릭해도 터미널 포커스를 뺏지 않음
     webPreferences: {
       preload: path.join(PATHS.project, "preload.js"),
-      // 창이 숨겨졌다 다시 보일 때 애니메이션 타이머가 멈추지 않게 함
-      backgroundThrottling: false,
+      // 숨었다 보일 때 애니메이션 타이머가 멈추지 않게 스로틀링을 끈다 — 단 Windows 는 켜 둔다.
+      // Windows 에서 끄면 렌더러가 숨김 상태로 가지 않아, 창을 숨길 때 내려간 입력용 자식 창
+      // (Chrome_RenderWidgetHostHWND)이 다시 보일 때 올라오지 않는다. 그러면 누르기가 부모 창에 떨어지고,
+      // 포커스를 받지 않는 창(focusable:false)이라 Chromium 이 누르기를 버린다(MA_NOACTIVATEANDEAT) — 떼기만 온다.
+      // 켜 두면 숨은 동안만 타이머가 초당 1회로 느려지고, 다시 보이면 곧바로 제 속도로 돈다 (최소 시험 창으로 확인)
+      backgroundThrottling: process.platform === "win32",
     },
   });
 
@@ -821,51 +824,25 @@ function reportFailure(message) {
 ipcMain.handle("art", () => art);
 
 // 포인터로 펫을 만졌다 (buddy 전용) — 렌더러는 화면 좌표만 알려 주고, 옮기기·반응은 여기서 한다
-// 들고 있는 동안 커서를 따라간다 — 렌더러의 움직임 이벤트로 옮기지 않는다.
-// Windows 에서 누르기가 먹히면(renderer/pointer.js) OS 가 마우스를 펫 창에 묶어 주지 않아, 커서가 작은 창을
-// 벗어나는 순간 움직임이 끊긴다. 커서를 직접 읽어 따라가면 펫이 늘 커서 밑에 있어 떼기도 펫에 도착한다
-const FOLLOW_MS = 16;
-let follow = null; // { timer, offsetX, offsetY }
-
-function followCursor(offsetX, offsetY) {
-  stopFollow();
-  const step = () => {
-    if (!win || !held) return stopFollow();
-    const p = screen.getCursorScreenPoint();
-    const [cx, cy] = win.getPosition();
-    const { w, h } = windowSize();
-    // 끄는 중에도 창 안에 가둔다 — 가장자리에 붙어 따라오고, 놓을 때 튀어 들어가지 않는다
-    const want = { x: Math.round(p.x - offsetX), y: Math.round(p.y - offsetY) };
-    const { x, y } = lastTarget ? clampToWindow(want.x, want.y, w, h, lastTarget) : want;
-    if (x === cx && y === cy) return undefined;
-    buddy?.drag(x - cx, y - cy);
-    lastUserMoveAt = Date.now();
-    win.setPosition(x, y); // 사용자 이동 — commanded 를 적지 않는다. 저장은 놓을 때 settleUserMove 가 한다
-    return undefined;
-  };
-  follow = { timer: setInterval(step, FOLLOW_MS) };
-  step();
-}
-
-function stopFollow() {
-  if (!follow) return;
-  clearInterval(follow.timer);
-  follow = null;
-}
-
 ipcMain.on("pointer", (_e, msg) => {
-  // 디버그 — 렌더러가 넘긴 포인터가 메인까지 오는지
-  if (debug && msg) console.log(JSON.stringify({ pointer: msg.type, buddy: !!buddy, held }));
+  // 디버그 — 렌더러가 넘긴 포인터가 메인까지 오는지 (끄는 동안의 drag 는 너무 잦아 뺀다)
+  if (debug && msg && msg.type !== "drag") console.log(JSON.stringify({ pointer: msg.type, buddy: !!buddy, held }));
   if (!win || !buddy || !msg) return;
   const now = Date.now();
   if (msg.type === "grab") {
     held = true;
     lastUserMoveAt = now;
     buddy.pickup();
-    followCursor(Number(msg.offsetX) || 0, Number(msg.offsetY) || 0);
+  } else if (msg.type === "drag" && held && Number.isFinite(msg.x) && Number.isFinite(msg.y)) {
+    const [cx, cy] = win.getPosition();
+    const { w, h } = windowSize();
+    // 끄는 중에도 창 안에 가둔다 — 가장자리에 붙어 따라오고, 놓을 때 튀어 들어가지 않는다
+    const { x, y } = lastTarget ? clampToWindow(msg.x, msg.y, w, h, lastTarget) : { x: msg.x, y: msg.y };
+    buddy.drag(x - cx, y - cy);
+    lastUserMoveAt = now;
+    win.setPosition(x, y); // 사용자 이동 — commanded 를 적지 않는다. 저장은 놓을 때 settleUserMove 가 한다
   } else if (msg.type === "drop" && held) {
     held = false;
-    stopFollow();
     droppedAt = now;
     lastUserMoveAt = now;
     roam = { x: 0, y: 0 }; // 놓은 자리가 새 집 — 저장하는 오프셋은 실제 창 자리라 산책분이 이미 들어 있다

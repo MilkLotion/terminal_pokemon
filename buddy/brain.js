@@ -35,6 +35,10 @@ const MOVES = {
   held: ["Walk", "Idle"], // 들린 채 버둥거림 — 끄는 방향을 본다
   drop: ["Hop", "Nod", "Pose"],
   click: ["Nod", "Pose", "Hop", "LookUp"], // 여러 개 중 무작위
+  // drop·click 후보가 하나도 없는 펫의 대신 반응 — 원래 후보가 하나라도 있으면 쓰지 않는다.
+  // 썬더는 Nod·Pose·LookUp 이 없고 Hop 은 칸이 커서 빠져(art/pmd.js EXTRA_BUDGET) 만져도 아무 반응이 없었다.
+  // Charge 는 상태 동작(waving)으로 담긴 펫에만 있다
+  reactFallback: ["Rotate", "Charge"],
 };
 
 // mode 별 배율 — calm 은 덜 돌아다니고 제자리 동작도 덜 한다
@@ -258,7 +262,8 @@ function createBrain({ have, durOf, mode = "on", speedPx = 54, timeScale = 1, rn
     // 내려놓았다 — 놓은 자리가 새 집이다. CLI 가 일하는 중이어도 반응은 보여 준다
     drop(now, activeAt, agent) {
       roam = { x: 0, y: 0 };
-      if (!react(now, first(MOVES.drop), agent !== "idle" ? "yield" : "rest")) toRest(now, activeAt);
+      const anim = first(MOVES.drop) || first(MOVES.reactFallback);
+      if (!react(now, anim, agent !== "idle" ? "yield" : "rest")) toRest(now, activeAt);
     },
     // 사용자가 창을 직접 옮겼거나 들고 있던 게 풀렸다 — 반응 없이 쉰다
     rehome(now, activeAt) {
@@ -278,7 +283,7 @@ function createBrain({ have, durOf, mode = "on", speedPx = 54, timeScale = 1, rn
           return;
         }
       }
-      react(now, any(MOVES.click), agent !== "idle" ? "yield" : "rest");
+      react(now, any(MOVES.click) || any(MOVES.reactFallback), agent !== "idle" ? "yield" : "rest");
     },
   };
 }
