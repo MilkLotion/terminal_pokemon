@@ -99,6 +99,12 @@ let level = null; // 지금 창 레벨 — "float" | "normal"
 let ownerPid = null; // 내 터미널을 띄운 프로그램의 프로세스 번호 (한 번 찾으면 재사용)
 let ownerDeepAt = 0; // 프로세스 표로 창 주인을 마지막으로 찾아본 시각
 let servedHelper = null; // Windows 창 추적 헬퍼 (띄워 두고 한 줄씩 묻는다)
+// 끝내는 중 — 창이 파괴되는 사이에 주기 작업·감시·헬퍼가 그 창을 건드리지 않게 before-quit 에서 멈춘다.
+// 파괴된 창을 건드려 예외가 나면 Electron 기본 처리기가 모달을 띄워 메인이 멈추고, 확인을 누르면 밀린 폴링이
+// 또 던진다 — 대화상자가 끝없이 이어지고 프로세스가 끝나지 못한다
+let quitting = false;
+const intervals = []; // 끝낼 때 멈출 setInterval
+const watchers = []; // 끝낼 때 닫을 fs.watch
 
 // 창 주인을 찾는 데 쓴다 (체인 전체). pkmon 이 구해 넘긴 것을 쓴다 — pkmon 은 펫을 띄우고 곧바로 끝나서,
 // 펫이 스스로 구하면 부모 관계가 이미 끊겨 있다 (Windows 는 끊긴 채 남고, mac 은 launchd 밑으로 옮겨진다).
@@ -168,6 +174,8 @@ function helperCommand() {
 
 // 헬퍼에게 창 목록을 한 번 묻는다 — cb(err, stdout)
 function queryHelper(helper, cb) {
+  // 끝내는 중에는 묻지 않는다 — before-quit 에서 멈춘 헬퍼를 다음 질문이 다시 띄우면 펫보다 오래 남는다
+  if (quitting) return;
   if (!helper.serve) {
     execFile(helper.cmd, helper.args, { timeout: HELPER_TIMEOUT_MS, windowsHide: true }, (err, stdout) => cb(err, stdout));
     return;
@@ -277,11 +285,12 @@ function watchRecords() {
   }
   let pending = false;
   try {
-    fs.watch(windowsDir, () => {
+    const watcher = fs.watch(windowsDir, () => {
       if (pending) return; // tmp+rename 은 이벤트를 여러 번 낸다 — 한 틱으로 묶는다
       pending = true;
       setImmediate(() => {
         pending = false;
+        if (!win) return; // 기다리는 사이 창이 닫혔다
         const records = readWindowRecords();
         refineTermPid(records);
         const rec = myRecord(records);
@@ -305,6 +314,7 @@ function watchRecords() {
         }
       });
     });
+    watchers.push(watcher);
   } catch {
     // 감시 실패해도 폴링이 받쳐 준다
   }
@@ -664,6 +674,11 @@ function createWindow() {
   // 렌더러가 죽거나 다시 뜨면 들고 있던 포인터도 사라진다
   win.webContents.on("render-process-gone", () => releaseHeld());
 
+  // 창이 파괴돼도 win 은 null 이 되지 않는다 — 비워 둬야 곳곳의 `if (!win)` 이 파괴된 창을 거른다
+  win.on("closed", () => {
+    win = null;
+  });
+
   win.webContents.on("did-finish-load", () => {
     releaseHeld();
     buddy?.resend();
@@ -768,11 +783,11 @@ function watchLifetime() {
     checkPetFile();
   };
   check();
-  setInterval(check, LIFE_CHECK_MS);
+  intervals.push(setInterval(check, LIFE_CHECK_MS));
   // 내리기는 바로 반응한다 — 같은 펫을 다시 띄울 때 새 펫이 옛 펫이 끝나길 기다린다 (전역 단축키를 넘겨받으려고)
   if (petFile) {
     try {
-      fs.watch(path.dirname(petFile), () => checkPetFile());
+      watchers.push(fs.watch(path.dirname(petFile), () => checkPetFile()));
     } catch {
       // 감시 실패해도 주기 확인이 받쳐 준다
     }
@@ -886,31 +901,42 @@ app.whenReady().then(async () => {
     const retry = setInterval(() => {
       if (bindShortcuts()) clearInterval(retry);
     }, SHORTCUT_RETRY_MS);
+    intervals.push(retry);
   }
 
   watchLifetime();
 
-  setInterval(() => {
-    const { state, promptAt } = currentInfo();
-    buddy?.state(state, promptAt);
-    if (state !== lastState) {
-      lastState = state;
-      win?.webContents.send("state", state);
-    }
-  }, STATE_POLL_MS);
-  if (buddy) setInterval(buddyTick, buddy.TICK_MS);
+  intervals.push(
+    setInterval(() => {
+      const { state, promptAt } = currentInfo();
+      buddy?.state(state, promptAt);
+      if (state !== lastState) {
+        lastState = state;
+        win?.webContents.send("state", state);
+      }
+    }, STATE_POLL_MS),
+  );
+  if (buddy) intervals.push(setInterval(buddyTick, buddy.TICK_MS));
 
   watchRecords();
-  setInterval(pollAnchor, ANCHOR_POLL_MS);
+  intervals.push(setInterval(pollAnchor, ANCHOR_POLL_MS));
 });
 
 // 밖에서 끝내라는 신호 (kill 등) — 정리하고 끝낸다
 process.on("SIGTERM", () => app.quit());
 process.on("SIGINT", () => app.quit());
 
+// 창을 닫기 전에 온다 — 주기 작업·감시·헬퍼를 먼저 멈춘다 (quitting 설명 참고).
+// 창이 따로 닫혀 끝나는 경로(window-all-closed → app.quit)도 이곳을 지난다
+app.on("before-quit", () => {
+  quitting = true;
+  for (const id of intervals) clearInterval(id);
+  for (const w of watchers) w.close();
+  servedHelper?.stop();
+});
+
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
-  servedHelper?.stop();
   // 떠 있는 펫 목록에서 빠진다 — 남겨 두면 status 가 끝난 펫을 센다 (죽은 번호는 pkmon 이 다음에 청소한다)
   if (petFile) fs.rmSync(petFile, { force: true });
 });
