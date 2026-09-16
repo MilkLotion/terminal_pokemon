@@ -23,7 +23,6 @@ const VISIBLE_CONFIRM = 2; // 표시 전환은 이만큼 연속 같은 판정일
 const CAPTURE_CONFIRM = 2; // 앵커 창을 확정하기까지 연속 일치 횟수
 const ANCHOR_MISS_LIMIT = 8; // 내 창이 이만큼 연속으로 안 보이면 앵커를 풀고 다시 찾는다
 const CAPTURE_MIN = { w: 600, h: 400 }; // 분리된 DevTools 같은 보조 창을 앵커로 잡지 않도록
-const SCREEN_SLACK = 64; // 화면 경계 판정 여유
 const OWN_PID_CHECK_MS = 5000; // 터미널이 죽었는지 확인하는 주기
 
 const config = settings.load();
@@ -44,6 +43,7 @@ let wantStreak = 0;
 let sawExtension = false; // 확장 기록을 한 번이라도 봤으면, 잃었을 때 닫는 쪽으로 간다
 let userHidden = false; // Cmd+Alt+H 로 직접 숨김
 let helperFails = 0;
+let onTop = false; // 펫을 이미 올려 뒀는가 — 같은 상태에서 moveTop 을 반복하지 않게
 
 // 기동 시 한 번만 구한다 — 래퍼가 먼저 끝나면 부모 관계가 끊긴다
 const myPids = pkstate.myPidsFor(termPid);
@@ -194,7 +194,11 @@ function setVisible(visible) {
 
 // Space 전환 애니메이션 중에는 다른 Space 의 창이 가상 스트립 좌표로 섞여 들어온다
 // (보고값 = 실좌표 + Space인덱스 × (디스플레이폭 + 64)). 좌표도 순서도 믿을 수 없으므로 표본을 통째로 버린다
-function offScreen(windows) {
+//
+// 판정은 "화면 밖으로 완전히 벗어난 창이 있는가" 로 한다. 지금 화면에 보이는 창은 아무리 끝으로
+// 밀어도 일부는 화면 안에 남는다 — 통째로 밖에 있다면 다른 Space 의 창이 끌려 들어온 것이다.
+// (경계를 조금만 벗어나도 버리게 하면, 창 하나를 화면 밖으로 걸쳐 둔 것만으로 펫이 얼어붙는다)
+function screenUnion() {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -205,14 +209,63 @@ function offScreen(windows) {
     maxX = Math.max(maxX, d.bounds.x + d.bounds.width);
     maxY = Math.max(maxY, d.bounds.y + d.bounds.height);
   }
-  if (!Number.isFinite(minX)) return false;
-  return windows.some(
-    (w) =>
-      w.x < minX - SCREEN_SLACK ||
-      w.y < minY - SCREEN_SLACK ||
-      w.x + w.w > maxX + SCREEN_SLACK ||
-      w.y + w.h > maxY + SCREEN_SLACK,
+  return { minX, minY, maxX, maxY };
+}
+
+function offScreen(windows) {
+  const b = screenUnion();
+  if (!Number.isFinite(b.minX)) return false;
+  return windows.some((w) => w.x >= b.maxX || w.x + w.w <= b.minX || w.y >= b.maxY || w.y + w.h <= b.minY);
+}
+
+// 펫을 z-order 맨 위로 올린다 — 포커스는 빼앗지 않는다
+function raise() {
+  if (!win || !win.isVisible()) return;
+  // moveTop() 을 쓰면 안 된다 — 백그라운드 앱에서는 창을 활성 앱 "아래"로 밀어넣는다 (실측 확인)
+  // showInactive() 는 orderFrontRegardless 라 포커스를 뺏지 않고 맨 위로 올린다
+  win.showInactive();
+  onTop = true;
+}
+
+// 확장이 포커스 변화를 적는 순간 바로 반응한다 — 폴링(0.4초)을 기다리면 그만큼 펫이 창에 가려 있다
+// winbounds 를 다시 돌리지 않는다. 기록에 "내 창이 포커스"라고 적혀 있으면 그것으로 충분하다
+function watchRecords() {
+  try {
+    fs.mkdirSync(windowsDir, { recursive: true });
+  } catch {
+    return;
+  }
+  let pending = false;
+  try {
+    fs.watch(windowsDir, () => {
+      if (pending) return; // tmp+rename 은 이벤트를 여러 번 낸다 — 한 틱으로 묶는다
+      pending = true;
+      setImmediate(() => {
+        pending = false;
+        if (onTop) return; // 이미 올려 뒀다 — 하트비트 기록까지 반응할 필요는 없다
+        const rec = myRecord(readWindowRecords());
+        if (rec && rec.focused === true && tabAxis(rec)) {
+          raise();
+          if (debug) console.log(JSON.stringify({ watch: "raise", lagMs: Math.round(Date.now() - rec.at * 1000) }));
+        }
+      });
+    });
+  } catch {
+    // 감시 실패해도 폴링이 받쳐 준다
+  }
+}
+
+// 펫이 놓일 자리 — 따라가는 창의 오른쪽 아래 모서리 기준
+function petSpot(target) {
+  const { w, h } = windowSize();
+  const { x, y } = clampToWindow(
+    target.x + target.w - w + config.window.dx - stackShift(),
+    target.y + target.h - h + config.window.dy,
+    w,
+    h,
+    target,
   );
+  return { x, y, w, h };
 }
 
 // 표시 전환은 같은 판정이 연속으로 나올 때만 반영한다
@@ -259,8 +312,11 @@ function pollAnchor() {
     } catch {
       return;
     }
+    // 목록은 전역 z-order(앞→뒤) 전체다. 앵커 판정에는 앵커 앱 창만 쓰고,
+    // 가림 판정에는 전체가 필요하다 — 내 창을 덮는 게 어느 앱인지는 상관없다
     const windows = (info.windows || []).filter((w) => w && typeof w.id === "number");
     if (offScreen(windows)) return; // Space 전환 중
+    const appWindows = anchorApp ? windows.filter((w) => w.app === anchorApp) : windows;
 
     const records = readWindowRecords();
     const rec = myRecord(records);
@@ -270,7 +326,7 @@ function pollAnchor() {
     // ── 앵커 — 한 번 확정하면 그 창 ID 만 따라간다
     let target = null;
     if (anchorId != null) {
-      target = windows.find((w) => w.id === anchorId) || null;
+      target = appWindows.find((w) => w.id === anchorId) || null;
       if (target) anchorMiss = 0;
       else if ((anchorMiss += 1) >= ANCHOR_MISS_LIMIT) {
         anchorId = null; // 창이 닫혔거나 오래 안 보임 — 다시 찾는다
@@ -278,7 +334,7 @@ function pollAnchor() {
       }
     }
     if (anchorId == null) {
-      const head = windows[0] || null;
+      const head = appWindows[0] || null;
       // 내 창이 지금 포커스이고 내 탭이 활성인 순간에만 확정한다 — 그때 맨 앞 창은 반드시 내 창이다
       const sure =
         !!head &&
@@ -299,19 +355,27 @@ function pollAnchor() {
       target = head; // 확정 전에는 맨 앞 창을 임시로 따라간다
     }
 
-    // ── 창 축 — 내 창이 이 앱 창들 중 맨 앞인가
-    // 목록은 앵커 앱으로 걸러져 있으므로, 크롬을 보고 있어도 이 앱 창들끼리의 순서는 그대로다
-    const front = !!(target && windows[0] && windows[0].id === target.id);
+    // ── 내 창이 화면 맨 앞이면 펫을 그 위로 올린다
+    // 일반 레벨이라 A 를 클릭하면 A 가 펫 위로 올라온다. 다시 올려 주면 [펫, A] 가 되고,
+    // 그 뒤 B 를 클릭하면 B 가 그 위로 올라와 [B, 펫, A] — 겹친 부분만 OS 가 알아서 가린다
+    // 내 창이 맨 앞으로 돌아온 순간에만 올린다. 이미 올려 뒀으면 다시 부르지 않는다
+    if (target && windows[0] && windows[0].id === target.id) {
+      if (!onTop) raise();
+    } else {
+      onTop = false;
+    }
+
+    const spot = target ? petSpot(target) : null;
 
     let want;
     if (tab === null) {
       // 확장 기록이 없다. 한 번이라도 본 적 있으면 잃은 것이므로 닫는 쪽으로 간다
-      want = sawExtension ? false : front;
+      want = sawExtension ? false : !!target;
     } else if (anchorId == null) {
-      // 아직 내 창을 특정하지 못했다 — 확장이 알려주는 포커스로 판단한다
-      want = tab && rec.focused === true;
+      // 아직 내 창을 특정하지 못했다 — 확장이 알려주는 포커스를 함께 본다
+      want = tab && rec.focused === true && !!target;
     } else {
-      want = tab && front;
+      want = tab && !!target; // 내 창이 목록에 없으면(다른 Space·최소화) 숨긴다
     }
     if (config.keepVisible) want = true;
     if (userHidden) want = false;
@@ -319,20 +383,12 @@ function pollAnchor() {
     const dragging = Date.now() - lastUserMoveAt < DRAG_GRACE_MS;
     if (dragging) want = visible;
 
-    if (target && !dragging) {
+    if (target && spot && !dragging) {
       lastTarget = target;
-      const { w, h } = windowSize();
-      const { x, y } = clampToWindow(
-        target.x + target.w - w + config.window.dx - stackShift(),
-        target.y + target.h - h + config.window.dy,
-        w,
-        h,
-        target,
-      );
       const [curX, curY] = win.getPosition();
-      if (curX !== x || curY !== y) {
-        commanded = { x, y };
-        win.setPosition(x, y);
+      if (curX !== spot.x || curY !== spot.y) {
+        commanded = { x: spot.x, y: spot.y };
+        win.setPosition(spot.x, spot.y);
       }
     }
 
@@ -344,10 +400,9 @@ function pollAnchor() {
           want,
           visible,
           tab,
-          front,
           anchorId,
           target: target ? target.id : null,
-          head: windows[0] ? windows[0].id : null,
+          head: appWindows[0] ? appWindows[0].id : null,
           state: currentState(),
         }),
       );
@@ -373,7 +428,7 @@ function createWindow() {
     hasShadow: false,
     resizable: false,
     skipTaskbar: true,
-    alwaysOnTop: true,
+    alwaysOnTop: false, // 일반 레벨 — 내 창 위에만 있고 다른 창이 올라오면 그 아래로 내려간다
     fullscreenable: false,
     focusable: false, // 클릭해도 터미널 포커스를 뺏지 않음
     webPreferences: {
@@ -383,7 +438,6 @@ function createWindow() {
     },
   });
 
-  win.setAlwaysOnTop(true, "floating");
   // 첫 인자 false — Space(데스크탑) 를 전환해도 펫이 따라오지 않고 자기 창이 있는 Space 에 남는다
   // visibleOnFullScreen 은 별개 속성이라 풀스크린 창 위 표시는 그대로 유지된다
   win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true });
@@ -491,6 +545,7 @@ app.whenReady().then(async () => {
     }
   }, STATE_POLL_MS);
 
+  watchRecords();
   setInterval(pollAnchor, ANCHOR_POLL_MS);
 });
 

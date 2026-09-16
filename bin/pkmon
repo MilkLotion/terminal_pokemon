@@ -113,10 +113,18 @@ if [[ -n "$pet" ]]; then
         resolved="$slug" # 스프라이트 저장소를 못 찾으면 검사 없이 그대로 넘긴다
       fi
 
+      # PKMON_DEBUG=1 이면 판정 로그를 파일로 남긴다. 평소에는 버린다
+      if [[ -n "${PKMON_DEBUG:-}" ]]; then
+        pet_log="$RUN_DIR/debug-$PPID-$resolved.log"
+        echo "펫 로그: $pet_log" >&2
+      else
+        pet_log="/dev/null"
+      fi
+
       # $PPID = 이 스크립트를 부른 대화형 셸 = VS Code 가 터미널 탭의 프로세스로 보는 번호
       PKMON_SLUG="$resolved" PKMON_SCALE="$scale" PKMON_POS="$pos" PKMON_MATCH_CWD="$PWD" \
         PKMON_INDEX="$((base + slot))" PKMON_ANCHOR_APP="$anchor_app" PKMON_TERM_PID="$PPID" \
-        "$electron" "$PROJECT" >/dev/null 2>&1 &
+        "$electron" "$PROJECT" >"$pet_log" 2>&1 &
       overlay_pids+=("$!")
       echo "$!" > "$RUN_DIR/$PPID-$!.pid"
       slot=$((slot + 1))
