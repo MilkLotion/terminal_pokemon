@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# 명령을 실행하는 동안 펫 오버레이를 띄우고, 명령이 끝나면 펫도 함께 종료
+# 사용: pkmon --pet pikachu [--scale 1] -- claude
+#       pkmon --pet zapdos,pikachu -- claude      (쉼표로 여러 마리)
+set -uo pipefail
+
+PROJECT="${PKMON_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
+pet=""
+scale=""
+pos=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --pet) pet="${2:-}"; shift 2 ;;
+    --scale) scale="${2:-}"; shift 2 ;;
+    --pos) pos="${2:-}"; shift 2 ;;
+    --) shift; break ;;
+    *) echo "알 수 없는 옵션: $1" >&2; exit 2 ;;
+  esac
+done
+
+if [[ $# -eq 0 ]]; then
+  echo "실행할 명령이 없음 — 사용: pkmon --pet pikachu -- claude" >&2
+  exit 2
+fi
+
+electron="$PROJECT/node_modules/.bin/electron"
+overlay_pids=()
+
+# 터미널 종류에 따라 따라갈 앱 — 그 앱 창 모서리에 붙고, 앞에 없을 때는 숨는다
+anchor_app=""
+case "${TERM_PROGRAM:-}" in
+  vscode) anchor_app="Code" ;;
+  ghostty) anchor_app="Ghostty" ;;
+  iTerm.app) anchor_app="iTerm2" ;;
+  Apple_Terminal) anchor_app="Terminal" ;;
+  WezTerm) anchor_app="WezTerm" ;;
+esac
+
+# 떠 있는 펫 목록 — pid 파일로 관리한다 (Electron 은 한 마리가 여러 프로세스를 만들어 프로세스 수로는 셀 수 없음)
+RUN_DIR="${TMPDIR:-/tmp}/pkmon-pets"
+mkdir -p "$RUN_DIR"
+
+live_pets() {
+  local count=0 file pid
+  for file in "$RUN_DIR"/*.pid; do
+    [[ -e "$file" ]] || continue
+    pid="$(cat "$file" 2>/dev/null)"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      count=$((count + 1))
+    else
+      rm -f "$file" # 죽은 펫의 흔적 정리
+    fi
+  done
+  echo "$count"
+}
+
+# 스프라이트 저장소 경로 — 설정은 config.js 한 곳에서만 온다
+sprite_source() {
+  node -e 'process.stdout.write(require(process.argv[1] + "/config.js").load().source)' "$PROJECT" 2>/dev/null
+}
+
+# 입력 이름 → 실제 폴더명. 소문자로 맞추고, 2D 가 없는 6세대 이후는 -3d 로 대체
+resolve_slug() {
+  local input="$1" source="$2" name cand
+  name="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  for cand in "$name" "${name}-3d"; do
+    if [[ -f "$source/pets/$cand/spritesheet.webp" ]]; then
+      printf '%s' "$cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# 오타·없는 이름일 때 비슷한 폴더명 몇 개 — mega 처럼 팩에 없는 접두/접미는 떼고 찾는다
+suggest_slugs() {
+  local input="$1" source="$2" key
+  key="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z')"
+  key="${key#mega}"
+  key="${key%mega}"
+  [[ ${#key} -ge 3 ]] || return 0
+  ls "$source/pets" 2>/dev/null | grep -i -- "$key" | head -5
+}
+
+if [[ -n "$pet" ]]; then
+  if [[ -x "$electron" ]]; then
+    source_dir="$(sprite_source)"
+    # 이미 떠 있는 펫 수 — 그만큼 옆으로 밀어서 배치
+    base="$(live_pets)"
+    IFS=',' read -r -a pet_list <<< "$pet"
+    slot=0
+    for slug in "${pet_list[@]}"; do
+      slug="${slug//[[:space:]]/}"
+      [[ -z "$slug" ]] && continue
+
+      if [[ -d "$source_dir/pets" ]]; then
+        if ! resolved="$(resolve_slug "$slug" "$source_dir")"; then
+          echo "펫 이름을 찾을 수 없음: $slug" >&2
+          hits="$(suggest_slugs "$slug" "$source_dir")"
+          if [[ -n "$hits" ]]; then
+            echo "  비슷한 이름:" >&2
+            printf '    %s\n' $hits >&2
+          fi
+          echo "  전체 목록: $source_dir/pets" >&2
+          continue
+        fi
+      else
+        resolved="$slug" # 스프라이트 저장소를 못 찾으면 검사 없이 그대로 넘긴다
+      fi
+
+      # $PPID = 이 스크립트를 부른 대화형 셸 = VS Code 가 터미널 탭의 프로세스로 보는 번호
+      PKMON_SLUG="$resolved" PKMON_SCALE="$scale" PKMON_POS="$pos" PKMON_MATCH_CWD="$PWD" \
+        PKMON_INDEX="$((base + slot))" PKMON_ANCHOR_APP="$anchor_app" PKMON_TERM_PID="$PPID" \
+        "$electron" "$PROJECT" >/dev/null 2>&1 &
+      overlay_pids+=("$!")
+      echo "$!" > "$RUN_DIR/$!.pid"
+      slot=$((slot + 1))
+    done
+  else
+    echo "펫을 건너뜀 — Electron 미설치: $PROJECT 에서 npm install 필요" >&2
+  fi
+fi
+
+cleanup() {
+  for pid in "${overlay_pids[@]:-}"; do
+    [[ -n "$pid" ]] || continue
+    kill "$pid" 2>/dev/null
+    rm -f "$RUN_DIR/$pid.pid"
+  done
+  overlay_pids=()
+}
+trap cleanup EXIT INT TERM
+
+"$@"
+status=$?
+cleanup
+exit $status

@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# 펫이 이상하게 보일 때 지금 상태를 확인한다
+# 사용: pkmon-status        (이 터미널 기준으로 판정 결과까지 표시)
+set -uo pipefail
+
+PROJECT="${PKMON_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+TERM_PID="$PPID"
+
+node - "$PROJECT" "$TERM_PID" <<'NODE'
+const fs = require("fs");
+const path = require("path");
+const [project, termPidArg] = process.argv.slice(2);
+const termPid = Number(termPidArg);
+// 경로·설정은 config.js 한 곳에서만 온다
+const settings = require(`${project}/config.js`);
+const { PATHS, USER_DEFAULTS } = settings;
+const STATE_DIR = PATHS.state;
+const ACTIVE_FILE = PATHS.activeTerminal;
+const STALE_SEC = 600;
+
+const age = (at) => (Date.now() / 1000 - (at || 0)).toFixed(1);
+
+const config = settings.load();
+const userValues = Object.keys(USER_DEFAULTS)
+  .map((key) => `${key}=${config[key]}`)
+  .join(" ");
+console.log(`설정 파일: ${PATHS.config}`);
+console.log(`  ${userValues}`);
+console.log(`이 터미널 셸 번호: ${termPid}`);
+
+try {
+  const active = JSON.parse(fs.readFileSync(ACTIVE_FILE, "utf8"));
+  const mark = active.pid === termPid ? "← 이 터미널" : "";
+  console.log(`활성 터미널(확장 기록): pid=${active.pid} name=${active.name} ${age(active.at)}초 전 ${mark}`);
+} catch {
+  console.log("활성 터미널 기록 없음 — VS Code 확장이 없거나 아직 기록 전");
+}
+
+let files = [];
+try {
+  files = fs
+    .readdirSync(STATE_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => path.join(STATE_DIR, f))
+    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+} catch {
+  console.log("상태 파일 폴더 없음 — 훅 미설치");
+}
+
+console.log(`\n세션 상태 기록 ${files.length}건 (최신순)`);
+let resolved = null;
+for (const file of files) {
+  let record;
+  try {
+    record = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    continue;
+  }
+  const anc = Array.isArray(record.ancestors) ? record.ancestors : [];
+  const mine = anc.length ? anc.includes(termPid) : null;
+  let shown = record.state;
+  const a = Date.now() / 1000 - (record.at || 0);
+  if (record.hold != null && a >= record.hold) shown = record.then || "idle";
+  if ((shown === "running" || shown === "waiting") && a > STALE_SEC) shown = "idle";
+  if (mine && resolved === null) resolved = shown;
+  const tag = mine === null ? "조상 기록 없음" : mine ? "← 이 터미널" : "다른 터미널";
+  console.log(
+    `  ${path.basename(file).slice(0, 8)}  기록=${record.state}${record.hold ? `(${record.hold}초)` : ""}` +
+      ` → 지금=${shown}  ${age(record.at)}초 전  cwd=${(record.cwd || "").slice(-30)}  ${tag}`,
+  );
+}
+console.log(`\n이 터미널 펫이 보여야 할 동작: ${resolved ?? "idle (내 터미널 기록 없음)"}`);
+
+try {
+  const out = require("child_process").execFileSync("ps", ["-Ao", "pid=,args="], { encoding: "utf8" });
+  const pets = out
+    .split("\n")
+    .filter((l) => l.includes(project) && !l.includes("--type=") && l.includes("Electron"))
+    .map((l) => l.trim().split(/\s+/)[0]);
+  console.log(`떠 있는 펫 프로세스: ${pets.length}개`);
+} catch {
+  // 프로세스 조회 실패는 무시
+}
+NODE

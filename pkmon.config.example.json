@@ -1,0 +1,9 @@
+{
+  "slug": "pikachu",
+  "dotSize": 2,
+  "useGif": "auto",
+  "keepVisible": false,
+  "clickThrough": false,
+  "pos": "fix",
+  "fps": 7
+}
