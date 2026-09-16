@@ -27,11 +27,23 @@ const EVENT_STATES = {
 };
 
 // 이 훅을 띄운 조상 프로세스 목록 — 훅 → claude → 터미널 셸 순으로 올라간다
-// 펫 오버레이가 자기 터미널 셸 번호가 이 목록에 있는지로 "내 세션"을 가린다
+// 펫 오버레이가 자기 터미널 셸 번호가 이 목록에 있는지로 "내 세션"을 가린다.
+// 비어 있으면 펫은 작업 폴더(cwd)로만 가려서, 같은 폴더를 연 두 터미널의 상태가 섞인다
 function ancestorPids() {
-  if (process.platform === "win32") return [];
   try {
-    const out = execFileSync("ps", ["-Ao", "pid=,ppid="], { encoding: "utf8", timeout: 2000 });
+    // Windows 에는 ps 가 없다 — PowerShell 로 프로세스 표를 읽는다 (수백 ms, 그래서 세션마다 한 번만 부른다)
+    const out =
+      process.platform === "win32"
+        ? execFileSync(
+            "powershell",
+            [
+              "-NoProfile",
+              "-Command",
+              "Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId | ForEach-Object { \"$($_.ProcessId) $($_.ParentProcessId)\" }",
+            ],
+            { encoding: "utf8", timeout: 4000, windowsHide: true },
+          )
+        : execFileSync("ps", ["-Ao", "pid=,ppid="], { encoding: "utf8", timeout: 2000 });
     const parent = new Map();
     for (const line of out.split("\n")) {
       const [pid, ppid] = line.trim().split(/\s+/).map(Number);
@@ -90,11 +102,15 @@ process.stdin.on("end", () => {
 
     const file = path.join(STATE_DIR, `${sessionId}.json`);
     const now = Date.now() / 1000;
+    const prev = readState(file);
+    // 조상은 한 세션 안에서 바뀌지 않는다. Windows 는 구하는 데 PowerShell 을 띄워야 해서, 도구를 쓸 때마다
+    // 부르지 않고 세션 시작(재개 포함 — 다른 터미널에서 이어 열 수 있다) 때 구한 것을 이어 쓴다
+    const known = prev && Array.isArray(prev.ancestors) && prev.ancestors.length ? prev.ancestors : null;
+    const ancestors = process.platform === "win32" && event !== "SessionStart" && known ? known : ancestorPids();
     // cwd·조상 프로세스 기록 — 펫 오버레이가 자기 터미널의 세션만 따라가는 데 씀
-    let record = { ...mapping, event, at: now, cwd: data.cwd || "", ancestors: ancestorPids() };
+    let record = { ...mapping, event, at: now, cwd: data.cwd || "", ancestors };
 
     // 실패 표시 중에 바로 다음 도구 호출이 와도 실패 동작을 끝까지 보여줌 — 전환 대상만 갱신
-    const prev = readState(file);
     if (mapping.state === "running" && prev && prev.state === "failed" && prev.hold && now - prev.at < prev.hold) {
       record = { ...prev, then: "running" };
     }

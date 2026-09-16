@@ -12,11 +12,19 @@ const pkstate = require("./lib/state");
 const { loadArt } = require("./art");
 // buddy — 산책·수면·만지기 반응. PMD 에서만 켜진다 (판단은 buddy/brain.js, 붙이는 층은 buddy/body.js)
 const { createBuddy } = require("./buddy/body.js");
+// Windows 창 추적 헬퍼를 띄워 두고 한 줄씩 묻는다
+const { createLineHelper } = require("./lib/line-helper.js");
 
 const { PATHS } = settings;
 const { CELL } = require("./art/sheet.js"); // 팩 스프라이트시트의 한 칸 — 정의는 그쪽에 있다
 const STATE_POLL_MS = 500;
-const ANCHOR_POLL_MS = process.platform === "darwin" ? 400 : 1000;
+// Windows 도 헬퍼를 띄워 두고 묻기 때문에(한 번 1ms 안쪽) mac 과 같은 간격으로 창을 따라간다
+const ANCHOR_POLL_MS = 400;
+const HELPER_TIMEOUT_MS = 2000;
+// Windows 헬퍼의 첫 답 — PowerShell 기동과 C# 컴파일이 끼어 느린 컴퓨터·백신 검사 중에는 수 초 걸린다
+const HELPER_START_TIMEOUT_MS = 20000;
+// 창 주인을 조상에서 못 찾았을 때 프로세스 표를 다시 읽는 간격 — Windows 는 한 번에 수백 ms 동안 메인을 멈춘다
+const OWNER_DEEP_RETRY_MS = 10000;
 const STACK_RATIO = 0.8; // 여러 마리를 나란히 둘 때 창 너비 대비 간격
 const DRAG_GRACE_MS = 2000; // 이 시간 안에 내 창이 움직였으면 드래그 중으로 본다
 const VISIBLE_CONFIRM = 2; // 표시 전환은 이만큼 연속 같은 판정일 때만 — 한 번의 경합이 깜빡임이 되지 않게
@@ -67,6 +75,8 @@ let helperFails = 0;
 let frontIsMine = false; // 내 창이 화면 맨 앞인가
 let level = null; // 지금 창 레벨 — "float" | "normal"
 let ownerPid = null; // 내 터미널을 띄운 프로그램의 프로세스 번호 (한 번 찾으면 재사용)
+let ownerDeepAt = 0; // 프로세스 표로 창 주인을 마지막으로 찾아본 시각
+let servedHelper = null; // Windows 창 추적 헬퍼 (띄워 두고 한 줄씩 묻는다)
 
 // 기동 시 한 번만 구한다 — 래퍼가 먼저 끝나면 부모 관계가 끊긴다
 const ancestors = pkstate.ancestorPids(); // 창 주인을 찾는 데 쓴다 (체인 전체)
@@ -111,6 +121,7 @@ const tabAxis = (rec) => pkstate.tabAxis(rec, myPids);
 
 // 앵커 앱의 창 위치를 읽는 헬퍼 — mac 은 컴파일된 Swift, Windows 는 PowerShell
 // PKMON_WINBOUNDS 로 다른 실행 파일을 가리킬 수 있다 (테스트가 실제 헬퍼를 건드리지 않도록)
+// serve 면 한 번 띄워 두고 한 줄씩 묻는다 (lib/line-helper.js)
 function helperCommand() {
   // 앱 이름을 몰라도 된다 — 목록은 전체로 받고, 내 창은 프로세스 조상으로 가린다
   const args = anchorApp ? [anchorApp] : [];
@@ -123,10 +134,34 @@ function helperCommand() {
   if (process.platform === "win32") {
     const ps1 = path.join(PATHS.project, "helpers", "winbounds.ps1");
     return fs.existsSync(ps1)
-      ? { cmd: "powershell", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, ...args] }
+      ? { cmd: "powershell", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, "-Serve", ...args], serve: true }
       : null;
   }
   return null;
+}
+
+// 헬퍼에게 창 목록을 한 번 묻는다 — cb(err, stdout)
+function queryHelper(helper, cb) {
+  if (!helper.serve) {
+    execFile(helper.cmd, helper.args, { timeout: HELPER_TIMEOUT_MS, windowsHide: true }, (err, stdout) => cb(err, stdout));
+    return;
+  }
+  if (!servedHelper) {
+    servedHelper = createLineHelper(helper.cmd, helper.args, {
+      timeoutMs: HELPER_TIMEOUT_MS,
+      startTimeoutMs: HELPER_START_TIMEOUT_MS,
+    });
+  }
+  servedHelper.query(cb);
+}
+
+// 헬퍼 좌표 → Electron 창 좌표. Windows 헬퍼는 물리 픽셀을 주고 Electron 은 DIP 를 쓴다.
+// 배율 125%·150% 에서 그대로 쓰면 펫이 따라갈 창의 오른쪽 아래가 아니라 화면 밖에 놓인다.
+// 모니터마다 배율이 달라도 맞게 변환은 Electron(OS)에 맡긴다. mac 헬퍼는 이미 포인트 단위다
+function toDip(w) {
+  if (process.platform !== "win32") return w;
+  const r = screen.screenToDipRect(null, { x: w.x, y: w.y, width: w.w, height: w.h });
+  return { ...w, x: r.x, y: r.y, w: r.width, h: r.height };
 }
 
 // 펫이 따라가는 창 밖으로 나가지 않도록 위치를 가둔다 (창보다 펫이 크면 좌상단에 맞춘다)
@@ -415,8 +450,7 @@ function pollAnchor() {
     return;
   }
 
-  // windowsHide — 펫은 콘솔 없는 GUI 프로세스라, 숨기지 않으면 1초마다 PowerShell 창이 번쩍인다
-  execFile(helper.cmd, helper.args, { timeout: 2000, windowsHide: true }, (err, stdout) => {
+  queryHelper(helper, (err, stdout) => {
     if (!win) return;
     if (err) {
       // 헬퍼가 계속 실패하면 안전한 쪽으로 — 아무 앱 위에나 영영 떠 있는 것을 막는다
@@ -435,13 +469,20 @@ function pollAnchor() {
     }
     // 목록은 전역 z-order(앞→뒤) 전체다. 앵커 판정에는 앵커 앱 창만 쓰고,
     // 가림 판정에는 전체가 필요하다 — 내 창을 덮는 게 어느 앱인지는 상관없다
-    const windows = (info.windows || []).filter((w) => w && typeof w.id === "number");
-    if (offScreen(windows)) return; // Space 전환 중
+    const windows = (info.windows || []).filter((w) => w && typeof w.id === "number").map(toDip);
+    // Space 전환 중 — mac 에서만 일어난다. Windows 는 다른 가상 데스크톱의 창이 헬퍼에서 걸러져 들어오지 않고,
+    // 화면 밖에 걸어 둔 창 하나(떼어 낸 모니터 자리 등) 때문에 표본을 매번 버리면 펫이 영영 자리를 못 잡는다
+    if (process.platform === "darwin" && offScreen(windows)) return;
     // 내 터미널을 띄운 프로그램의 창들 — 앱 이름 표가 아니라 프로세스 조상으로 찾는다.
     // VS Code·cmux·iTerm2·Warp·Windows Terminal·cmd 무엇이든 이걸로 잡힌다
     // 한 번 찾은 창 주인은 바뀌지 않는다 — 다시 찾는 건 그 프로세스의 창이 하나도 없을 때뿐
+    // 프로세스 표까지 읽는 깊은 탐색은 한 번도 못 찾았을 때만, 가끔 한다 (동기 호출이라 그동안 펫이 멈춘다).
+    // 이미 찾은 주인의 창이 잠깐 없는 것(모두 최소화)은 다시 찾을 이유가 아니다 — 못 찾으면 알던 주인을 그대로 둔다
     if (ownerPid == null || !windows.some((w) => w.pid === ownerPid)) {
-      ownerPid = pkstate.ownerPidOf(ancestors, windows);
+      const deep = ownerPid == null && Date.now() - ownerDeepAt >= OWNER_DEEP_RETRY_MS;
+      const found = pkstate.ownerPidOf(ancestors, windows, { deep });
+      if (deep && found == null) ownerDeepAt = Date.now();
+      if (found != null) ownerPid = found;
     }
     let appWindows = ownerPid != null ? windows.filter((w) => w.pid === ownerPid) : [];
     // 조상으로 못 찾을 때(tmux·원격 세션 등)는 터미널 종류에서 받은 앱 이름으로 갈음한다
@@ -767,5 +808,8 @@ app.whenReady().then(async () => {
 process.on("SIGTERM", () => app.quit());
 process.on("SIGINT", () => app.quit());
 
-app.on("will-quit", () => globalShortcut.unregisterAll());
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+  servedHelper?.stop();
+});
 app.on("window-all-closed", () => app.quit());

@@ -241,6 +241,18 @@ function vsixFile() {
   }
 }
 
+// git clone 으로 받았으면 vsix 가 없다 — 빌드 산출물이라 저장소에 넣지 않는다 (npm 배포본에는 prepack 이 넣는다).
+// 묶는 스크립트는 의존성 없는 Node 라 어느 OS 에서나 돈다. 배포본에는 스크립트가 없어 null
+const VSIX_BUILDER = path.join(PROJECT, "scripts", "build-vsix.js");
+function buildVsix() {
+  if (!fs.existsSync(VSIX_BUILDER)) return null;
+  try {
+    return require(VSIX_BUILDER).build();
+  } catch {
+    return null;
+  }
+}
+
 // 에디터 CLI 실행 — Windows 의 .cmd 는 셸을 거쳐야 한다
 function runEditor(cli, args) {
   const opts = { encoding: "utf8", timeout: 60_000, stdio: ["ignore", "pipe", "pipe"], windowsHide: true };
@@ -337,13 +349,20 @@ function setup({ dryRun = false, editor = true } = {}) {
   }
 
   // 4. 에디터 확장 — 같은 창의 여러 터미널 탭 중 펫을 띄운 탭에서만 보이게 한다
-  const vsix = vsixFile();
+  let vsix = vsixFile();
   const clis = editor ? editorClis() : [];
+  // git clone 설치 — 묶는 스크립트로 vsix 를 만든다. 미리 보기에서는 파일을 만들지 않고 예정으로만 둔다
+  const toBuild = editor && !vsix && fs.existsSync(VSIX_BUILDER);
+  if (toBuild && dryRun) say("에디터 확장    vsix 파일이 없음 — 묶어서 설치할 예정");
+  if (toBuild && !dryRun) {
+    vsix = buildVsix();
+    say(`에디터 확장    vsix 파일이 없어 묶음${vsix ? `: ${vsix}` : " — 실패"}`);
+  }
   if (!editor) say("에디터 확장    --no-editor — 건너뜀");
-  else if (!vsix) say("에디터 확장    vsix 파일이 없음 — 건너뜀");
+  else if (!vsix && !(toBuild && dryRun)) say("에디터 확장    vsix 파일이 없음 — 건너뜀");
   else if (!clis.length) {
     say("에디터 확장    VS Code 계열 에디터 CLI 를 못 찾음 — 에디터에서 직접 설치:");
-    say(`               확장 보기 → … → VSIX 에서 설치 → ${vsix}`);
+    if (vsix) say(`               확장 보기 → … → VSIX 에서 설치 → ${vsix}`);
   } else {
     for (const { name, file: cli } of clis) {
       if (dryRun) {

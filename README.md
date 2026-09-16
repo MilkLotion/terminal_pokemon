@@ -61,11 +61,12 @@ npm uninstall -g terminal-pkmon
 git clone https://github.com/MilkLotion/terminal_pokemon.git
 cd terminal_pokemon
 npm install                # mac 은 Swift 컴파일러가 있으면 헬퍼를 이 컴퓨터용으로 빌드한다
-bin/pkmon setup
+bin/pkmon setup            # 탭 구분 확장 vsix 가 없으면 먼저 묶어서 설치한다 (Windows cmd 는 bin\pkmon.cmd setup)
 ```
 
 `pkmon` 을 PATH 에 올린다 — mac 은 `~/.zshrc` 에 `source <클론한 경로>/shell/pkmon.zsh`,
 Windows 는 PowerShell 프로필에 `$env:PATH = "<클론한 경로>\bin;$env:PATH"` (`bin/pkmon.ps1` 이 받는다).
+명령 프롬프트(cmd)나 스크립트 실행이 막힌 PowerShell 에서는 같은 폴더의 `bin/pkmon.cmd` 가 받는다 — `pkmon.cmd eevee`.
 
 > **`claude`·`codex` 를 셸 함수로 덮지 않는다.**
 > 남의 명령에 없는 문법을 얹는 것은 관례가 아니다 — `pyenv`·`conda` 는 기존 서브커맨드를
@@ -262,12 +263,21 @@ pkmon gengar dot=3         # 이번만 크게
 둘 다 실패하는 경우(`tmux`·`screen`·원격 세션처럼 조상 관계가 끊길 때)에만 터미널 종류
 (`TERM_PROGRAM` 등)에서 받은 앱 이름을 대비책으로 쓴다.
 
+Windows 는 조상을 **셸(`explorer`)에서 끊는다.** 시작 메뉴로 띄운 PowerShell 을 Windows Terminal 이 넘겨받으면
+(Windows 11 기본) 셸의 조상에 터미널 창 주인이 없고 바로 `explorer` 가 나온다. 거기까지 보면 펫이 파일 탐색기나
+바탕화면 창을 따라간다. 끊고 나면 위의 대비책으로 넘어간다 — 넘겨받은 셸에는 `WT_SESSION` 도 없으므로
+명령을 친 순간 화면 맨 앞 창(그 터미널 창)을 따라간다.
+
 내 터미널이 **그 프로그램의 어느 창에 있는지**는 명령을 친 순간에 확정된다 — 그때 그 창이
 화면 맨 앞이기 때문이다. 창 고유 ID 를 박아 두고 이후로는 그 ID 만 따라간다.
 
 - mac 은 `helpers/winbounds`(Swift, `npm install` 때 자동 빌드)가 창 목록을 읽는다.
   **접근성 권한은 필요 없다.**
 - Windows 는 `helpers/winbounds.ps1` 이 `EnumWindows` 로 창을 열거한다.
+  - 펫마다 PowerShell 을 **한 번 띄워 두고** 한 줄씩 묻는다(`-Serve`). 폴링마다 새로 띄우면 기동·C# 컴파일에
+    수백 ms~수 초가 들어, 느린 컴퓨터에서는 타임아웃이 쌓여 펫이 숨는다. 띄워 두면 한 번에 1ms 안쪽이다
+  - 잠든 UWP 앱·다른 가상 데스크톱의 창(cloaked)은 뺀다. 좌표는 보이지 않는 크기 조절 테두리를 뺀 실제 테두리다
+  - 헬퍼 좌표는 물리 픽셀이라 Electron 좌표(DIP)로 바꿔 쓴다 — 배율 125%·150% 모니터에서도 창에 붙는다
 - `pos=fix`(기본)면 펫이 창 밖으로 나가지 않는다.
 - 0.4초마다 창 위치를 읽어 오른쪽 아래 모서리에 붙인다. 창을 옮기거나 크기를 바꾸면 같이 움직인다.
 
@@ -340,6 +350,7 @@ VS Code 가 아닌 프로그램에서는 애초에 탭을 구분할 방법이 �
 훅은 세션마다 `~/.claude/pkmon/state/<세션>.json` 에 상태를 남기고, 자기를 띄운 프로세스 조상
 (훅 → claude → 터미널 셸)도 함께 적는다. 펫은 그 목록에 자기 터미널 셸 번호가 있는 기록만 따라가므로,
 같은 프로젝트를 여러 터미널에서 열어도 섞이지 않는다.
+Windows 는 조상을 구하는 데 PowerShell 을 띄워야 해서(수백 ms) 세션 시작 때 한 번 구하고 이후 이벤트는 이어 쓴다.
 
 훅은 마지막 프롬프트 시각(`promptAt`)도 이어서 적는다. buddy 가 "사용자가 마지막으로 뭔가 한 때"를
 알아야 잠들 수 있어서다. 업데이트한 뒤에는 `pkmon setup` 을 다시 실행하면 훅 파일이 새 버전으로 바뀐다.
@@ -467,6 +478,9 @@ npm install -g ./terminal-pkmon-<버전>.tgz   # 올리기 전에 이 파일로 
 ```
 
 - **mac 에서 만든다.** 헬퍼는 Swift·lipo·codesign 이 필요해서 다른 OS 에서는 `npm pack` 이 멈춘다
+- `.ps1` 파일(`helpers/winbounds.ps1` · `bin/pkmon.ps1`)은 **UTF-8 BOM 을 유지한다.** Windows PowerShell 5.1 은
+  BOM 없는 스크립트를 시스템 코드 페이지(한국어 Windows 는 CP949)로 읽어, 한국어 주석이 줄바꿈을 삼키고
+  다음 코드 줄이 주석이 된다. 헬퍼는 C# 컴파일이 실패해 창 목록이 비고 펫이 뜨지 않는다
 - 게시 전 할 일: `package.json` 의 `"private": true` 제거(실수로 게시하지 않게 막아 둔 줄), 버전 올리기,
   Windows 실기에서 `pkmon setup` · `pkmon eevee` 확인
 - 확장을 고쳤으면 `vscode-extension/package.json` 의 버전도 올린다 — `pkmon setup` 은 같은 버전도 덮어 설치하지만, 버전이 같으면 사용자가 어느 쪽인지 구분할 수 없다
