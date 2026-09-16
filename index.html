@@ -24,40 +24,6 @@
         height: 100%;
       }
 
-      /* 상태별 동작 — 원본 GIF 는 애니메이션이 하나뿐이라, 그 위에 얹어서 상태를 구분한다.
-         창이 그림 크기에 딱 맞아 넘치는 변형은 잘린다. 그래서 줄이는 방향과 밝기만 쓴다 */
-      img {
-        transform-origin: 50% 100%;
-      }
-      @keyframes pk-bob {
-        0%, 100% { transform: scaleY(1); }
-        50% { transform: scaleY(0.93); }
-      }
-      @keyframes pk-pulse {
-        0%, 100% { filter: brightness(1); }
-        50% { filter: brightness(1.35); }
-      }
-      @keyframes pk-wave {
-        0%, 100% { transform: scaleX(1); }
-        50% { transform: scaleX(0.88); }
-      }
-      @keyframes pk-shake {
-        0%, 100% { transform: scaleX(1); }
-        25% { transform: scaleX(0.9); }
-        75% { transform: scaleX(0.97); }
-      }
-      @keyframes pk-slow {
-        0%, 100% { transform: scaleX(1); filter: brightness(1); }
-        50% { transform: scaleX(0.95); filter: brightness(0.88); }
-      }
-      img.pk-running { animation: pk-bob 0.8s ease-in-out infinite; }
-      img.pk-waiting { animation: pk-pulse 1.3s ease-in-out infinite; }
-      img.pk-waving { animation: pk-wave 0.5s ease-in-out infinite; }
-      img.pk-failed {
-        animation: pk-shake 0.32s ease-in-out infinite;
-        filter: saturate(0.5) hue-rotate(-25deg);
-      }
-      img.pk-review { animation: pk-slow 2.2s ease-in-out infinite; }
     </style>
   </head>
   <body>
@@ -313,21 +279,6 @@
         );
       }
 
-      // 상태 → GIF 위에 얹을 동작. 스프라이트시트 모드는 상태마다 진짜 그림이 따로 있어 필요 없다
-      const GIF_MOTION = {
-        running: "pk-running",
-        waiting: "pk-waiting",
-        waving: "pk-waving",
-        failed: "pk-failed",
-        review: "pk-review",
-      };
-      let gifImg = null;
-      function applyGifMotion() {
-        if (!gifImg) return;
-        gifImg.className = GIF_MOTION[state] || "";
-        if (debug) console.log(JSON.stringify({ gifMotion: state, css: gifImg.className || "(없음)" }));
-      }
-
       // 원본 GIF — 프레임 수·간격이 원본 그대로라 계산할 게 없다. 브라우저가 알아서 돌린다
       function setupGif(art) {
         canvas.style.display = "none";
@@ -336,8 +287,6 @@
         img.style.width = `${art.w * art.scale}px`;
         img.style.height = `${art.h * art.scale}px`;
         document.body.appendChild(img);
-        gifImg = img;
-        applyGifMotion();
         if (debug) {
           console.log(JSON.stringify({ 그림: "gif", 원본: `${art.w}x${art.h}`, 배율: art.scale }));
           setInterval(() => console.log(JSON.stringify({ kind: "gif", state, visibility: document.visibilityState })), 2000);
@@ -399,7 +348,6 @@
           if (!sameFrames(next, state)) tick = 0;
           state = next;
           stateStartedAt = performance.now();
-          applyGifMotion();
         }
       });
       window.pkmon.onClickThrough((on) => {
