@@ -1,6 +1,6 @@
 // 커맨드 배선 — dispatcher 를 만들고 무대가 받는 명령을 등록한다. writer 면 mailbox 를 잇는다 (CLI·확장·읽기 전용 펫의 요청).
 // S2 등록: quit · settings.set(hidden · clickThrough · keepVisible) · party.show / party.hide · pet.set(home 만) · poke · snapshot.
-// S3 밥·놀기·찌르기는 상태 코어와 저장·연출을 연결. 진화·상점은 S4. 결과 문구는 표면이 구성
+// S3 돌봄과 S4 구매·진화·모습 선택을 저장과 무대에 연결. 결과 문구는 표면이 구성
 import { bridgeMailbox, createDispatcher, type Dispatcher } from "../commands/dispatcher";
 import type { MailServer } from "../save/mailbox";
 import type { Command, CommandResult, Mode } from "../shared/types";
@@ -9,6 +9,12 @@ import type { PartySource } from "./party";
 import { care } from "../state/core";
 import type { CareAction } from "../state/types";
 import { send } from "../save/mailbox";
+import { advance, evolve, evolutionOptions, setLook } from "../dex/progress";
+import { appearanceOf } from "../dex/appearance";
+import { unlockRules } from "../dex/unlocks";
+import { buy, speciesForSale } from "../shop/core";
+import { SHOP } from "../shop/catalog";
+import type { SaveV2 } from "../shared/types";
 
 export interface CommandSettings {
   hidden(): boolean;
@@ -26,6 +32,9 @@ export interface CommandContext {
   stage: { poke(id: string): boolean; care?(id: string, action: CareAction): void; petIds(): string[]; size(): Size; visible(): boolean };
   settings: CommandSettings;
   quit(): void;
+  prepareLook?(look: string): Promise<boolean>;
+  onChanged?(evolvedId?: string): Promise<void>;
+  onUnlocked?(species: string[]): void;
   log?: ((o: Record<string, unknown>) => void) | null;
 }
 
@@ -83,11 +92,19 @@ export function createCommands(ctx: CommandContext): Commands {
   dispatcher.register("party.show", showHide(true));
   dispatcher.register("party.hide", showHide(false));
 
-  // pet.set — S2 는 home 만. 다른 키(nick · size · look …)는 아직
-  dispatcher.register("pet.set", (c) => {
+  // pet.set — 집과 에버스톤. 모습은 pet.look 사용
+  dispatcher.register("pet.set", async (c) => {
     const id = target(c);
     if (!id || !ctx.party.all().some((p) => p.id === id)) return { ok: false, reason: "no-pet", id: String(id) };
     const home = isObj(c.args) ? c.args.home : undefined;
+    if (c.args && typeof c.args.everstone === "boolean") return transact(c, (save) => {
+      const pet = save.party.find((p) => p.id === id);
+      if (!pet) return { ok: false, reason: "no-pet" };
+      if (c.args!.everstone === true && !pet.everstone && !save.inventory[`everstone:${id}`]) return { ok: false, reason: "not-owned" };
+      if (pet.everstone) save.inventory[`everstone:${id}`] = 1;
+      pet.everstone = c.args!.everstone as boolean;
+      return { ok: true, reason: "ok" };
+    });
     if (!isObj(home)) return { ok: false, reason: "not-yet", id };
     const { dx, dy } = home;
     if (typeof dx !== "number" || typeof dy !== "number" || !Number.isFinite(dx) || !Number.isFinite(dy)) return { ok: false, reason: "bad-value", id };
@@ -116,6 +133,51 @@ export function createCommands(ctx: CommandContext): Commands {
     return result;
   });
 
+  // 비동기 그림 확인 중에는 저장을 변경하지 않음. 확인 후 최신 상태로 재검사
+  async function transact(c: Command, apply: (save: SaveV2) => CommandResult): Promise<CommandResult> {
+    if (ctx.party.kind === "sandbox") return { ok: false, reason: "sandbox" };
+    if (!ctx.party.isWriter()) return server ? { ok: false, reason: "not-writer" } : send(ctx.mailboxDir, c);
+    const initial = ctx.party.save();
+    if (!initial) return { ok: false, reason: "no-pet" };
+    let preview = structuredClone(initial);
+    let result = apply(preview);
+    if (!result.ok) return result;
+    const changedLooks = (before: SaveV2, after: SaveV2): string[] => after.party.filter((p) => {
+      const old = before.party.find((o) => o.id === p.id);
+      return !old || appearanceOf(old) !== appearanceOf(p);
+    }).map(appearanceOf);
+    const needed = changedLooks(initial, preview);
+    for (const look of needed) {
+      if (!ctx.prepareLook || !await ctx.prepareLook(look)) return { ok: false, reason: "art-missing", look };
+    }
+    if (!ctx.party.isWriter()) return { ok: false, reason: "not-writer" };
+    if (c.at != null && Date.now() - c.at > 40_000) return { ok: false, reason: "expired" };
+    const save = ctx.party.save();
+    if (!save) return { ok: false, reason: "no-pet" };
+    preview = structuredClone(save);
+    result = apply(preview);
+    if (!result.ok) return result;
+    if (changedLooks(save, preview).some((look) => !needed.includes(look))) return { ok: false, reason: "state-changed" };
+    const unlocked = advance(preview, Date.now());
+    const previous = structuredClone(save);
+    Object.assign(save, preview);
+    if (!ctx.party.persist()) {
+      Object.assign(save, previous);
+      return { ok: false, reason: "save-failed" };
+    }
+    try { await ctx.onChanged?.(c.cmd === "evolve" ? c.target : undefined); }
+    catch (e) { log?.({ commands: "refresh-failed", message: String(e) }); }
+    ctx.onUnlocked?.(unlocked);
+    return result;
+  }
+
+  dispatcher.register("shop.buy", (c) => {
+    const seed = Math.random();
+    return transact(c, (save) => buy(save, c.target, c.args ?? {}, Date.now(), () => seed));
+  });
+  dispatcher.register("evolve", (c) => transact(c, (save) => evolve(save, c.target ?? "", c.args?.species, Date.now())));
+  dispatcher.register("pet.look", (c) => transact(c, (save) => setLook(save, c.target ?? "", c.args ?? {})));
+
   dispatcher.register("snapshot", () => {
     const save = ctx.party.save();
     return {
@@ -130,7 +192,14 @@ export function createCommands(ctx: CommandContext): Commands {
       clickThrough: ctx.settings.clickThrough(),
       keepVisible: ctx.settings.keepVisible(),
       slots: save?.slots ?? null,
-      party: ctx.party.all(),
+      points: save?.points ?? null,
+      inventory: save?.inventory ?? {},
+      unlocked: save?.unlocked ?? [],
+      dex: unlockRules(),
+      shop: { ...SHOP, species: save ? speciesForSale(save) : [] },
+      evolutions: save ? Object.fromEntries(save.party.map((p) => [p.id, evolutionOptions(save, p.id, Date.now())])) : {},
+      log: save?.log ?? [],
+      party: save?.party ?? ctx.party.all(),
     };
   });
 

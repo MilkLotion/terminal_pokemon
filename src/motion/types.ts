@@ -1,4 +1,4 @@
-// 움직임 모듈의 타입 — 마리별 brain 의 입출력, 성격 배율 자리, 겹침 밀어내기
+// 움직임 모듈의 타입 — 마리별 brain 의 입출력, 성격 배율과 주변 위치
 import type { Play, StageState } from "../shared/stage";
 
 // 성격 배율 자리 — S2 는 NEUTRAL_PARAMS (전부 1 · 0). S3 가 natures 축 → 값
@@ -33,7 +33,7 @@ export interface MotionInput {
   agent: StageState;
   box: RoamBox | null;
   visible: boolean;
-  // 집·밀어내기를 뺀 산책 좌표 — 중립이면 입력이 있어도 사용하지 않음
+  // 집·돌봄 이동을 뺀 산책 좌표 — 중립이면 입력이 있어도 사용하지 않음
   company?: { x: number; y: number }[];
   cursor?: { x: number; y: number } | null;
 }
@@ -69,14 +69,3 @@ export interface PetMotionOptions {
   log?: ((o: Record<string, unknown>) => void) | null;
   now?: number; // 만든 시각 — 마지막 사용자 활동의 시작값 (막 켰으면 사용자가 있는 것). 없으면 첫 tick 의 now
 }
-
-// 겹침 밀어내기 (arrange)
-export interface BodyRect {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  movable: boolean;
-}
-export type Nudge = Map<string, { dx: number; dy: number }>;

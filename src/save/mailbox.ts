@@ -72,7 +72,8 @@ function toCommand(raw: unknown): Command | null {
 // 요청을 두고 결과를 기다린다 — CommandResult 또는 { ok:false, reason:"timeout" }. 절대 throw 하지 않는다
 //   at 은 여기서 찍는다 (보낸 시각) — writer 가 오래된 요청을 가르는 기준
 export function send(dir: string, command: Command, opts: SendOptions = {}): Promise<CommandResult> {
-  const { timeoutMs = SAVE_RULES.io.sendTimeoutMs, pollMs = SAVE_RULES.io.sendPollMs, clock = realClock } = opts;
+  const slow = ["shop.buy", "evolve", "pet.look"].includes(command.cmd);
+  const { timeoutMs = slow ? 45_000 : SAVE_RULES.io.sendTimeoutMs, pollMs = SAVE_RULES.io.sendPollMs, clock = realClock } = opts;
   return new Promise((resolve) => {
     const cmd = isObj(command) ? command.cmd : undefined;
     if (!isCmdName(cmd)) return resolve({ ok: false, reason: "bad-cmd", cmd: String(cmd) });

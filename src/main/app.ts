@@ -3,9 +3,9 @@
 //   session    앵커 앱(VS Code 등) 창을 따라다니고, 그 앱이 앞에 없거나 내 터미널 탭이 아닐 때는 숨는다. 부른 세션이 끝나면 함께 끝난다
 //   window     VS Code 확장이 창마다 띄운 펫 — 그 창 위에만, 그 창의 활성 터미널 상태를 따른다. 확장 호스트와 함께 끝난다
 //   companion  기기당 하나, 항상 위. 맨 앞 터미널 창을 따르고 그 창의 활성 터미널 상태를 따른다 (follow/front). 트레이로 끝낸다
-// 설정·경로는 전부 config.js(paths.ts facade)에서 온다. 1판 게임 코어(game/ — 지웠다)의 틱·행동은 아직 배선하지 않는다 — S3 가 src/state 로 되살린다
+// 설정·경로는 config.js에서 읽음. 육성과 해금은 writer만 갱신
 import fs from "node:fs";
-import { app, nativeImage, screen, shell } from "electron";
+import { app, nativeImage, screen, shell, Notification } from "electron";
 import { starters, unlockRules } from "../dex/unlocks";
 import type { HelperWindow, SelfMark } from "../follow/types";
 import { pidAlive } from "../save/writer";
@@ -27,9 +27,14 @@ import { readSessionUsages } from "../agents/usage";
 import { careAvailable, createStateEngine } from "../state/core";
 import { stateLine } from "./text";
 import { STATE_RULES } from "../state/rules";
+import { advance } from "../dex/progress";
+import { gameMenu, petGameMenu } from "./game-menu";
+import { petName } from "./text";
+import type { Command } from "../shared/types";
 
 const stateEngine = createStateEngine();
 let lastStateSave = 0;
+let lastMenuPoints = -1;
 
 // POKEBUDDY_LOG 가 있으면 출력(console·stderr)을 그 파일에 이어 쓴다 — pokebuddy 는 펫에 출력 핸들을 넘기지 않는다
 // (Windows 는 Start-Process 로 띄워 넘길 수도 없다. cli/run.js launchPet)
@@ -196,8 +201,9 @@ const displayName = (): string => {
   return p ? petLabel(p) : party?.pets()[0]?.species ?? config.slug;
 };
 
-const trayTemplate = () =>
-  trayMenu(
+const trayTemplate = () => [
+  ...(party?.save() ? gameMenu(party.save()!, runGameCommand) : []),
+  ...trayMenu(
     { name: displayName(), hidden: userHidden, ghost: !!config.clickThrough },
     {
       toggleHidden,
@@ -206,7 +212,25 @@ const trayTemplate = () =>
       toggleGhost: () => applyClickThrough(!config.clickThrough, mode !== "companion"),
       openConfig: () => void shell.openPath(PATHS.config),
     },
-  );
+  ),
+];
+
+function notifyGame(body: string): void {
+  try {
+    if (Notification.isSupported()) new Notification({ title: "pokebuddy", body }).show();
+  } catch (e) { log?.({ notification: "failed", message: String(e) }); }
+}
+
+function notifyUnlocked(species: string[]): void {
+  if (species.length) notifyGame(t("game.unlocked", { names: species.slice(0, 3).map((s) => petName(s)).join(", "), n: species.length }));
+}
+
+function runGameCommand(command: Command): void {
+  void commands?.dispatcher.dispatch(command).then((result) => {
+    if (!result.ok) notifyGame(t("game.failed", { reason: t(`game.reason.${result.reason}`) }));
+    tray?.refresh();
+  });
+}
 
 function showPetMenu(id: string): void {
   const p = stage?.petOf(id);
@@ -218,11 +242,17 @@ function showPetMenu(id: string): void {
     return { enabled: result.ok, reason: result.ok ? undefined : t(`care.${result.reason}`, { n: result.seconds }) };
   };
   const status = pet ? stateLine(pet) : undefined;
-  stageWin.popup(petMenu({ ...model, ...(pet ? { status, feed: availability("feed"), play: availability("play") } : {}) }, {
+  const items = petMenu({ ...model, ...(pet ? { status, feed: availability("feed"), play: availability("play") } : {}) }, {
     toggleHidden, quit: () => app.quit(),
-    feed: () => void commands?.dispatcher.dispatch({ cmd: "feed", target: id, from: "menu" }),
-    play: () => void commands?.dispatcher.dispatch({ cmd: "play", target: id, from: "menu" }),
-  }));
+    feed: () => runGameCommand({ cmd: "feed", target: id, from: "menu" }),
+    play: () => runGameCommand({ cmd: "play", target: id, from: "menu" }),
+  });
+  if (pet && party?.save()) items.splice(items.length - 2, 0,
+    { type: "separator" as const },
+    ...petGameMenu(party.save()!, pet, runGameCommand),
+    ...gameMenu(party.save()!, runGameCommand),
+  );
+  stageWin.popup(items);
 }
 
 // 파티 목록 → 무대. 그림을 받는 동안 기다린다. 트레이 아이콘·이름도 첫 마리에 맞춘다
@@ -241,7 +271,19 @@ function stateTick(): void {
   if (save && party?.isWriter()) {
     const now = Date.now();
     stateEngine.tick(save, { now, shown: stageWin?.isVisible() ? stage.petIds() : [], agent: state, tokenWork: !!tokenWork, usages: readSessionUsages(PATHS.state) });
+    const draft = structuredClone(save);
+    const unlocked = advance(draft, now);
+    if (draft.points !== save.points || draft.unlocked.length !== save.unlocked.length) {
+      const previous = structuredClone(save);
+      Object.assign(save, draft);
+      if (party.persist()) { notifyUnlocked(unlocked); tray?.refresh(); }
+      else Object.assign(save, previous);
+    }
     if (now - lastStateSave >= STATE_RULES.saveMs && party.persist()) lastStateSave = now;
+    if (Math.floor(save.points) !== lastMenuPoints) {
+      lastMenuPoints = Math.floor(save.points);
+      tray?.refresh();
+    }
   } else stateEngine.reset();
   if (state !== lastState) {
     lastState = state;
@@ -365,6 +407,12 @@ async function main(): Promise<void> {
     mode,
     mailboxDir: PATHS.mailbox,
     party,
+    prepareLook: async (look) => !!await art.loadLook(look),
+    onChanged: async (evolvedId) => {
+      await refreshParty();
+      if (evolvedId) stage?.celebrate(evolvedId);
+    },
+    onUnlocked: notifyUnlocked,
     stage: {
       poke: (id) => !!stage?.poke(id),
       care: (id, action) => stage?.care(id, action),

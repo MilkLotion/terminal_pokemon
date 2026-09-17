@@ -2,6 +2,47 @@
 
 설치·명령·설정부터 동작 원리와 실측 근거까지 전부 담은 문서다. 요약은 [README](../README.md).
 
+## S4 상점과 진화
+
+동반자나 창 펫을 실행한 뒤 포켓몬을 우클릭한다. 상점, 파티, 도감을 사용할 수 있다.
+동반자의 트레이에서도 같은 메뉴를 연다. 설정창은 다음 S5 단계에서 추가한다.
+
+1. 상점에서 파티 칸을 구매한다. 최대 6칸이다.
+2. 빈 칸이 있으면 해금한 포켓몬을 얻는다. 종마다 가격이 다르다.
+3. 파티에서 마리를 선택한다. 성격, 모습, 색, 에버스톤, 표시 여부를 바꿀 수 있다.
+4. 진화 조건을 채우면 `진화하기`가 나타난다. 갈림길에서는 원하는 종을 선택한다.
+
+민트는 성격을 바로 바꾼다. 먹이는 재고에 추가된다. 다음 밥은 먹이 하나를 쓰고 효과가 두 배가 된다.
+먹이가 없어도 기본 밥을 줄 수 있다. 기존 대기 시간과 하루 친밀도 상한은 유지한다.
+에버스톤을 해제했다가 다시 장착하거나 색을 되돌려도 추가 비용은 없다.
+그림을 받을 수 없거나 저장에 실패하면 거래를 취소한다.
+
+칸 가격은 80, 160, 240, 320, 400 포인트다. 민트는 40, 먹이는 10, 에버스톤은 30, 색은 200 포인트다.
+이는 조정 가능한 초기값이다. [계획과 규칙](plan-s4.md)에 보상도 기록했다.
+
+CLI에서도 같은 기능을 사용한다. 아래 명령은 PowerShell과 일반 셸에서 사용할 수 있다.
+`p1`은 예시 ID다. `snapshot`의 `party`에서 실제 ID를 확인한다.
+
+```text
+pokebuddy game snapshot
+pokebuddy game shop.buy - item=slot
+pokebuddy game shop.buy - item=species species=pikachu
+pokebuddy game shop.buy p1 item=mint nature=jolly
+pokebuddy game shop.buy - item=berry
+pokebuddy game shop.buy p1 item=everstone
+pokebuddy game pet.set p1 everstone=false
+pokebuddy game evolve p1 species=umbreon
+pokebuddy game pet.look p1 look=eevee
+pokebuddy game shop.buy p1 item=shiny
+pokebuddy game pet.look p1 shiny=false
+pokebuddy game --help
+```
+
+`snapshot`에는 포인트, 재고, 파티, 해금 조건, 상점, 진화 조건, 최근 기록이 포함된다.
+게임 저장을 담당하는 앱이 실행 중이어야 한다. 세션 펫은 육성 기능을 사용하지 않는다.
+
+## 기본 사용
+
 터미널 위에 떠 있는 포켓몬 펫. 테두리 없는 투명 창이라 VS Code 터미널 위에 겹쳐 놓을 수 있다.
 일반 터미널에서 그대로, 또는 CLI LLM(Claude Code · Codex CLI · Gemini CLI …) 안에서 `!` 로 불러낸다. macOS · Windows 에서 동작한다.
 
@@ -193,7 +234,7 @@ npm 이 만든 `pokebuddy.ps1` 이 실행 정책에 걸린 것이다. `pokebuddy
 
 - 펫을 드래그해 원하는 자리에 놓으면 위치가 기억된다. 마리마다 따로 기억한다(세션 펫은 `config.json`, 동반자·창 펫은 `save.json` 의 마리). buddy 는 거기를 집으로 삼는다.
 - 여러 마리를 띄우면 겹치지 않게 옆으로 밀려서 배치된다. 한 마리를 내린 빈자리에는 다음에 띄운 펫이 들어간다.
-  한 무대의 여러 마리(동반자·창 펫의 파티)는 쉬는 동안 몸이 겹치면 서로 밀어낸다.
+  한 무대의 여러 마리는 겹칠 수 있다. 나중에 소환한 마리가 앞에 보인다.
 - 전역 단축키는 한 번에 한 펫만 잡을 수 있다(먼저 뜬 펫). 그 펫이 내려가면 남은 펫이 3초 안에 이어받는다.
 
 | 단축키 | 동작 |
@@ -658,10 +699,9 @@ PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이라 �
 - **드래그는 마리별이다.** 창은 그대로이고 그 마리만 무대 안에서 옮긴다(끄는 중에도 무대 안에 가둔다). 4px 이상 끌면 드래그,
   0.5초 안에 눌렀다 떼면 클릭(콕 찌르기), 우클릭은 그 마리의 메뉴. 놓은 자리는 따라가는 창 오른쪽 아래 기준 오프셋으로 그 마리의 집이 된다.
   터미널 호스트를 못 본 동반자가 작업 영역을 무대로 쓰는 동안에는 저장하지 않는다
-- **겹치면 밀어낸다.** 쉬는 마리(걷거나 들린 마리는 빼고)끼리 몸이 겹치면 틱마다 최대 4px 씩, 겹침이 작은 축으로 민다(`src/motion/arrange.ts`).
-  기동 직후와 마리가 새로 들어온 뒤에는 몸 너비의 0.8 씩 20회 크게 벌린다 — 같은 기본 집에서 태어난 마리들이 서로 다른 자리로 벌어진다.
-  벽에 막혀 절반도 못 간 축은 반대쪽으로 민다(기본 집이 오른쪽 아래라 6마리를 벌릴 때 오른쪽 벽에 막힌 두 마리가 5px 차이로 겹쳐 남았다)
-- **그리는 순서는 파티 순서**(뒤가 위)이고, 들고 있는 마리는 맨 위로 올린다
+- **겹침을 허용한다.** 시작할 때와 쉬는 동안 강제로 밀어내지 않는다.
+- **그리는 순서는 소환 순서다.** 나중에 소환한 마리가 앞에 보인다. 드래그와 모습 변경은 순서를 바꾸지 않는다.
+  숨긴 뒤 다시 소환하면 앞에 보인다. 앱을 다시 시작하면 저장된 파티 순서로 소환한다.
 - Windows 는 `backgroundThrottling` 을 켜 둔다. 끄면 렌더러가 숨김 상태로 가지 않아, 창을 숨길 때 내려간 입력용 자식 창
   (`Chrome_RenderWidgetHostHWND`)이 다시 보일 때 올라오지 않는다. 누르기가 부모 창에 떨어지고, 포커스를 받지 않는 창
   (`focusable: false`)이라 Chromium 이 누르기를 버려 떼기만 온다 — 탭을 한 번 옮기면 잡기·클릭이 안 되던 원인이다(최소 시험 창으로 재현).
@@ -678,7 +718,7 @@ PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이라 �
 |---|---|
 | `src/main/` | 메인 프로세스 — `app.ts`(기동 · 모드 · 종료 배선) · `anchor.ts`(창 추적 폴링) · `stage-window.ts`(무대 창 · 클릭 통과 · z-order) · `stage.ts`(마리 자리 · 25fps 틱 · 포인터) · `layout.ts`(자리 계산) · `party.ts`(저장 파티 · 세션 한 마리) · `art.ts`(PMD 그림) · `lifetime.ts`(pid 파일 · 끝날 조건) · `commands.ts` · `menus.ts` · `tray.ts` · `shortcuts.ts` · `picker-window.ts`(첫 실행 선택 창) · `paths.ts` · `text.ts` · `preload.ts` |
 | `src/follow/` | 어느 창 · 어느 세션을 따를지 — `state.ts`(세션 · 창 기록 · 훅 상태 판정) · `front.ts`(동반자의 맨 앞 창) · `winbounds.ts` · `line-helper.ts`(창 추적 헬퍼). `pokebuddy status` 가 같은 코드를 부른다 |
-| `src/motion/` | 마리 하나의 움직임 — `brain.ts` · `pet-motion.ts` · `rules.ts` · `params.ts` · `arrange.ts`(밀어내기) |
+| `src/motion/` | 마리 하나의 움직임 — `brain.ts` · `pet-motion.ts` · `rules.ts` · `params.ts` |
 | `src/renderer/` | 무대 `stage.html` · `stage.ts` · `sprites.ts` · `hit.ts` · `pointer.ts`, 선택 창 `picker.html` · `picker.ts` |
 
 - 빌드는 `npm run build` — `tsconfig.json` 이 메인 · CLI 가 부르는 모듈 · 도구를 `dist/` 로(CJS), `tsconfig.renderer.json` 이 화면 스크립트를
@@ -687,7 +727,7 @@ PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이라 �
 - 창 아이콘 — Windows 는 `assets/logo/out/logo-256.png`, mac 은 Dock 아이콘을 `logo-512.png` 로 정한 뒤 Dock 에서 숨긴다. 트레이는 첫 마리 그림
 - 자체 확인은 `npm run selftest` — 저장 · 도감 · 에이전트 · 따라가기 · 움직임 · 무대 6벌
 - 실기 확인용 저장 — `node dist/tools/dev-save.js <HOME> <종>[,<종>…] [--same-home]` 이 그 HOME 아래 `.claude/pokebuddy/save.json` 을 v2 로 만든다.
-  마리는 60px 씩 벌려 두고, `--same-home` 이면 전부 기본 집이다(밀어내기 확인). 진짜 저장은 건드리지 않는다
+  마리는 60px 씩 벌려 두고, `--same-home` 이면 전부 기본 집이다(겹침 확인). 진짜 저장은 건드리지 않는다
 - 시험 중 펫을 끝낼 때는 프로세스를 죽이지 않고 pid 파일을 지운다 — 세션 펫 `<임시 폴더>/pokebuddy-pets/*.pid`,
   창 펫 같은 폴더의 `w-<확장 호스트 pid>-<pid>.pid`, 동반자 `~/.claude/pokebuddy/companion.lock`
 

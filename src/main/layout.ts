@@ -37,11 +37,7 @@ export const STAGE_RULES = {
   statePollMs: 500, // 훅 상태 폴링 (옛 STATE_POLL_MS)
   care: { maxStepMs: 80, speedPerZoom: 0.075, arrivalPx: 3, eatMs: 2000, durationMs: 12_000, foodOffsetPx: 80 },
   stackRatio: 0.8, // 여러 마리를 나란히 둘 때 몸 너비 대비 간격 (옛 STACK_RATIO)
-  // 겹침 밀어내기 — 쉬는 마리끼리 몸이 겹치면 뒤쪽을 틱마다 step 씩 민다. 기동 직후는 몸 너비의 burstRatio 로 burstRounds 회 —
-  // 같은 기본 집에서 태어난 마리들을 옆으로 벌린다 (별도 "기본 자리 배분" 규칙 없이 이것으로 서로 다른 자리를 만든다)
-  arrange: { step: 4, burstRatio: 0.8, burstRounds: 20 },
-  // 밀어낼 수 있는 단계 — 걷는 중·들린 마리는 안 민다 (s2-plan 2.2 g)
-  restPhases: ["rest", "look", "fidget", "sleep"] as readonly string[],
+
 };
 
 // 무대 사각형 — 창과 디스플레이의 교집합. 겹치는 곳이 없으면 null (부르는 쪽이 마지막 무대를 유지한다)

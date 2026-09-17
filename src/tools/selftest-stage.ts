@@ -106,7 +106,6 @@ ok(frame.pets[0]?.play?.mode === "loop" && sheets.clips.idle?.anim === "Idle" &&
   eq(stageOf({ x: 1000, y: 0, w: 10, h: 10 }, { x: 0, y: 0, w: 500, h: 500 }), null, "stageOf 겹치지 않으면 null");
   eq(toLocal({ x: 100, y: 100, w: 800, h: 600 }, { x: 100, y: 100, w: 400, h: 400 }), { x: 0, y: 0, w: 800, h: 600 }, "toLocal");
   ok(isDefaultHome({ ...SAVE_RULES.pet.home }) && !isDefaultHome({ dx: 0, dy: 0 }), "isDefaultHome");
-  ok(STAGE_RULES.tickMs === 40 && STAGE_RULES.restPhases.includes("sleep") && !STAGE_RULES.restPhases.includes("walk"), "STAGE_RULES");
 }
 
 // ── art.zoomOf ────────────────────────────────────────────────────────────────
@@ -313,6 +312,43 @@ async function stageRuntimeTests(): Promise<void> {
   await stage.setParty([]);
   stage.tick();
   eq(stage.petIds(), [], "빈 파티에서 무대 제거");
+
+  const overlap = createStage({ mode: "companion", index: 0, buddyMode: "off", timeScale: 1, window: win, art, ghost: () => false,
+    onDrop() {}, onClick() {}, onMenu() {}, onArtMissing() { throw new Error("그림 누락"); }, now: () => now });
+  overlap.setStage({ x: 0, y: 0, w: 800, h: 600 }, { w: 800, h: 600 }, false);
+  overlap.setVisible(true);
+  const six = Array.from({ length: 6 }, (_, n) => ({ ...pet, id: `p${n + 1}` }));
+  await overlap.setParty(six);
+  overlap.tick();
+  const positions = () => overlap.lastFrame()!.pets.map((p) => [p.x, p.y]);
+  const same = positions();
+  ok(same.every((p) => p[0] === same[0]![0] && p[1] === same[0]![1]), "시작 시 여섯 마리가 겹쳐도 밀리지 않음");
+  for (let i = 0; i < 100; i++) { now += 40; overlap.tick(); }
+  eq(positions(), same, "반복 틱에서 겹친 마리 위치 유지");
+  overlap.pointer({ type: "grab", id: "p1", x: 0, y: 0 });
+  overlap.pointer({ type: "drag", id: "p1", x: same[0]![0]!, y: same[0]![1]! });
+  overlap.tick();
+  eq(overlap.lastFrame()!.pets.map((p) => p.id), six.map((p) => p.id), "드래그가 그리는 순서를 바꾸지 않음");
+  overlap.pointer({ type: "drop", id: "p1", x: 0, y: 0 });
+  overlap.tick();
+  eq(positions(), same, "겹친 위치에 놓아도 밀리지 않음");
+  await overlap.setParty([...six].reverse());
+  overlap.tick();
+  eq(overlap.petIds(), six.map((p) => p.id), "목록 재정렬은 소환 순서를 바꾸지 않음");
+  await overlap.setParty(six.map((p) => p.id === "p1" ? { ...p, look: "umbreon", species: "umbreon" } : p));
+  overlap.tick();
+  eq(overlap.petIds(), six.map((p) => p.id), "진화 그림 교체 후 소환 순서 유지");
+  overlap.celebrate("p1"); overlap.tick();
+  ok(overlap.lastFrame()!.pets[0]!.evolution, "진화 연출 시작");
+  now += 1300; overlap.tick();
+  ok(!overlap.lastFrame()!.pets[0]!.evolution, "진화 연출 종료");
+  await overlap.setParty(six.slice(1));
+  await overlap.setParty(six);
+  overlap.tick();
+  eq(overlap.petIds(), ["p2", "p3", "p4", "p5", "p6", "p1"], "숨긴 마리를 다시 소환하면 맨 앞에 표시");
+  overlap.setStage({ x: 0, y: 0, w: 60, h: 60 }, { w: 60, h: 60 }, false);
+  overlap.tick();
+  ok(positions().every(([x, y]) => x! >= 0 && y! >= 0 && x! <= 60 && y! <= 60), "겹침 허용 후에도 화면 경계 유지");
 
   const paths = pathsIn(tmpDir("lost-writer"));
   store.write(paths.save, devSaveState(["eevee"], { now: T0 }));

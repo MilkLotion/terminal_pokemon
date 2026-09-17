@@ -1,17 +1,9 @@
-// 무대 상태 + 25fps 틱 — 마리별 PetMotion · 집 · 산책 · 들기 · 자리 계산(layout) · 겹침 밀어내기(arrange) · StageFrame 조립 ·
-// 포인터(grab/drag/drop/click/menu) 처리 · 집 저장 요청.
-//
-// 위치의 주인은 메인 — 마리 위치·집·held 는 여기 있다 (가두기·저장·메뉴·밀어내기가 전부 메인 일). 렌더러는 40ms 마다 오는 StageFrame 을
-// 그대로 그리고 애니 프레임 진행만 스스로 한다. 렌더러가 죽고 다시 떠도 다음 프레임으로 복구된다 (s2-plan 2.2 i)
-// 마리 자리 = clampInStage(집 + brain 의 산책 오프셋 + 밀어내기 누적) — 밀어내기는 brain 의 roam 과 따로 쌓는다.
-//   brain 은 틱마다 자기 roam 을 돌려주므로 거기에 더하면 다음 틱에 덮인다
-// 그리는 순서 = 파티 순서(뒤가 위). 들고 있는 마리는 맨 뒤로 — 끄는 동안 다른 마리 아래로 들어가지 않게
-import { separate } from "../motion/arrange";
+// 무대 틱과 포인터 처리. 포켓몬 겹침 허용. 소환 순서대로 그리기.
 import { axesAt } from "../dex/natures";
 import { profile } from "../dex/species";
 import { paramsFor, NEUTRAL_PARAMS } from "../motion/params";
 import { capsOf, createPetMotion } from "../motion/pet-motion";
-import type { BodyRect, PetMotion, Phase } from "../motion/types";
+import type { PetMotion, Phase } from "../motion/types";
 import type { HitReply, Play, PointerMsg, SpriteSheet, StageFrame, StageState } from "../shared/stage";
 import type { Mode } from "../shared/types";
 import type { CareAction } from "../state/types";
@@ -39,6 +31,7 @@ export interface StageOptions {
 }
 
 interface PetState {
+  evolvingUntil?: number;
   quirkKey?: string;
   care: { action: "feed" | "play"; target: Spot; until: number; eatingAt: number | null; last: number } | null;
   pet: PartyPet;
@@ -47,7 +40,7 @@ interface PetState {
   body: Size; // 몸 (DIP) — body 칸 × zoom
   motion: PetMotion | null;
   roam: Spot; // brain 의 산책 오프셋
-  nudge: Spot; // 밀어내기 누적
+  offset: Spot; // 돌봄 이동과 화면 경계 보정
   pos: Spot; // 지금 몸 좌상단 (무대 안 좌표)
   dragPos: Spot | null; // 들고 있는 동안의 자리
   play: Play | null;
@@ -68,6 +61,7 @@ export interface Stage {
   resend(): void; // 렌더러가 새로 떴다 — init · 모든 look 의 sheets · 마지막 frame 을 다시 보낸다
   poke(id: string): boolean;
   care(id: string, action: CareAction): void;
+  celebrate(id: string): void;
   petIds(): string[];
   petOf(id: string): PartyPet | null;
   heldId(): string | null;
@@ -75,32 +69,29 @@ export interface Stage {
   lastFrame(): StageFrame | null;
 }
 
-const isRest = (phase: Phase | null): boolean => phase == null || STAGE_RULES.restPhases.includes(phase);
-
 export function createStage(opts: StageOptions): Stage {
   const { mode, index, buddyMode, timeScale, window: win, art } = opts;
   const now = opts.now ?? Date.now;
   const log = opts.log ?? null;
   const pets = new Map<string, PetState>();
-  let order: string[] = []; // 파티 순서 (그리는 순서의 바탕)
+  let order: string[] = []; // 소환 순서. 목록 갱신과 드래그로 변경하지 않음
   let anchor: Rect = { x: 0, y: 0, w: 0, h: 0 };
   let size: Size = { w: 0, h: 0 };
   let fake = false; // 가짜 창(작업 영역) 위 — 이 기준으로 집을 저장하면 진짜 창이 왔을 때 화면 기준 오프셋이 되어 튄다
   let visible = false;
   let agent: StageState = "idle";
   let held: string | null = null;
-  let needBurst = false; // 마리가 새로 들어왔다 — 다음 기회에 크게 벌린다
   let generation = 0; // setParty 가 겹쳐 불렸을 때 옛 호출이 결과를 덮지 않게
   const sentLooks = new Set<string>();
   let last: StageFrame | null = null;
 
   const shiftOf = (body: Size): number => stackShift(body, index, mode);
   const spotOf = (p: PetState): Spot => homeSpot(p.pet.home, p.body, anchor, size, shiftOf(p.body));
-  // 집 + 산책 + 밀어내기 → 무대 안에 가둔 자리. 가둔 뒤 누적 밀어내기를 실제 자리에 맞춰 되돌린다 — 벽에 대고 밀어도 끝없이 쌓이지 않게
+  // 집 + 산책 + 돌봄 이동을 화면 안으로 제한
   const settle = (p: PetState): Spot => {
     const s = spotOf(p);
-    const pos = clampInStage(s.x + p.roam.x + p.nudge.x, s.y + p.roam.y + p.nudge.y, p.body, size);
-    p.nudge = { x: pos.x - s.x - p.roam.x, y: pos.y - s.y - p.roam.y };
+    const pos = clampInStage(s.x + p.roam.x + p.offset.x, s.y + p.roam.y + p.offset.y, p.body, size);
+    p.offset = { x: pos.x - s.x - p.roam.x, y: pos.y - s.y - p.roam.y };
     return pos;
   };
 
@@ -123,54 +114,9 @@ export function createStage(opts: StageOptions): Stage {
     sentLooks.add(look.look);
   }
 
-  // 그리는 순서 — 파티 순서, 들고 있는 마리는 맨 뒤(맨 위)
+  // 나중에 소환한 마리가 앞. 드래그 중에도 같은 순서
   function drawOrder(): PetState[] {
-    const list: PetState[] = [];
-    let top: PetState | null = null;
-    for (const id of order) {
-      const p = pets.get(id);
-      if (!p) continue;
-      if (p.held) top = p;
-      else list.push(p);
-    }
-    if (top) list.push(top);
-    return list;
-  }
-
-  const rectsOf = (all: boolean): BodyRect[] =>
-    drawOrder().map((p) => ({ id: p.pet.id, x: p.pos.x, y: p.pos.y, w: p.body.w, h: p.body.h, movable: !p.held && (all || isRest(p.phase)) }));
-
-  // 벽에 막혀 절반도 못 갔으면 그 축은 반대쪽으로 민다 — 무대 가장자리에 붙은 마리끼리 같은 쪽으로만 밀려 영영 겹쳐 있지 않게
-  //   (실기: 기본 집이 오른쪽 아래라 6마리 burst 에서 오른쪽 벽에 막힌 두 마리가 5px 차이로 겹쳐 남았다)
-  function applyNudges(nudges: Map<string, { dx: number; dy: number }>): void {
-    for (const [id, d] of nudges) {
-      const p = pets.get(id);
-      if (!p || p.held) continue;
-      const before = p.pos;
-      p.nudge = { x: p.nudge.x + d.dx, y: p.nudge.y + d.dy };
-      p.pos = settle(p);
-      const stuckX = d.dx !== 0 && Math.abs(p.pos.x - before.x) * 2 < Math.abs(d.dx);
-      const stuckY = d.dy !== 0 && Math.abs(p.pos.y - before.y) * 2 < Math.abs(d.dy);
-      if (!stuckX && !stuckY) continue;
-      p.nudge = { x: p.nudge.x - (stuckX ? d.dx : 0), y: p.nudge.y - (stuckY ? d.dy : 0) };
-      p.pos = settle(p);
-    }
-  }
-
-  // 기동 직후 · 마리가 새로 들어온 뒤 한 번 — 같은 기본 집에서 태어난 마리들을 크게 벌린다 (s2-plan 2.2 g)
-  function burst(): void {
-    needBurst = false;
-    const { burstRatio, burstRounds } = STAGE_RULES.arrange;
-    for (const p of pets.values()) if (!p.held) p.pos = settle(p);
-    for (let i = 0; i < burstRounds; i++) {
-      const rects = rectsOf(true);
-      if (rects.length < 2) return;
-      const step = Math.max(...rects.map((r) => r.w)) * burstRatio;
-      const nudges = separate(rects, step);
-      if (!nudges.size) break;
-      applyNudges(nudges);
-    }
-    log?.({ stage: "burst", at: rectsOf(true).map((r) => `${r.id}:${r.x},${r.y}`) });
+    return order.flatMap((id) => { const pet = pets.get(id); return pet ? [pet] : []; });
   }
 
   function release(id: string): void {
@@ -192,7 +138,7 @@ export function createStage(opts: StageOptions): Stage {
         if (held === id) release(id);
         pets.delete(id);
       }
-      let added = false;
+      order = order.filter((id) => keep.has(id));
       for (const pet of list) {
         const cur = pets.get(pet.id);
         if (cur && cur.look.look === pet.look) {
@@ -221,7 +167,7 @@ export function createStage(opts: StageOptions): Stage {
           body: { w: look.art.body.w * zoom, h: look.art.body.h * zoom },
           motion: makeMotion(pet, look, zoom),
           roam: { x: 0, y: 0 },
-          nudge: { x: 0, y: 0 },
+          offset: { x: 0, y: 0 },
           pos: { x: 0, y: 0 },
           dragPos: null,
           play: null,
@@ -230,12 +176,10 @@ export function createStage(opts: StageOptions): Stage {
           care: null,
         });
         sendSheets(look);
-        added = true;
+        if (!order.includes(pet.id)) order.push(pet.id);
         log?.({ stage: "pet", id: pet.id, look: look.look, zoom, body: `${look.art.body.w}x${look.art.body.h}`, cell: `${look.art.cell.w}x${look.art.cell.h}` });
       }
-      order = list.map((p) => p.id).filter((id) => pets.has(id));
-      if (added) needBurst = true;
-      if (needBurst && size.w > 0) burst();
+
     },
 
     setStage(nextAnchor, nextSize, nextFake) {
@@ -244,7 +188,6 @@ export function createStage(opts: StageOptions): Stage {
       fake = nextFake;
       const h = held ? pets.get(held) : null;
       if (h?.dragPos) h.dragPos = clampInStage(h.dragPos.x, h.dragPos.y, h.body, size);
-      if (needBurst && size.w > 0) burst();
     },
 
     setVisible(on) {
@@ -267,7 +210,6 @@ export function createStage(opts: StageOptions): Stage {
       const t = now();
       win.hoverTick(held != null, opts.ghost());
       if (size.w <= 0 || size.h <= 0) return; // 아직 따라갈 창이 없다
-      if (needBurst) burst();
       const cursor = opts.cursor?.() ?? null;
       const positions = drawOrder().map((p) => ({ id: p.pet.id, x: p.pos.x + p.body.w / 2, y: p.pos.y + p.body.h / 2 }));
       for (const id of order) {
@@ -285,7 +227,7 @@ export function createStage(opts: StageOptions): Stage {
         }
         if (p.motion && !p.care) {
           const home = spotOf(p);
-          const local = (s: Spot): Spot => ({ x: s.x - home.x - p.nudge.x - p.body.w / 2, y: s.y - home.y - p.nudge.y - p.body.h / 2 });
+          const local = (s: Spot): Spot => ({ x: s.x - home.x - p.offset.x - p.body.w / 2, y: s.y - home.y - p.offset.y - p.body.h / 2 });
           const out = p.motion.tick({ now: t, agent, box: roamBox(home, p.body, size), visible, company: positions.filter((s) => s.id !== id).map(local), cursor: cursor ? local(cursor) : null });
           p.play = out.act;
           p.phase = out.phase;
@@ -311,22 +253,21 @@ export function createStage(opts: StageOptions): Stage {
             if (anim) p.play = { anim, row: 0, mode: "loop", rate: 1 };
           }
           const home = spotOf(p);
-          p.nudge = { x: p.pos.x - home.x - p.roam.x, y: p.pos.y - home.y - p.roam.y };
+          p.offset = { x: p.pos.x - home.x - p.roam.x, y: p.pos.y - home.y - p.roam.y };
           p.phase = walking ? "walk" : "fidget";
           if (t >= action.until || (action.action === "feed" && action.eatingAt != null && t - action.eatingAt >= STAGE_RULES.care.eatMs)) {
             p.care = null;
             p.motion?.rehome(t);
             p.roam = { x: 0, y: 0 };
-            p.nudge = { x: p.pos.x - home.x, y: p.pos.y - home.y };
+            p.offset = { x: p.pos.x - home.x, y: p.pos.y - home.y };
           }
         }
       }
-      const nudges = separate(rectsOf(false), STAGE_RULES.arrange.step);
-      if (nudges.size) applyNudges(nudges);
       const frame: StageFrame = {
         at: t,
         state: agent,
         pets: drawOrder().map((p) => ({ id: p.pet.id, look: p.look.look, zoom: p.zoom, x: p.pos.x, y: p.pos.y, play: p.play, held: p.held,
+          ...(p.evolvingUntil && t < p.evolvingUntil ? { evolution: (p.evolvingUntil - t) / 1200 } : {}),
           ...(p.care?.action === "feed" ? { berry: { x: p.care.target.x + p.body.w / 2, y: p.care.target.y + p.body.h - 4 } } : {}) })),
       };
       last = frame;
@@ -360,7 +301,7 @@ export function createStage(opts: StageOptions): Stage {
         const at = p.dragPos ?? p.pos;
         p.dragPos = null;
         p.roam = { x: 0, y: 0 }; // 놓은 자리가 새 집 — 산책분은 집에 들어간다
-        p.nudge = { x: 0, y: 0 };
+        p.offset = { x: 0, y: 0 };
         const home = homeOf(at, p.body, anchor, shiftOf(p.body));
         p.pet.home = home;
         p.pos = settle(p);
@@ -410,6 +351,10 @@ export function createStage(opts: StageOptions): Stage {
       p.care = { action, target: clampInStage(p.pos.x + (p.pos.x > size.w / 2 ? -1 : 1) * STAGE_RULES.care.foodOffsetPx, p.pos.y, p.body, size), until: t + STAGE_RULES.care.durationMs, eatingAt: null, last: t };
     },
 
+    celebrate(id) {
+      const p = pets.get(id);
+      if (p) { p.evolvingUntil = now() + 1200; p.motion?.click(now()); }
+    },
     petIds: () => order.filter((id) => pets.has(id)),
     petOf: (id) => pets.get(id)?.pet ?? null,
     heldId: () => held,

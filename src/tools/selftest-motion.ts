@@ -6,17 +6,16 @@
 //   (1) 한가: 일정 시간 안에 walk 가 나오고 roam 은 box 안      (2) 300초 입력 없음 → sleep, click → wake → rest
 //   (3) running → work 리듬, 잠 안 듦, Walk 만 있으면 걷기만     (4) pickup → held · drag 누적 6px → heldRow · drop → roam 0 + 반응
 //   (5) 신호 상태(waiting) → yield, act null                     (6) paceScale 2 → 같은 거리 walk.dur 절반 · sleepScale 0.5 → 150초에 잔다
-//   (7) 두 인스턴스(씨앗 다름)가 다른 자리로 간다                 (8) separate: 뒤쪽이 밀림 · movable:false 안 밀림 · 안 겹치면 빈 Map · 20회로 분리
+//   (7) 두 인스턴스(씨앗 다름)가 다른 자리로 간다
 //   + NEUTRAL_PARAMS 면 규칙표 숫자가 옛 것과 같다 · rowOf 방향 · body.js 의 활동 bump 규칙 · 숨어 있으면 걷지 않는다 · capsOf
 // 끝에 "통과 (N건)". 실패하면 어디서 깨졌는지와 함께 종료 코드 1
 import assert from "node:assert";
-import { separate } from "../motion/arrange";
 import { createBrain } from "../motion/brain";
 import { NEUTRAL_PARAMS, applyParams } from "../motion/params";
 import { capsOf, createPetMotion } from "../motion/pet-motion";
 import { MOTION_RULES } from "../motion/rules";
 import type { MotionRules } from "../motion/rules";
-import type { BodyRect, MotionCaps, MotionOut, MotionParams, PetMotion, PetMotionOptions, Phase, RoamBox } from "../motion/types";
+import type { MotionCaps, MotionOut, MotionParams, PetMotion, PetMotionOptions, Phase, RoamBox } from "../motion/types";
 import type { StageState } from "../shared/stage";
 
 const out = (line: string): void => {
@@ -480,60 +479,6 @@ check("씨앗이 다른 두 마리는 다른 때 다른 곳으로 걷는다 · �
   assert.ok(a.every((t) => inBox(t.out.roam, BOX)) && b.every((t) => inBox(t.out.roam, BOX)));
   // 같은 씨앗·같은 입력이면 결정적 — 시험이 재현된다
   assert.strictEqual(path(run(pet({ seed: 51 }), 0, 90_000, "idle")), path(a));
-});
-
-// ── (8) 겹침 밀어내기 ─────────────────────────────────────────────────────────
-out("(8) 겹침 밀어내기");
-const rect = (id: string, x: number, y: number, movable = true, w = 40, h = 40): BodyRect => ({ id, x, y, w, h, movable });
-const applyNudge = (rects: BodyRect[], n: ReturnType<typeof separate>): BodyRect[] =>
-  rects.map((r) => {
-    const d = n.get(r.id);
-    return d ? { ...r, x: r.x + d.dx, y: r.y + d.dy } : r;
-  });
-const overlaps = (a: BodyRect, b: BodyRect): boolean => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-const anyOverlap = (rects: BodyRect[]): boolean => rects.some((a, i) => rects.slice(i + 1).some((b) => overlaps(a, b)));
-
-check("겹친 둘 → 뒤쪽이 겹침이 작은 축으로 step 만큼 밀린다, 앞쪽은 그대로", () => {
-  const n = separate([rect("a", 0, 0), rect("b", 10, 30)], 4); // x 겹침 30 · y 겹침 10 → y 로, 아래로
-  assert.deepStrictEqual([...n.entries()], [["b", { dx: 0, dy: 4 }]]);
-  const m = separate([rect("a", 0, 0), rect("b", 30, -10)], 4); // x 겹침 10 · y 겹침 30 → x 로, 오른쪽
-  assert.deepStrictEqual([...m.entries()], [["b", { dx: 4, dy: 0 }]]);
-  const l = separate([rect("a", 0, 0), rect("b", -30, 5)], 4); // 왼쪽에 있으면 왼쪽으로
-  assert.deepStrictEqual([...l.entries()], [["b", { dx: -4, dy: 0 }]]);
-  // 남은 겹침이 step 보다 작으면 그만큼만 — 닿기만 하게
-  assert.deepStrictEqual([...separate([rect("a", 0, 0), rect("b", 38, 0)], 4).entries()], [["b", { dx: 2, dy: 0 }]]);
-});
-
-check("movable:false 는 안 밀린다 — 뒤쪽이 못 움직이면 앞쪽이 반대로, 둘 다 못 움직이면 빈 Map", () => {
-  const n = separate([rect("a", 0, 0), rect("b", 10, 30, false)], 4);
-  assert.deepStrictEqual([...n.entries()], [["a", { dx: 0, dy: -4 }]]);
-  assert.strictEqual(separate([rect("a", 0, 0, false), rect("b", 10, 30, false)], 4).size, 0);
-});
-
-check("안 겹치면 빈 Map — 모서리가 닿기만 한 것도", () => {
-  assert.strictEqual(separate([rect("a", 0, 0), rect("b", 40, 0)], 4).size, 0);
-  assert.strictEqual(separate([rect("a", 0, 0), rect("b", 100, 100)], 4).size, 0);
-  assert.strictEqual(separate([], 4).size, 0);
-  assert.strictEqual(separate([rect("a", 0, 0)], 4).size, 0);
-});
-
-check("같은 집에서 태어난 6마리 — step 몸너비×0.8 로 20회 돌리면 완전히 벌어진다, 중심이 같으면 오른쪽으로", () => {
-  let rects = ["p1", "p2", "p3", "p4", "p5", "p6"].map((id) => rect(id, 100, 100));
-  const first = separate(rects, 32);
-  assert.ok([...first.values()].every((d) => d.dx > 0 && d.dy === 0), "중심이 같으면 뒤쪽을 오른쪽으로");
-  assert.ok(!first.has("p1"), "맨 앞은 안 밀린다");
-  for (let i = 0; i < 20; i++) rects = applyNudge(rects, separate(rects, 32));
-  assert.ok(!anyOverlap(rects), `20회 뒤에도 겹친다: ${JSON.stringify(rects.map((r) => r.x))}`);
-  assert.strictEqual(separate(rects, 32).size, 0);
-  assert.strictEqual(rects[0]?.x, 100, "맨 앞은 제자리");
-  // 틱마다 4px 씩 — 살짝 겹친 둘은 몇 틱 안에 떨어진다
-  let pair = [rect("a", 0, 0), rect("b", 30, 2)];
-  let ticks = 0;
-  while (anyOverlap(pair) && ticks < 20) {
-    pair = applyNudge(pair, separate(pair, 4));
-    ticks += 1;
-  }
-  assert.ok(!anyOverlap(pair) && ticks <= 3, `10px 겹침이 ${ticks}틱`);
 });
 
 out(`통과 (${passed}건)`);

@@ -128,6 +128,16 @@ function paint() {
       Math.round(r.w * dpr),
       Math.round(r.h * dpr),
     );
+    if (pet.evolution) {
+      ctx.save();
+      ctx.strokeStyle = `rgba(255, 226, 110, ${pet.evolution})`;
+      ctx.lineWidth = 3 * dpr;
+      const radius = (1 - pet.evolution) * 18 + Math.max(r.w, r.h) / 2;
+      ctx.beginPath();
+      ctx.arc((r.x + r.w / 2) * dpr, (r.y + r.h / 2) * dpr, radius * dpr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
   if (debugOn) renderDebug();
 }

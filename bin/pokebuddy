@@ -31,9 +31,13 @@ function needDist() {
   process.exit(1);
 }
 
-const parsed = parseArgs(process.argv.slice(2));
+const parsed = process.argv[2] === "game" ? { kind: "game" } : parseArgs(process.argv.slice(2));
 
 switch (parsed.kind) {
+  case "game":
+    needDist();
+    void require("../dist/cli/game.js").game(process.argv.slice(3));
+    break;
   case "help":
     process.stdout.write(`${USAGE}\n`);
     break;

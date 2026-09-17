@@ -45,6 +45,7 @@ export interface Play {
 
 // 무대 위 마리 하나 — x·y 는 무대 안 좌표(DIP)의 "몸" 좌상단. 그림은 몸 칸 가운데에 맞춰 렌더러가 그린다
 export interface StagePet {
+  evolution?: number; // 진화 연출의 남은 비율 0~1
   berry?: { x: number; y: number };
   id: string;
   look: string;

@@ -5,6 +5,7 @@
 // look(모습) 하나는 한 번만 받는다 — 같은 종 여러 마리가 시트를 공유한다. 배율(zoom)은 마리별(Pet.size)이라 여기서 정하지 않고 zoomOf 로 뽑는다
 import type { LookSheets, PlayMode, SpriteSheet, StageSize } from "../shared/stage";
 import type { Paths } from "./paths";
+import { profile } from "../dex/species";
 
 export const ART_RULES = {
   // 배율 상한 — 몸 칸으로 잰다 (art/pmd-load.js 와 같은 수). 작업 동작이 칸을 키웠다고 펫이 작아지지 않게.
@@ -35,7 +36,7 @@ export interface Look {
 }
 
 interface PmdLoadModule {
-  loadPmd(config: { slug: string; dotSize: number; buddy: string }, paths: Paths): Promise<PmdArt | null>;
+  loadPmd(config: { slug: string; dotSize: number; buddy: string; spritePath?: string }, paths: Paths): Promise<PmdArt | null>;
 }
 
 const { loadPmd } = require("../../art/pmd-load.js") as PmdLoadModule;
@@ -71,9 +72,14 @@ export function createArtLoader(paths: Paths): ArtLoader {
 
   async function fetchLook(look: string): Promise<Look | null> {
     // dotSize 는 loadPmd 의 zoom 계산에만 쓰이고 무대는 그 값을 쓰지 않는다. buddy=on — 작업 동작까지 담아야 작업 리듬이 나온다
-    const art = await loadPmd({ slug: look, dotSize: ART_RULES.defaultZoom, buddy: "on" }, paths);
+    const shiny = look.endsWith(":shiny");
+    const slug = shiny ? look.slice(0, -6) : look;
+    const dex = profile(slug).dex;
+    if (shiny && !dex) return null;
+    const art = await loadPmd({ slug, dotSize: ART_RULES.defaultZoom, buddy: "on",
+      ...(shiny ? { spritePath: `${String(dex).padStart(4, "0")}/0000/0001` } : {}) }, paths);
     const result = art && art.kind === "pmd" && art.anims && art.clips ? { look, art, sheets: sheetsOf(look, art) } : null;
-    done.set(look, result);
+    if (result) done.set(look, result);
     return result;
   }
 

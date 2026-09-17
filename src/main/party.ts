@@ -16,6 +16,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomNature } from "../dex/natures";
+import { appearanceOf } from "../dex/appearance";
 import { profile } from "../dex/species";
 import * as mailbox from "../save/mailbox";
 import { SAVE_RULES } from "../save/rules";
@@ -61,7 +62,7 @@ export interface PartySource {
 export const toPartyPet = (p: Pet): PartyPet => ({
   id: p.id,
   species: p.species,
-  look: p.look ?? p.species,
+  look: appearanceOf(p),
   size: p.size,
   nature: p.nature,
   nick: p.nick,
@@ -330,8 +331,12 @@ export function createSaveParty(opts: SavePartyOptions): PartySource {
       const pet = findPet(id);
       if (!pet) return { ok: false, reason: "no-pet", id };
       if (!amWriter) return ask(shown ? "party.show" : "party.hide", id);
+      const previous = pet.shown;
       pet.shown = shown;
-      persist();
+      if (!persist()) {
+        pet.shown = previous;
+        return { ok: false, reason: "save-failed", id };
+      }
       emitChange();
       return { ok: true, reason: "ok", id, shown };
     },

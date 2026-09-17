@@ -81,13 +81,15 @@ export function care(save: SaveV2, id: string, action: CareAction, now: number):
   const available = careAvailable(p, action, now);
   if (!available.ok) return available;
   const axes = axesAt(p.nature, p.id, now);
+  const foodScale = action === "feed" && (save.inventory.berry ?? 0) > 0 ? 2 : 1;
   let affinity: number;
   if (action === "feed") {
-    p.hunger = clamp(p.hunger - R.feed.hunger);
+    if (foodScale === 2) save.inventory.berry!--;
+    p.hunger = clamp(p.hunger - R.feed.hunger * foodScale);
     p.fedAt = now;
     p.daily.feeds++;
     save.totals.fed++;
-    affinity = R.feed.affinity * (axes.patience > 0 ? 0.8 : axes.patience < 0 ? 1.3 : 1);
+    affinity = R.feed.affinity * foodScale * (axes.patience > 0 ? 0.8 : axes.patience < 0 ? 1.3 : 1);
   } else if (action === "play") {
     p.playedAt = now;
     p.daily.plays++;
@@ -97,7 +99,7 @@ export function care(save: SaveV2, id: string, action: CareAction, now: number):
     p.daily.pokes++;
     affinity = R.poke.affinity;
   }
-  mood(p, R[action].mood, now);
+  mood(p, R[action].mood * foodScale, now);
   const gained = gain(p, affinity);
   if (!save.daily.interacted) {
     save.daily.streak = isYesterday(a.interactedDate, now) ? save.daily.streak + 1 : 1;

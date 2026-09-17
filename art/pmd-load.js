@@ -31,7 +31,7 @@ function parseCredits(text) {
 }
 
 async function loadPmd(config, PATHS) {
-  const d = dex.dexPath(config.slug);
+  const d = config.spritePath || dex.dexPath(config.slug);
   if (!d) return null; // 모르는 이름
 
   const zipFile = path.join(PATHS.pmd, `${d}.zip`);
