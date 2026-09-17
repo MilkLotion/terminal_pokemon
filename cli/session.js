@@ -82,4 +82,46 @@ function livePets() {
   return pets.sort((a, b) => a.index - b.index);
 }
 
-module.exports = { currentSession, resolveTerminal, livePets };
+// 동반자(pokebuddy companion)의 pid — lock 파일의 pid 가 살아 있을 때만. 죽은 pid 가 남은 lock(크래시)은 지운다.
+// 파일이 있다는 것만으로 "떠 있다"고 하면 크래시 뒤 확장이 창 펫을 영영 안 띄운다
+function companionPid() {
+  let text;
+  try {
+    text = fs.readFileSync(PATHS.companionLock, "utf8");
+  } catch {
+    return null;
+  }
+  const pid = Number(String(text).split("\n")[0]);
+  if (pid > 0 && state.pidAlive(pid)) return pid;
+  fs.rmSync(PATHS.companionLock, { force: true });
+  return null;
+}
+
+// 창 펫(VS Code 확장이 띄운 것) — [{ file, hostPid, pid, ready }]. 죽은 펫이 남긴 파일은 지운다
+function liveWindowPets() {
+  let names = [];
+  try {
+    names = fs.readdirSync(PATHS.pets).filter((f) => settings.WINDOW_PET_FILE.test(f));
+  } catch {
+    return [];
+  }
+  const pets = [];
+  for (const name of names) {
+    const [, hostPid, pid] = name.match(settings.WINDOW_PET_FILE);
+    const file = settings.windowPetFile(hostPid, pid);
+    if (!state.pidAlive(Number(pid))) {
+      fs.rmSync(file, { force: true });
+      continue;
+    }
+    let text = "";
+    try {
+      text = fs.readFileSync(file, "utf8");
+    } catch {
+      continue; // 방금 내려졌다
+    }
+    pets.push({ file, hostPid: Number(hostPid), pid: Number(pid), ready: /\bready\b/.test(text) });
+  }
+  return pets;
+}
+
+module.exports = { currentSession, resolveTerminal, livePets, companionPid, liveWindowPets };

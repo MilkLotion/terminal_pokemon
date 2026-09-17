@@ -13,4 +13,7 @@ contextBridge.exposeInMainWorld("pokebuddy", {
   // 커서가 창 위에 있는 자리 { x, y } (창 안 좌표) — 그 자리가 그림 위인지 hit 으로 답한다 (buddy 만)
   onHover: (cb) => ipcRenderer.on("hover", (_e, p) => cb(p)),
   hit: (on) => ipcRenderer.send("hit", on),
+  // 첫 실행 스타터 선택 창 (renderer/picker.js) — 목록·문구를 받고, 고른 슬러그를 보낸다
+  pickerList: () => ipcRenderer.invoke("picker-list"),
+  pickerStart: (slug) => ipcRenderer.send("picker-start", slug),
 });

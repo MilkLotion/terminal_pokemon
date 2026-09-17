@@ -78,6 +78,14 @@ export function enablePointer() {
     if (on && press) release({ pointerId: press.id }, true);
   });
 
+  // 우클릭 — 그림 위에서만 메뉴를 청한다 (메뉴는 메인이 네이티브로 띄운다). 투명한 곳은 통과 중이라 오지 않지만,
+  // 통과 전환 전의 한 프레임에 올 수 있어 한 번 더 가린다
+  document.body.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (press) return; // 끄는 중에 우클릭 — 무시
+    if (opaqueNear(e.clientX, e.clientY)) window.pokebuddy.pointer({ type: "menu" });
+  });
+
   // 메인이 묻는 커서 자리가 그림 위인지 답한다. 누르고 있는 동안은 늘 그림 위로 답한다 —
   // 도중에 통과로 바뀌면 떼기가 아래 창으로 가서 펫이 들린 채 남는다
   window.pokebuddy.onHover((p) => window.pokebuddy.hit(press != null || opaqueNear(p.x, p.y)));

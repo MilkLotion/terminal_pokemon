@@ -4,3 +4,4 @@ pkmon.config.json
 helpers/winbounds
 .DS_Store
 *.tgz
+dist/

@@ -2,6 +2,7 @@
 //
 //   CLI LLM 안에서  !pokebuddy eevee   → 그 CLI(claude·codex·gemini…)가 끝나면 펫도 끝난다. 상태 훅이 있으면 상태에 반응한다
 //   셸에서 바로     pokebuddy eevee    → 그 터미널 셸이 끝나면 펫도 끝난다. 산책·수면 같은 기본 동작만
+//   pokebuddy companion                → 세션에 묶이지 않는 동반자 하나. 항상 위에 떠서 맨 앞 터미널 창의 에이전트 상태를 따른다 (companion)
 //
 // 명령(CLI)을 pokebuddy 가 띄우지 않는다. 예전처럼 감싸서 띄우면 claude 의 부모가 터미널 셸이 아니라 pokebuddy(node)가 되는데,
 // 그렇게 뜬 claude 는 화면이 달랐다 (상태줄 이모지가 ♦ 로 나오고 탭 제목이 안 바뀜).
@@ -12,15 +13,21 @@ const path = require("path");
 const settings = require("../config.js");
 const dex = require("../lib/dex.js");
 const state = require("../lib/state.js");
+const { electronPath } = require("../lib/electron.js");
+const { TERM_PROGRAM_APPS } = require("../lib/follow.js");
+const i18n = require("../lib/i18n.js");
+const { petName } = require("../lib/names.js");
 const { optionEnv, petList } = require("./args.js");
 const { checklist } = require("./checklist.js");
-const { currentSession, livePets } = require("./session.js");
+const { currentSession, livePets, companionPid, liveWindowPets } = require("./session.js");
 
 const PROJECT = path.join(__dirname, "..");
 const { PATHS } = settings;
 // 펫이 창을 만들 때까지 기다리는 시간 — 처음 띄우는 펫은 그림(PMD ZIP)을 받느라 몇 초 걸린다.
 // 넘기면 더 기다리지 않고 돌아온다 (펫은 계속 뜨는 중이다)
 const READY_TIMEOUT_MS = 15000;
+// 첫 실행 선택 창에서 포켓몬을 고르는 동안 기다리는 시간 — 고르지 않고 닫으면 펫이 끝나 그 전에 돌아온다
+const PICK_TIMEOUT_MS = 120000;
 // 바꿀 때 옛 펫이 끝나길 기다리는 시간 — 먼저 끝나야 새 펫이 전역 단축키를 가져간다
 const GONE_TIMEOUT_MS = 5000;
 const POLL_MS = 100;
@@ -34,8 +41,7 @@ function anchorApp(env = process.env) {
   let term = env.TERM_PROGRAM || "";
   // TERM_PROGRAM 이 비어 있어도 VS Code 계열이면 주입 표시로 알아낸다
   if (!term && env.VSCODE_INJECTION) term = "vscode";
-  const known = { vscode: "Code", ghostty: "Ghostty", "iTerm.app": "iTerm2", Apple_Terminal: "Terminal", WezTerm: "WezTerm" };
-  if (known[term]) return known[term];
+  if (TERM_PROGRAM_APPS[term]) return TERM_PROGRAM_APPS[term];
   if (process.platform === "win32" && env.WT_SESSION) return "WindowsTerminal";
   return "";
 }
@@ -51,20 +57,6 @@ function resolveSlug(input, source) {
   }
   if (dex.dexOf(name) != null) return { slug: name };
   return { error: true, hints: dex.suggest(name) };
-}
-
-// Electron 실행 파일. require("electron") 은 쓰지 않는다 — Electron 44 는 실행 파일이 없으면 그 자리에서
-// 100MB 를 받기 시작해 명령이 그만큼 멈추고, 오프라인이면 매번 스택을 찍는다.
-// 받는 일은 설치(postinstall)와 pokebuddy setup 이 맡고, 여기서는 있는지만 본다
-function electronPath() {
-  try {
-    const dir = path.dirname(require.resolve("electron/package.json"));
-    const rel = fs.readFileSync(path.join(dir, "path.txt"), "utf8").trim();
-    const exe = path.join(dir, "dist", rel);
-    return fs.existsSync(exe) ? exe : null;
-  } catch {
-    return null;
-  }
 }
 
 // 펫이 스스로 끝났을 때 남긴 이유 (main.js reportFailure) — since 이후 것만
@@ -136,6 +128,25 @@ function launchPet(electron, env) {
 async function waitGone(pids) {
   const until = Date.now() + GONE_TIMEOUT_MS;
   while (pids.some((pid) => state.pidAlive(pid)) && Date.now() < until) await sleep(POLL_MS);
+}
+
+// 펫이 창을 만들었다고 적거나(ready) 끝날 때까지 기다린다 — 펫은 이 명령의 자식이 아니라서(Windows) 번호로 살아 있는지 본다.
+// pets: [{ pid, file, ready, exited }] — ready·exited 를 채운다. 시간을 넘기면 그대로 돌아온다 (펫은 계속 뜨는 중이다)
+async function waitReady(pets, { timeoutMs = READY_TIMEOUT_MS } = {}) {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    for (const pet of pets) {
+      if (pet.ready || pet.exited) continue;
+      try {
+        pet.ready = /\bready\b/.test(fs.readFileSync(pet.file, "utf8"));
+      } catch {
+        // 쓰는 중 — 다음에 다시 본다
+      }
+      if (!pet.ready && !state.pidAlive(pet.pid)) pet.exited = true;
+    }
+    if (pets.every((pet) => pet.ready || pet.exited) || Date.now() >= until) break;
+    await sleep(POLL_MS);
+  }
 }
 
 // pokebuddy stop [펫 ...] [all] — 이 세션의 펫 내리기
@@ -271,21 +282,7 @@ async function run(opts) {
     }),
   );
 
-  // 펫이 창을 만들었다고 적거나(ready) 끝날 때까지 — 펫은 이 명령의 자식이 아니라서(Windows) 번호로 살아 있는지 본다
-  const until = Date.now() + READY_TIMEOUT_MS;
-  for (;;) {
-    for (const pet of pets) {
-      if (pet.ready || pet.exited) continue;
-      try {
-        pet.ready = /\bready\b/.test(fs.readFileSync(pet.file, "utf8"));
-      } catch {
-        // 쓰는 중 — 다음에 다시 본다
-      }
-      if (!pet.ready && !state.pidAlive(pet.pid)) pet.exited = true;
-    }
-    if (pets.every((pet) => pet.ready || pet.exited) || Date.now() >= until) break;
-    await sleep(POLL_MS);
-  }
+  await waitReady(pets);
 
   const ready = pets.filter((pet) => pet.ready);
   const failed = pets.filter((pet) => !pet.ready && pet.exited);
@@ -303,4 +300,115 @@ async function run(opts) {
   else if (all.length === 1) say(`내리기: ${commandFor(session, "stop")}`);
 }
 
-module.exports = { run, stop };
+// pokebuddy companion [<펫>] [이름=값 ...] — 동반자 하나를 띄운다.
+// 세션에 묶이지 않고 기기당 하나. 항상 위에 떠서 맨 앞 터미널 창을 따르고, 트레이나 companion stop 으로 내린다 (main.js companion 모드).
+// VS Code 확장이 창마다 띄운 창 펫은 내린다 — 동반자 하나가 모든 창을 따르므로 겹치면 두 마리가 보인다.
+// 확장은 동반자가 살아 있는 동안 창 펫을 다시 띄우지 않고, 동반자가 내려가면 10초 안에 되살린다
+async function companion(opts = {}) {
+  const startedAt = Date.now() / 1000;
+  const debug = Boolean(process.env.POKEBUDDY_DEBUG);
+
+  const electron = electronPath();
+  if (!electron) {
+    process.stderr.write("동반자를 띄우지 못함 — Electron 이 아직 준비되지 않음. pokebuddy setup 을 한 번 실행하면 받는다\n");
+    process.exitCode = 1;
+    return;
+  }
+  const running = companionPid();
+  if (running) {
+    say(`동반자가 이미 떠 있음 (pid ${running}) — 내리기: pokebuddy companion stop`);
+    return;
+  }
+
+  const config = settings.load();
+  let slug = config.slug;
+  if (opts.pet) {
+    const got = resolveSlug(petList(opts.pet)[0] || "", config.source);
+    if (got.error) {
+      process.stderr.write(`펫 이름을 찾을 수 없음: ${opts.pet}\n`);
+      if (got.hints.length) process.stderr.write(`  비슷한 이름:\n${got.hints.map((h) => `    ${h}\n`).join("")}`);
+      process.exitCode = 1;
+      return;
+    }
+    slug = got.slug;
+  }
+
+  const windowPets = liveWindowPets();
+  if (windowPets.length) {
+    await waitGone(dismiss(windowPets));
+    say(`창 펫 ${windowPets.length}마리를 내림 — 동반자 하나가 모든 창을 따른다`);
+  }
+
+  fs.mkdirSync(PATHS.home, { recursive: true });
+  fs.mkdirSync(PATHS.pets, { recursive: true });
+  const env = { ...process.env, ...optionEnv(opts), POKEBUDDY_MODE: "companion" };
+  // 이름은 직접 줬을 때만 넘긴다 — 첫 실행이면 그 종으로 바로 시작하고, 저장이 있으면 저장된 종이 먼저다.
+  // 안 줬는데 설정의 기본 이름을 넘기면 첫 실행 선택 창이 뜨지 않고 그 종으로 시작해 버린다
+  if (opts.pet) env.POKEBUDDY_SLUG = slug;
+  const firstRun = !fs.existsSync(PATHS.save);
+  if (firstRun && !opts.pet) say("첫 실행 — 포켓몬 선택 창에서 고르면 뜬다 (닫으면 시작하지 않는다)");
+  if (debug) {
+    env.POKEBUDDY_LOG = path.join(PATHS.pets, "debug-companion.log");
+    process.stderr.write(`펫 로그: ${env.POKEBUDDY_LOG}\n`);
+  }
+  const pet = { slug, pid: null, file: PATHS.companionLock, ready: false, exited: false };
+  try {
+    pet.pid = await launchPet(electron, env);
+  } catch (e) {
+    process.stderr.write(`동반자를 띄우지 못함 — ${e.message}\n`);
+  }
+  if (!pet.pid) {
+    process.exitCode = 1;
+    return;
+  }
+  fs.writeFileSync(pet.file, `${pet.pid}\n`);
+  // 선택 창을 고르는 동안은 오래 기다린다 — 고르지 않고 닫으면 펫이 끝나 exited 로 돌아온다
+  await waitReady([pet], { timeoutMs: firstRun && !opts.pet ? PICK_TIMEOUT_MS : READY_TIMEOUT_MS });
+
+  const shown = displayName(savedSpecies() || slug, config);
+  if (pet.ready) say(`동반자를 띄움: ${shown} — 맨 앞 터미널 창을 따른다. 내리기: 트레이 메뉴 또는 pokebuddy companion stop`);
+  else if (!pet.exited) say(`아직 뜨는 중: ${shown} — 한참 안 보이면 pokebuddy status`);
+  else {
+    const why = lastError(startedAt);
+    process.stderr.write(`동반자가 뜨지 못함${why ? ` — ${why.message}` : ""} (자세히: pokebuddy status)\n`);
+    fs.rmSync(pet.file, { force: true });
+    process.exitCode = 1;
+  }
+}
+
+// 저장된 파티의 active 종 — 펫이 저장을 쓰는 중이라 읽기 전용으로 본다. 없으면 null
+function savedSpecies() {
+  try {
+    const { createGame } = require("../game");
+    const game = createGame({ paths: PATHS, writer: false, from: "cli" });
+    const snap = game.snapshot();
+    game.close();
+    return snap && snap.active ? snap.active.species : null;
+  } catch {
+    return null;
+  }
+}
+
+// 화면 이름과 슬러그를 함께 — "이브이 (eevee)". 이름표에 없으면 슬러그만
+function displayName(slug, config) {
+  const name = petName(slug, i18n.langOf(config));
+  return name === slug ? slug : `${name} (${slug})`;
+}
+
+// pokebuddy companion stop — 동반자를 내린다. lock 파일을 지우면 동반자가 스스로 끝난다.
+// 창 펫은 여기서 내리지 않는다 — 확장이 10초 안에 다시 띄우므로 뜻이 없다. 창 펫은 VS Code 명령으로 내린다
+async function companionStop() {
+  const pid = companionPid();
+  if (!pid) {
+    say("떠 있는 동반자가 없음");
+    const windowPets = liveWindowPets();
+    if (windowPets.length) say(`창 펫 ${windowPets.length}마리는 VS Code 명령 팔레트 "pokebuddy: 이 창의 펫 내리기" 로 내린다`);
+    return;
+  }
+  fs.rmSync(PATHS.companionLock, { force: true });
+  await waitGone([pid]);
+  if (state.pidAlive(pid)) say(`동반자(pid ${pid})가 아직 끝나지 않음 — 잠시 뒤 pokebuddy status 로 확인`);
+  else say("동반자를 내림 — VS Code 창 펫은 확장이 10초 안에 다시 띄운다");
+}
+
+module.exports = { run, stop, companion, companionStop };

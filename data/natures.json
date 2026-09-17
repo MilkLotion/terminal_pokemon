@@ -1,0 +1,31 @@
+[
+  { "id": "hardy",    "name": { "ko": "노력",       "en": "Hardy" },    "axes": { "activity": 0,  "boldness": 0,  "steadiness": 0,  "sociability": 0,  "patience": 0 } },
+  { "id": "lonely",   "name": { "ko": "외로움",     "en": "Lonely" },   "axes": { "activity": 0,  "boldness": 1,  "steadiness": -1, "sociability": 0,  "patience": 0 } },
+  { "id": "brave",    "name": { "ko": "용감",       "en": "Brave" },    "axes": { "activity": -1, "boldness": 1,  "steadiness": 0,  "sociability": 0,  "patience": 0 } },
+  { "id": "adamant",  "name": { "ko": "고집",       "en": "Adamant" },  "axes": { "activity": 0,  "boldness": 1,  "steadiness": 0,  "sociability": -1, "patience": 0 } },
+  { "id": "naughty",  "name": { "ko": "개구쟁이",   "en": "Naughty" },  "axes": { "activity": 0,  "boldness": 1,  "steadiness": 0,  "sociability": 0,  "patience": -1 } },
+
+  { "id": "bold",     "name": { "ko": "대담",       "en": "Bold" },     "axes": { "activity": 0,  "boldness": -1, "steadiness": 1,  "sociability": 0,  "patience": 0 } },
+  { "id": "docile",   "name": { "ko": "온순",       "en": "Docile" },   "axes": { "activity": 0,  "boldness": 0,  "steadiness": 0,  "sociability": 0,  "patience": 0 } },
+  { "id": "relaxed",  "name": { "ko": "무사태평",   "en": "Relaxed" },  "axes": { "activity": -1, "boldness": 0,  "steadiness": 1,  "sociability": 0,  "patience": 0 } },
+  { "id": "impish",   "name": { "ko": "장난꾸러기", "en": "Impish" },   "axes": { "activity": 0,  "boldness": 0,  "steadiness": 1,  "sociability": -1, "patience": 0 } },
+  { "id": "lax",      "name": { "ko": "촐랑",       "en": "Lax" },      "axes": { "activity": 0,  "boldness": 0,  "steadiness": 1,  "sociability": 0,  "patience": -1 } },
+
+  { "id": "timid",    "name": { "ko": "겁쟁이",     "en": "Timid" },    "axes": { "activity": 1,  "boldness": -1, "steadiness": 0,  "sociability": 0,  "patience": 0 } },
+  { "id": "hasty",    "name": { "ko": "성급",       "en": "Hasty" },    "axes": { "activity": 1,  "boldness": 0,  "steadiness": -1, "sociability": 0,  "patience": 0 } },
+  { "id": "serious",  "name": { "ko": "성실",       "en": "Serious" },  "axes": { "activity": 0,  "boldness": 0,  "steadiness": 0,  "sociability": 0,  "patience": 0 } },
+  { "id": "jolly",    "name": { "ko": "명랑",       "en": "Jolly" },    "axes": { "activity": 1,  "boldness": 0,  "steadiness": 0,  "sociability": -1, "patience": 0 } },
+  { "id": "naive",    "name": { "ko": "천진",       "en": "Naive" },    "axes": { "activity": 1,  "boldness": 0,  "steadiness": 0,  "sociability": 0,  "patience": -1 } },
+
+  { "id": "modest",   "name": { "ko": "조심",       "en": "Modest" },   "axes": { "activity": 0,  "boldness": -1, "steadiness": 0,  "sociability": 1,  "patience": 0 } },
+  { "id": "mild",     "name": { "ko": "온화",       "en": "Mild" },     "axes": { "activity": 0,  "boldness": 0,  "steadiness": -1, "sociability": 1,  "patience": 0 } },
+  { "id": "quiet",    "name": { "ko": "냉정",       "en": "Quiet" },    "axes": { "activity": -1, "boldness": 0,  "steadiness": 0,  "sociability": 1,  "patience": 0 } },
+  { "id": "bashful",  "name": { "ko": "수줍음",     "en": "Bashful" },  "axes": { "activity": 0,  "boldness": 0,  "steadiness": 0,  "sociability": 0,  "patience": 0 } },
+  { "id": "rash",     "name": { "ko": "덜렁",       "en": "Rash" },     "axes": { "activity": 0,  "boldness": 0,  "steadiness": 0,  "sociability": 1,  "patience": -1 } },
+
+  { "id": "calm",     "name": { "ko": "차분",       "en": "Calm" },     "axes": { "activity": 0,  "boldness": -1, "steadiness": 0,  "sociability": 0,  "patience": 1 } },
+  { "id": "gentle",   "name": { "ko": "얌전",       "en": "Gentle" },   "axes": { "activity": 0,  "boldness": 0,  "steadiness": -1, "sociability": 0,  "patience": 1 } },
+  { "id": "sassy",    "name": { "ko": "건방",       "en": "Sassy" },    "axes": { "activity": -1, "boldness": 0,  "steadiness": 0,  "sociability": 0,  "patience": 1 } },
+  { "id": "careful",  "name": { "ko": "신중",       "en": "Careful" },  "axes": { "activity": 0,  "boldness": 0,  "steadiness": 0,  "sociability": -1, "patience": 1 } },
+  { "id": "quirky",   "name": { "ko": "변덕",       "en": "Quirky" },   "axes": { "activity": 0,  "boldness": 0,  "steadiness": 0,  "sociability": 0,  "patience": 0 }, "quirk": "random" }
+]

@@ -119,13 +119,14 @@ public class PokeBuddyWin {
 
     string front = "";
     long frontId = 0;
+    int frontPid = 0; // 맨 앞 창 주인의 프로세스 번호 — 이름만으로는 펫끼리(전부 electron) 가를 수 없다
     IntPtr fg = GetForegroundWindow();
     if (fg != IntPtr.Zero) {
       frontId = fg.ToInt64();
-      int fgPid; GetWindowThreadProcessId(fg, out fgPid);
-      front = ProcessName(fgPid, names);
+      GetWindowThreadProcessId(fg, out frontPid);
+      front = ProcessName(frontPid, names);
     }
-    return "{\"frontmost\":" + Json(front) + ",\"frontId\":" + frontId + ",\"windows\":[" + String.Join(",", items) + "]}";
+    return "{\"frontmost\":" + Json(front) + ",\"frontId\":" + frontId + ",\"frontPid\":" + frontPid + ",\"windows\":[" + String.Join(",", items) + "]}";
   }
 }
 "@ -ErrorAction SilentlyContinue

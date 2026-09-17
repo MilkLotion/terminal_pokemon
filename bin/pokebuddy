@@ -2,6 +2,7 @@
 // pokebuddy — 이 명령을 실행한 세션에 펫을 붙인다. claude 안에서 !pokebuddy eevee 로 띄우면 claude 가 끝날 때 함께 끝난다.
 //
 //   pokebuddy <펫> [이름=값 ...]
+//   pokebuddy companion [<펫>] [이름=값 ...] | companion stop
 //   pokebuddy stop [펫 ...|all] | setup | uninstall | status
 //
 // mac·Windows·npm 전역 설치·git clone 모두 이 파일 하나로 돈다.
@@ -45,6 +46,14 @@ switch (parsed.kind) {
     break;
   case "stop":
     require("../cli/run.js").stop(parsed.rest, { all: parsed.flags.has("--all") });
+    break;
+  case "companion":
+    if (parsed.error) {
+      process.stderr.write(`${parsed.error}\n\n${USAGE}\n`);
+      process.exit(2);
+    }
+    if (parsed.stop) require("../cli/run.js").companionStop();
+    else require("../cli/run.js").companion(parsed.opts || {});
     break;
   default:
     if (parsed.error) {

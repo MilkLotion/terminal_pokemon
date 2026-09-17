@@ -7,8 +7,10 @@ const settings = require("../config.js");
 const state = require("../lib/state.js");
 const dex = require("../lib/dex.js");
 const { parseCredits } = require("../art/pmd-load.js");
-const { currentSession, livePets } = require("./session.js");
+const { currentSession, livePets, companionPid, liveWindowPets } = require("./session.js");
 const { hookInstalled } = require("./setup.js");
+const i18n = require("../lib/i18n.js");
+const { petName } = require("../lib/names.js");
 
 const PROJECT = path.join(__dirname, "..");
 const { PATHS, USER_DEFAULTS } = settings;
@@ -149,6 +151,41 @@ function status(petArg) {
   const here = pets.filter((pet) => pet.key === session.key);
   say(`\n떠 있는 펫: ${pets.length}마리 (이 세션 ${here.length}마리) — ${PATHS.pets}`);
   for (const pet of here) say(`  ${pet.slug.padEnd(14)}  순번 ${pet.index}  pid ${pet.pid}  ${pet.ready ? "떠 있음" : "뜨는 중"}`);
+
+  // 동반자·창 펫 — 세션 펫과 다른 파일로 산다 (companion.lock · w-<호스트>-<pid>.pid)
+  const companion = companionPid();
+  const windowPets = liveWindowPets();
+  say(`\n동반자: ${companion ? `떠 있음 (pid ${companion}) — 내리기: pokebuddy companion stop` : "없음 — 띄우기: pokebuddy companion"}`);
+  if (windowPets.length) {
+    say(`창 펫: ${windowPets.length}마리 — ${windowPets.map((p) => `확장 호스트 ${p.hostPid} · pid ${p.pid}${p.ready ? "" : " (뜨는 중)"}`).join(", ")}`);
+  } else say(`창 펫: 없음 (VS Code 확장 0.3.0 이 창을 열 때 띄운다${companion ? " — 동반자가 떠 있으면 띄우지 않는다" : ""})`);
+  let cliInfo = null;
+  try {
+    cliInfo = JSON.parse(fs.readFileSync(PATHS.cli, "utf8"));
+  } catch {
+    // 아직 setup 전
+  }
+  if (!cliInfo) say("실행 경로 기록: 없음 — pokebuddy setup (없으면 확장이 펫을 못 띄운다)");
+  else if (cliInfo.electron && fs.existsSync(cliInfo.electron)) say(`실행 경로 기록: ${PATHS.cli} (v${cliInfo.version})`);
+  else say(`실행 경로 기록: Electron 경로가 없음 — pokebuddy setup 을 다시 (${cliInfo.electron || "null"})`);
+
+  // 게임 진행 — 저장 파일을 읽기 전용으로 본다 (쓰는 쪽은 떠 있는 펫). 세션 펫은 게임을 모른다
+  try {
+    const { createGame } = require("../game");
+    const game = createGame({ paths: PATHS, writer: false, from: "cli" });
+    const snap = game.snapshot();
+    game.close();
+    i18n.setLang(i18n.langOf(config));
+    if (!snap || !snap.active) say(`\n게임: 저장 없음 — pokebuddy companion 첫 실행에서 포켓몬을 고른다 (${PATHS.save})`);
+    else {
+      const a = snap.active;
+      const next = a.nextThreshold ? `/${a.nextThreshold}` : "";
+      say(`\n게임: ${petName(a.species, i18n.getLang())} · 친밀도 ${a.affinity}${next} · 기분 ${i18n.moodWord(a.mood)} · 포인트 ${snap.points}`);
+      say(`  오늘 ${snap.daily.gained}/${snap.daily.cap} · 연속 ${snap.daily.streak}일 · 파티 ${snap.party.length}마리${snap.corrupted ? " · 저장이 깨져 .bak 으로 옮겼음" : ""}`);
+    }
+  } catch (e) {
+    say(`\n게임: 읽지 못함 — ${e.message}`);
+  }
 }
 
 module.exports = { status };

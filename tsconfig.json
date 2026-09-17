@@ -1,0 +1,21 @@
+{
+  // TypeScript 빌드 — 메인·CLI·모듈 (src/ → dist/). 번들러 없이 tsc 하나.
+  // 렌더러(브라우저 ESM)는 S2 에서 tsconfig.renderer.json 으로 따로 컴파일한다.
+  // 옛 JS(main.js · cli/ · lib/ 등)는 src/ 밖에 그대로 두고 단계마다 하나씩 옮긴다 — 옮긴 파일은 옛 자리에서 지운다
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "sourceMap": false,
+    "declaration": false
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/renderer/**"]
+}

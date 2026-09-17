@@ -1,7 +1,10 @@
-// 펫 오버레이 메인 프로세스 — 테두리 없음 · 배경 투명 · 항상 위
-// 앵커 앱(VS Code 등) 창을 따라다니고, 그 앱이 앞에 없거나 내 터미널 탭이 아닐 때는 숨는다
+// 펫 오버레이 메인 프로세스 — 테두리 없음 · 배경 투명
+// 세 모드로 돈다 (config.runtime.mode — POKEBUDDY_MODE)
+//   session    앵커 앱(VS Code 등) 창을 따라다니고, 그 앱이 앞에 없거나 내 터미널 탭이 아닐 때는 숨는다. 부른 세션이 끝나면 함께 끝난다
+//   window     VS Code 확장이 창마다 띄운 펫 — 그 창 위에만, 그 창의 활성 터미널 상태를 따른다. 확장 호스트와 함께 끝난다
+//   companion  기기당 하나, 항상 위. 맨 앞 터미널 창을 따르고 그 창의 활성 터미널 상태를 따른다 (lib/follow.js). 트레이로 끝낸다
 // 설정·경로는 전부 config.js 에서 온다
-const { app, BrowserWindow, globalShortcut, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, screen, shell } = require("electron");
 const { execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -14,6 +17,13 @@ const { loadArt } = require("./art");
 const { createBuddy } = require("./buddy/body.js");
 // Windows 창 추적 헬퍼를 띄워 두고 한 줄씩 묻는다
 const { createLineHelper } = require("./lib/line-helper.js");
+// 동반자 — 맨 앞 창이 터미널 호스트인지, 어느 세션을 따를지 (순수 함수)
+const follow = require("./lib/follow.js");
+// 화면 문구(언어 파일)와 포켓몬 화면 이름 — 메뉴·트레이는 슬러그가 아니라 "피카츄" 를 보인다
+const i18n = require("./lib/i18n.js");
+const { petName } = require("./lib/names.js");
+// 게임 코어 — 친밀도·기분·저장. 동반자·창 펫만 만든다. 세션 펫(샌드박스)은 게임을 모른다 (game/index.js)
+const { createGame, STARTERS, RULES } = require("./game");
 
 // POKEBUDDY_LOG 가 있으면 출력(console·stderr)을 그 파일에 이어 쓴다 — pokebuddy 는 펫에 출력 핸들을 넘기지 않는다
 // (Windows 는 Start-Process 로 띄워 넘길 수도 없다. cli/run.js launchPet)
@@ -54,6 +64,8 @@ const CAPTURE_CONFIRM = 2; // 앵커 창을 확정하기까지 연속 일치 횟
 const ANCHOR_MISS_LIMIT = 8; // 내 창이 이만큼 연속으로 안 보이면 앵커를 풀고 다시 찾는다
 const CAPTURE_MIN = { w: 400, h: 250 }; // 분리된 DevTools 같은 보조 창을 앵커로 잡지 않도록
 const LIFE_CHECK_MS = 1000; // 세션(CLI LLM)·터미널이 끝났는지, pid 파일이 남아 있는지 확인하는 주기
+// 창 펫 — 내 창 기록이 이만큼 연속 없으면 창이 닫힌 것이다 (확장이 지운다). tmp+rename 사이의 한 번은 넘긴다
+const RECORD_MISS_LIMIT = 5;
 // 지시한 좌표에서 이만큼 안쪽이면 우리가 옮긴 것으로 본다.
 // Windows 배율(125%·150%)에서는 논리 좌표 ↔ 물리 픽셀 반올림으로 1~2px 어긋난 채 돌아온다.
 // 정확히 같을 때만 인정하면 그 어긋남이 "사용자가 끌었다"가 되고, 2초 동안 창 추적이 멈춘다
@@ -67,9 +79,23 @@ app.setPath("userData", PATHS.electronData);
 app.commandLine.appendSwitch("disable-http-cache");
 app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
 
-const config = settings.load();
-const { debug, matchCwd, index, anchorApp, windowsDir, hostPid, session } = config.runtime;
+// 펫 이름(slug)은 저장된 파티의 active 로 바뀔 수 있어 let — 정해진 뒤 settings.load() 로 다시 읽는다 (chooseSpecies)
+let config = settings.load();
+const { debug, matchCwd, index, anchorApp, windowsDir, hostPid, session, mode } = config.runtime;
+i18n.setLang(i18n.langOf(config));
+const { t } = i18n;
+const displayName = () => petName(config.slug, i18n.getLang());
+// 게임 — writer:true 로 두면 저장 잠금을 잡아 보고, 못 잡으면 읽기 전용으로 시작해 매 tick 다시 잡아 본다.
+// 우선순위(독립 펫 > 먼저 뜬 창 펫)는 gameTick 이 정한다 — 창 펫은 독립 펫이 살아 있으면 잠금을 내준다
+const game =
+  mode === "session" ? null : createGame({ paths: PATHS, writer: true, log: debug ? (o) => console.log(JSON.stringify(o)) : null });
+let lastGameTick = 0;
+let picking = false; // 첫 실행 선택 창이 열려 있다 — 그 창이 닫혀도 앱을 끝내지 않는다 (window-all-closed)
 let { termPid } = config.runtime; // pokebuddy 가 넘긴 첫 추정 — 확장 기록으로 바로잡을 수 있다 (refineTermPid)
+// 동반자는 기기당 하나 — Electron 의 잠금은 userData 단위인데 세션·창 펫은 이 잠금을 부르지 않으므로 서로 막지 않는다.
+// pokebuddy companion 이 lock 파일로 먼저 가리지만 동시에 두 번 치면 둘 다 통과한다 — 둘째는 창을 만들기 전에 끝난다
+const duplicate = mode === "companion" && !app.requestSingleInstanceLock();
+if (duplicate) app.quit();
 let win = null;
 let art = null; // gif·sheet: { kind, dataUrl, w, h, scale, from } / pmd: { kind, cell, body, zoom, anims, clips, credits, dex, from }
 let lastState = null;
@@ -99,6 +125,13 @@ let level = null; // 지금 창 레벨 — "float" | "normal"
 let ownerPid = null; // 내 터미널을 띄운 프로그램의 프로세스 번호 (한 번 찾으면 재사용)
 let ownerDeepAt = 0; // 프로세스 표로 창 주인을 마지막으로 찾아본 시각
 let servedHelper = null; // Windows 창 추적 헬퍼 (띄워 두고 한 줄씩 묻는다)
+let tray = null; // 트레이 아이콘 — companion 만
+let followPids = new Set(); // window·companion — 이번 폴링이 고른 "따를 세션"의 pid (활성 터미널 셸 또는 창 주인)
+let stateRecords = []; // 마지막으로 읽은 훅 기록 (최신순) — window·companion 은 폴링마다 한 번 읽어 판정 둘에 같이 쓴다
+let companionTarget = null; // companion — 마지막으로 따른 터미널 호스트 창. 브라우저를 봐도 여기 남는다
+let recordMiss = 0; // window — 내 창 기록이 연속으로 없던 횟수
+// 펫 자신을 가리는 표 — 세션·창 펫은 전부 같은 Electron 이라 이름으로 함께 걸러야 맨 앞 창에서 빠진다 (lib/follow frontWindow)
+const SELF = { pid: process.pid, appNames: new Set(["electron", String(app.getName() || "").toLowerCase()]) };
 // 끝내는 중 — 창이 파괴되는 사이에 주기 작업·감시·헬퍼가 그 창을 건드리지 않게 before-quit 에서 멈춘다.
 // 파괴된 창을 건드려 예외가 나면 Electron 기본 처리기가 모달을 띄워 메인이 멈추고, 확인을 누르면 밀린 폴링이
 // 또 던진다 — 대화상자가 끝없이 이어지고 프로세스가 끝나지 못한다
@@ -108,14 +141,17 @@ const watchers = []; // 끝낼 때 닫을 fs.watch
 
 // 창 주인을 찾는 데 쓴다 (체인 전체). pokebuddy 가 구해 넘긴 것을 쓴다 — pokebuddy 는 펫을 띄우고 곧바로 끝나서,
 // 펫이 스스로 구하면 부모 관계가 이미 끊겨 있다 (Windows 는 끊긴 채 남고, mac 은 launchd 밑으로 옮겨진다).
-// 넘겨받지 못했으면(npm start 로 직접 실행) 스스로 구한다
-const ancestors = config.runtime.ancestors.length ? [process.pid, ...config.runtime.ancestors] : pkstate.ancestorPids();
+// 넘겨받지 못했으면(npm start 로 직접 실행) 스스로 구한다. 동반자는 조상을 쓰지 않는다 — Windows 의 프로세스 표 읽기(1초)를 아낀다
+const ancestors =
+  mode === "companion" ? [process.pid]
+  : config.runtime.ancestors.length ? [process.pid, ...config.runtime.ancestors]
+  : pkstate.ancestorPids();
 let myPids = pkstate.pidsUpTo(ancestors, termPid); // 터미널 셸까지만 (탭·상태 판정용)
 let termRefined = false;
 
-// 터미널 셸을 확장 기록으로 한 번 바로잡는다 (판정은 lib/state — 진단 도구와 같은 규칙)
+// 터미널 셸을 확장 기록으로 한 번 바로잡는다 (판정은 lib/state — 진단 도구와 같은 규칙). 세션 펫만 — 다른 모드는 터미널 셸에 묶이지 않는다
 function refineTermPid(records) {
-  if (termRefined || !records.length) return;
+  if (mode !== "session" || termRefined || !records.length) return;
   const found = pkstate.terminalFromRecords(ancestors, records);
   if (found == null) return; // 이 창의 터미널이 아니거나 기록이 아직 없다 — 다음 기록에서 다시 본다
   termRefined = true;
@@ -154,19 +190,38 @@ function bodyInset() {
   };
 }
 
+// 동반자는 기본 자리를 한 칸 옆으로 — 세션 펫과 같은 창에 함께 뜨면 정확히 겹친다.
+// 저장된 집은 shift 를 더해 저장하고 빼서 쓰므로(settleUserMove·homeSpot) 상쇄된다 — 기본 자리만 움직인다
 function stackShift() {
-  return Math.round(bodySize().w * STACK_RATIO) * index;
+  return Math.round(bodySize().w * STACK_RATIO) * (index + (mode === "companion" ? 1 : 0));
 }
 
-// 훅(pokebuddy-state.cjs)이 남긴 세션 상태 중 나를 부른 CLI 것.
-// pokebuddy 가 띄웠는데 부른 CLI 가 없으면 셸에서 바로 띄운 펫이다 — CLI 상태를 따르지 않는다 (기본 동작만)
-const terminalOnly = session != null && !hostPid;
-const currentInfo = () => pkstate.sessionInfo(PATHS.state, { myPids, matchCwd, hostPid, terminalOnly });
+// 훅(pokebuddy-state.cjs)이 남긴 세션 상태 중 따를 것.
+//   session           나를 부른 CLI 것. pokebuddy 가 띄웠는데 부른 CLI 가 없으면 셸에서 바로 띄운 펫이다 — CLI 상태를 따르지 않는다 (기본 동작만)
+//   window·companion  폴링이 고른 followPids(활성 터미널 셸·창 주인)를 조상으로 가진 최신 기록 (lib/state stateFor). 비면 대기
+const terminalOnly = mode === "session" && session != null && !hostPid;
+const currentInfo = () =>
+  mode === "session"
+    ? pkstate.sessionInfo(PATHS.state, { myPids, matchCwd, hostPid, terminalOnly })
+    : pkstate.stateFor(stateRecords, followPids);
 const currentState = () => currentInfo().state;
 
 const readWindowRecords = () => pkstate.readWindowRecords(windowsDir);
-const myRecord = (records) => pkstate.myRecord(records, myPids);
-const tabAxis = (rec) => pkstate.tabAxis(rec, myPids);
+// 내 창 기록 — 창 펫은 확장이 넘긴 자기 호스트 pid 로, 세션 펫은 내 터미널 셸이 든 것으로
+const myRecord = (records) =>
+  mode === "window" ? records.find((r) => r.hostPid === hostPid) || null : pkstate.myRecord(records, myPids);
+// 탭 축 — 창 펫은 그 창의 모든 탭을 따르므로 기록만 있으면 활성이다
+const tabAxis = (rec) => (mode === "window" ? (rec ? true : null) : pkstate.tabAxis(rec, myPids));
+
+// 창 펫 — 내 창의 기록이 사라졌다(확장 비활성·창 닫힘 뒤 deactivate). 연속으로 없을 때만 끝난다 — tmp+rename 사이의 한 번은 넘긴다
+function trackRecord(rec) {
+  if (mode !== "window") return;
+  if (rec) {
+    recordMiss = 0;
+    return;
+  }
+  if ((recordMiss += 1) >= RECORD_MISS_LIMIT) app.quit();
+}
 
 // 앵커 앱의 창 위치를 읽는 헬퍼 — mac 은 컴파일된 Swift, Windows 는 PowerShell
 // POKEBUDDY_WINBOUNDS 로 다른 실행 파일을 가리킬 수 있다 (테스트가 실제 헬퍼를 건드리지 않도록)
@@ -308,9 +363,14 @@ function watchRecords() {
       setImmediate(() => {
         pending = false;
         if (!win) return; // 기다리는 사이 창이 닫혔다
+        if (mode === "companion") {
+          pollAnchor(); // 동반자는 맨 앞 창을 다시 고른다 — 포커스가 바뀐 순간 폴링(0.4초)을 기다리지 않게
+          return;
+        }
         const records = readWindowRecords();
         refineTermPid(records);
         const rec = myRecord(records);
+        trackRecord(rec);
         if (!rec) return;
         sawExtension = true;
         const tab = tabAxis(rec);
@@ -504,6 +564,8 @@ function cursorOnPet() {
 
 // 표시 여부 — 폴링과 확장 이벤트가 같은 규칙을 쓰도록 한 곳에 모은다
 function decideWant(tab, rec, hasTarget) {
+  // 동반자는 늘 보인다 — 맨 앞 창이 터미널이 아니어도 마지막 자리에 남는다. 직접 숨긴 것만 예외
+  if (mode === "companion") return !userHidden;
   let want;
   if (tab === null) {
     // 확장 기록이 없다. 한 번이라도 본 적 있으면 잃은 것이므로 닫는 쪽으로 간다
@@ -539,16 +601,146 @@ function applyVisible(want) {
   setVisible(want);
 }
 
+// 세션·창 펫 — 내 터미널을 띄운 프로그램의 창 중 "내 창"을 찾아 따른다 (조상 → 창 주인, 확장 기록 → 내 창 확정)
+// 반환: { target, want, placeId, debug }
+function resolveAnchored(windows, records) {
+  // 내 터미널을 띄운 프로그램의 창들 — 앱 이름 표가 아니라 프로세스 조상으로 찾는다.
+  // VS Code·cmux·iTerm2·Warp·Windows Terminal·cmd 무엇이든 이걸로 잡힌다
+  // 한 번 찾은 창 주인은 바뀌지 않는다 — 다시 찾는 건 그 프로세스의 창이 하나도 없을 때뿐
+  // 프로세스 표까지 읽는 깊은 탐색은 한 번도 못 찾았을 때만, 가끔 한다 (동기 호출이라 그동안 펫이 멈춘다).
+  // 이미 찾은 주인의 창이 잠깐 없는 것(모두 최소화)은 다시 찾을 이유가 아니다 — 못 찾으면 알던 주인을 그대로 둔다
+  // 창 펫은 확장이 [확장 호스트, VS Code 메인] 을 조상으로 넘기므로 바로 맞는다
+  if (ownerPid == null || !windows.some((w) => w.pid === ownerPid)) {
+    const deep = ownerPid == null && Date.now() - ownerDeepAt >= OWNER_DEEP_RETRY_MS;
+    const found = pkstate.ownerPidOf(ancestors, windows, { deep });
+    if (deep && found == null) ownerDeepAt = Date.now();
+    if (found != null) ownerPid = found;
+  }
+  let appWindows = ownerPid != null ? windows.filter((w) => w.pid === ownerPid) : [];
+  // 조상으로 못 찾을 때(tmux·원격 세션 등)는 터미널 종류에서 받은 앱 이름으로 갈음한다
+  if (!appWindows.length) appWindows = anchorApp ? windows.filter((w) => w.app === anchorApp) : windows;
+
+  refineTermPid(records);
+  const rec = myRecord(records);
+  trackRecord(rec);
+  if (rec) sawExtension = true;
+  const tab = tabAxis(rec);
+  buddy?.focus(focusKeyOf(rec, windows));
+  // 창 펫 — 이 창의 활성 터미널 셸을 따른다. 원격 창의 pid 는 다른 컴퓨터 것이라 대조하지 않는다 (대기)
+  if (mode === "window") followPids = new Set(rec && !rec.remote && rec.activeTerminal != null ? [rec.activeTerminal] : []);
+
+  // ── 앵커 — 한 번 확정하면 그 창 ID 만 따라간다
+  let target = null;
+  if (anchorId != null) {
+    target = appWindows.find((w) => w.id === anchorId) || null;
+    if (target) anchorMiss = 0;
+    else if ((anchorMiss += 1) >= ANCHOR_MISS_LIMIT) {
+      anchorId = null; // 창이 닫혔거나 오래 안 보임 — 다시 찾는다
+      anchorMiss = 0;
+    }
+  }
+  if (anchorId == null) {
+    const head = appWindows[0] || null;
+    // 내 창이 지금 포커스이고 내 탭이 활성인 순간에만 확정한다 — 그때 맨 앞 창은 반드시 내 창이다
+    // 확장이 있으면 그 신호로 확정한다. 없으면 "내 프로그램의 창이 화면 맨 앞" 으로 갈음한다 —
+    // 명령을 친 창이 곧 맨 앞이므로 펫이 뜨는 시점에는 이게 맞다
+    const sure =
+      !!head &&
+      head.w >= CAPTURE_MIN.w &&
+      head.h >= CAPTURE_MIN.h &&
+      (rec
+        ? tab === true && rec.focused === true && !records.some((r) => r !== rec && r.focused === true)
+        : !!windows[0] && windows[0].id === head.id);
+    if (sure && head.id === captureId) {
+      if ((captureHits += 1) >= CAPTURE_CONFIRM) {
+        anchorId = head.id;
+        captureHits = 0;
+      }
+    } else {
+      captureId = sure ? head.id : null;
+      captureHits = sure ? 1 : 0;
+    }
+    target = head; // 확정 전에는 맨 앞 창을 임시로 따라간다
+  }
+
+  // ── 내 창이 화면 맨 앞이면 펫을 그 위로 올린다
+  // 일반 레벨이라 A 를 클릭하면 A 가 펫 위로 올라온다. 다시 올려 주면 [펫, A] 가 되고,
+  // 그 뒤 B 를 클릭하면 B 가 그 위로 올라와 [B, 펫, A] — 겹친 부분만 OS 가 알아서 가린다
+  // 내 창이 맨 앞인가 — 확장 기록이 더 정확하고, 없으면 창 순서로 갈음한다
+  frontIsMine = rec ? rec.focused === true : !!(target && windows[0] && windows[0].id === target.id);
+
+  return {
+    target,
+    want: decideWant(tab, rec, !!target),
+    placeId: anchorId != null ? anchorId : target && target.id,
+    debug: { tab, anchorId, target: target ? target.id : null, head: appWindows[0] ? appWindows[0].id : null, pids: [...followPids] },
+  };
+}
+
+// 동반자 — 맨 앞 창이 터미널 호스트면 그 창을 따르고 그 창의 세션을 본다. 아니면 마지막 창에 그대로 남는다 (lib/follow.js)
+function resolveCompanion(info, windows, records) {
+  const front = follow.frontWindow(info, windows, SELF);
+  const host = follow.hostOf(front, records, stateRecords);
+  let moved = false;
+  if (host) {
+    followPids = new Set(host.pids);
+    // 자리를 옮길 창인가 — VS Code 포커스 판정(a)은 확장 기록이라 OS 의 맨 앞 창과 잠깐 어긋날 수 있다(blur 를 적기 전의 몇 ms).
+    // 그 순간 맨 앞이 브라우저면 자리를 옮기지 않고 상태만 따른다. 맨 앞 창이 터미널 앱으로 보이거나 따르던 그 앱이면 옮긴다
+    const trusted = !!front && (host.kind !== "vscode" || host.frontIsHost || (companionTarget && companionTarget.pid === front.pid));
+    if (trusted) {
+      companionTarget = front;
+      moved = true;
+    }
+    buddy?.focus(focusKeyOf(host.rec, windows));
+  }
+  // 호스트가 아니거나(브라우저가 앞) 그 창이 목록에 없다(다른 Space) — 마지막 창을 번호로 다시 찾아 위치만 갱신한다.
+  // 닫혔으면 마지막 값 그대로 — 펫은 그 자리에 남는다
+  if (companionTarget && !moved) {
+    const seen = windows.find((w) => w.id === companionTarget.id);
+    if (seen) companionTarget = seen;
+  }
+  frontIsMine = true; // 늘 위 — place 가 floating 으로 둔다
+  return {
+    target: companionTarget || workAreaTarget(),
+    want: decideWant(null, null, true),
+    placeId: null,
+    debug: { front: front ? front.id : null, host: host ? host.kind : null, pids: [...followPids] },
+  };
+}
+
+// 터미널 호스트를 한 번도 못 봤다 — 펫이 있는(없으면 주) 디스플레이의 작업 영역을 창으로 삼는다.
+// fake 표시 — 이 기준으로 집을 저장하면 진짜 창이 왔을 때 화면 기준 오프셋이 되어 튄다 (settleUserMove)
+function workAreaTarget() {
+  let display;
+  try {
+    display = win ? screen.getDisplayMatching(win.getBounds()) : screen.getPrimaryDisplay();
+  } catch {
+    display = screen.getPrimaryDisplay();
+  }
+  const a = display.workArea;
+  return { id: -1, pid: 0, app: "", x: a.x, y: a.y, w: a.width, h: a.height, fake: true };
+}
+
 function pollAnchor() {
   if (!win) return;
+  // 훅 기록은 폴링마다 한 번 — 호스트 판정(어느 앱이 CLI 를 띄운 적 있나)과 상태 판정이 같이 쓴다
+  if (mode !== "session") stateRecords = pkstate.readStateRecords(PATHS.state);
   const helper = helperCommand();
   if (!helper) {
-    // 창을 추적할 수단이 없다 — 탭 축만으로 정한다
+    // 창을 추적할 수단이 없다 — 탭 축만으로 정한다. 동반자는 늘 보이되 자리만 못 따라간다
     const records = readWindowRecords();
+    if (mode === "companion") {
+      const host = follow.hostOf(null, records, stateRecords);
+      if (host) followPids = new Set(host.pids);
+      applyVisible(decideWant(null, null, true));
+      return;
+    }
     refineTermPid(records);
     const rec = myRecord(records);
+    trackRecord(rec);
     const tab = tabAxis(rec);
     if (rec) sawExtension = true;
+    if (mode === "window") followPids = new Set(rec && !rec.remote && rec.activeTerminal != null ? [rec.activeTerminal] : []);
     applyVisible(decideWant(tab, rec, true));
     return;
   }
@@ -556,10 +748,14 @@ function pollAnchor() {
   queryHelper(helper, (err, stdout) => {
     if (!win) return;
     if (err) {
-      // 헬퍼가 계속 실패하면 안전한 쪽으로 — 아무 앱 위에나 영영 떠 있는 것을 막는다
+      // 헬퍼가 계속 실패하면 안전한 쪽으로 — 아무 앱 위에나 영영 떠 있는 것을 막는다. 동반자는 늘 위가 뜻이라 자리만 멈춘다
       helperFails += 1;
-      if (helperFails === 3) process.stderr.write("창 추적 헬퍼가 응답하지 않음 — 펫을 숨긴다\n");
-      if (helperFails >= 3) applyVisible(false);
+      if (helperFails === 3) {
+        process.stderr.write(
+          mode === "companion" ? "창 추적 헬퍼가 응답하지 않음 — 창을 따라가지 못한다\n" : "창 추적 헬퍼가 응답하지 않음 — 펫을 숨긴다\n",
+        );
+      }
+      if (helperFails >= 3 && mode !== "companion") applyVisible(false);
       return;
     }
     helperFails = 0;
@@ -576,71 +772,13 @@ function pollAnchor() {
     // Space 전환 중 — mac 에서만 일어난다. Windows 는 다른 가상 데스크톱의 창이 헬퍼에서 걸러져 들어오지 않고,
     // 화면 밖에 걸어 둔 창 하나(떼어 낸 모니터 자리 등) 때문에 표본을 매번 버리면 펫이 영영 자리를 못 잡는다
     if (process.platform === "darwin" && offScreen(windows)) return;
-    // 내 터미널을 띄운 프로그램의 창들 — 앱 이름 표가 아니라 프로세스 조상으로 찾는다.
-    // VS Code·cmux·iTerm2·Warp·Windows Terminal·cmd 무엇이든 이걸로 잡힌다
-    // 한 번 찾은 창 주인은 바뀌지 않는다 — 다시 찾는 건 그 프로세스의 창이 하나도 없을 때뿐
-    // 프로세스 표까지 읽는 깊은 탐색은 한 번도 못 찾았을 때만, 가끔 한다 (동기 호출이라 그동안 펫이 멈춘다).
-    // 이미 찾은 주인의 창이 잠깐 없는 것(모두 최소화)은 다시 찾을 이유가 아니다 — 못 찾으면 알던 주인을 그대로 둔다
-    if (ownerPid == null || !windows.some((w) => w.pid === ownerPid)) {
-      const deep = ownerPid == null && Date.now() - ownerDeepAt >= OWNER_DEEP_RETRY_MS;
-      const found = pkstate.ownerPidOf(ancestors, windows, { deep });
-      if (deep && found == null) ownerDeepAt = Date.now();
-      if (found != null) ownerPid = found;
-    }
-    let appWindows = ownerPid != null ? windows.filter((w) => w.pid === ownerPid) : [];
-    // 조상으로 못 찾을 때(tmux·원격 세션 등)는 터미널 종류에서 받은 앱 이름으로 갈음한다
-    if (!appWindows.length) appWindows = anchorApp ? windows.filter((w) => w.app === anchorApp) : windows;
 
     const records = readWindowRecords();
-    refineTermPid(records);
-    const rec = myRecord(records);
-    if (rec) sawExtension = true;
-    const tab = tabAxis(rec);
-    buddy?.focus(focusKeyOf(rec, windows));
-
-    // ── 앵커 — 한 번 확정하면 그 창 ID 만 따라간다
-    let target = null;
-    if (anchorId != null) {
-      target = appWindows.find((w) => w.id === anchorId) || null;
-      if (target) anchorMiss = 0;
-      else if ((anchorMiss += 1) >= ANCHOR_MISS_LIMIT) {
-        anchorId = null; // 창이 닫혔거나 오래 안 보임 — 다시 찾는다
-        anchorMiss = 0;
-      }
-    }
-    if (anchorId == null) {
-      const head = appWindows[0] || null;
-      // 내 창이 지금 포커스이고 내 탭이 활성인 순간에만 확정한다 — 그때 맨 앞 창은 반드시 내 창이다
-      // 확장이 있으면 그 신호로 확정한다. 없으면 "내 프로그램의 창이 화면 맨 앞" 으로 갈음한다 —
-      // 명령을 친 창이 곧 맨 앞이므로 펫이 뜨는 시점에는 이게 맞다
-      const sure =
-        !!head &&
-        head.w >= CAPTURE_MIN.w &&
-        head.h >= CAPTURE_MIN.h &&
-        (rec
-          ? tab === true && rec.focused === true && !records.some((r) => r !== rec && r.focused === true)
-          : !!windows[0] && windows[0].id === head.id);
-      if (sure && head.id === captureId) {
-        if ((captureHits += 1) >= CAPTURE_CONFIRM) {
-          anchorId = head.id;
-          captureHits = 0;
-        }
-      } else {
-        captureId = sure ? head.id : null;
-        captureHits = sure ? 1 : 0;
-      }
-      target = head; // 확정 전에는 맨 앞 창을 임시로 따라간다
-    }
-
-    // ── 내 창이 화면 맨 앞이면 펫을 그 위로 올린다
-    // 일반 레벨이라 A 를 클릭하면 A 가 펫 위로 올라온다. 다시 올려 주면 [펫, A] 가 되고,
-    // 그 뒤 B 를 클릭하면 B 가 그 위로 올라와 [B, 펫, A] — 겹친 부분만 OS 가 알아서 가린다
-    // 내 창이 맨 앞인가 — 확장 기록이 더 정확하고, 없으면 창 순서로 갈음한다
-    frontIsMine = rec ? rec.focused === true : !!(target && windows[0] && windows[0].id === target.id);
-
+    const picked = mode === "companion" ? resolveCompanion(info, windows, records) : resolveAnchored(windows, records);
+    const { target, placeId } = picked;
     const spot = target ? petSpot(target) : null;
 
-    let want = decideWant(tab, rec, !!target);
+    let want = picked.want;
     // 펫을 잡으면 IDE 가 뒤로 간다 — 드래그 중에는 판정을 보류하고 직전 상태를 유지한다
     const dragging = isDragging();
     if (dragging) want = visible;
@@ -651,23 +789,10 @@ function pollAnchor() {
     }
 
     applyVisible(want);
-    place(anchorId != null ? anchorId : target && target.id);
+    place(placeId);
 
     if (debug) {
-      console.log(
-        JSON.stringify({
-          want,
-          visible,
-          tab,
-          anchorId,
-          target: target ? target.id : null,
-          head: appWindows[0] ? appWindows[0].id : null,
-          state: currentState(),
-          pos: win.getPosition(),
-          roam,
-          driftMax,
-        }),
-      );
+      console.log(JSON.stringify({ mode, want, visible, ...picked.debug, state: currentState(), pos: win.getPosition(), roam, driftMax }));
     }
   });
 }
@@ -697,7 +822,8 @@ function createWindow() {
     hasShadow: false,
     resizable: false,
     skipTaskbar: true,
-    alwaysOnTop: false, // 일반 레벨 — 내 창 위에만 있고 다른 창이 올라오면 그 아래로 내려간다
+    // 동반자는 항상 위. 나머지는 일반 레벨 — 내 창 위에만 있고 다른 창이 올라오면 그 아래로 내려간다
+    alwaysOnTop: mode === "companion",
     fullscreenable: false,
     focusable: false, // 클릭해도 터미널 포커스를 뺏지 않음
     webPreferences: {
@@ -711,9 +837,15 @@ function createWindow() {
     },
   });
 
-  // 첫 인자 false — Space(데스크탑) 를 전환해도 펫이 따라오지 않고 자기 창이 있는 Space 에 남는다
-  // visibleOnFullScreen 은 별개 속성이라 풀스크린 창 위 표시는 그대로 유지된다
-  win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true });
+  if (mode === "companion") {
+    // 동반자는 Space(데스크탑)를 옮겨도 따라온다 — 늘 보이는 펫이 만들어진 Space 에 남으면 사라진 것처럼 보인다
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    level = "float";
+  } else {
+    // 첫 인자 false — Space(데스크탑) 를 전환해도 펫이 따라오지 않고 자기 창이 있는 Space 에 남는다
+    // visibleOnFullScreen 은 별개 속성이라 풀스크린 창 위 표시는 그대로 유지된다
+    win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true });
+  }
   win.loadFile("renderer/index.html", {
     query: {
       fps: String(config.fps),
@@ -790,6 +922,8 @@ function settleUserMove() {
   const { x, y } = clampToWindow(raw.x, raw.y, w, h, lastTarget);
   moveBody(x, y);
 
+  // 가짜 창(터미널 호스트를 한 번도 못 본 동반자의 작업 영역) 기준으로 저장하면 진짜 창이 왔을 때 화면 기준 오프셋이 되어 튄다
+  if (lastTarget.fake) return;
   // 몸 자리는 따라가는 창의 오른쪽 아래 모서리 기준 오프셋으로 기억한다 — 작업 동작이 창을 키우기 전과 같은 값이다
   settings.save(config, {
     window: {
@@ -810,10 +944,44 @@ function clearFailure() {
   }
 }
 
-// pokebuddy 가 만든 내 pid 파일 — pokebuddy 없이 직접 실행했으면 없다
-const petFile = session ? settings.petFile(session, process.pid, index, config.slug) : null;
+// 내 pid 파일 — 모드마다 다르다. 파일이 사라지면 스스로 끝난다
+//   session    pokebuddy 가 만든 <세션>-<pid>-<순번>-<종>.pid. pokebuddy 없이 직접 실행했으면 없다
+//   window     w-<확장 호스트 pid>-<pid>.pid — 스스로 만든다 (확장은 Electron 만 띄운다). VS Code 명령 "펫 내리기"가 지운다
+//   companion  companion.lock — pokebuddy companion 이 만든다. 직접 실행(npm start)이면 스스로 만든다. companion stop 이 지운다
+const petFile =
+  mode === "companion" ? PATHS.companionLock
+  : mode === "window" ? (hostPid ? settings.windowPetFile(hostPid, process.pid) : null)
+  : session ? settings.petFile(session, process.pid, index, config.slug) : null;
 let petFileSeen = false;
 let petFileReady = false;
+
+// 창 펫·동반자는 pid 파일을 스스로 만든다 (세션 펫은 pokebuddy 가 만들어 준다).
+// 동반자 lock 에 살아 있는 다른 pid 가 적혀 있으면 그쪽이 먼저다 — 단일 인스턴스 잠금이 막지 못한 경우의 마지막 방어. false 면 끝내야 한다
+function claimPetFile() {
+  if (!petFile || mode === "session") return true;
+  try {
+    fs.mkdirSync(path.dirname(petFile), { recursive: true });
+    if (mode === "companion" && fs.existsSync(petFile)) {
+      const other = Number(fs.readFileSync(petFile, "utf8").split("\n")[0]);
+      if (other > 0 && other !== process.pid && pkstate.pidAlive(other)) return false;
+    }
+    fs.writeFileSync(petFile, `${process.pid}\n`);
+    return true;
+  } catch {
+    return true; // 못 만들면 파일 감시 없이 산다 — 호스트 생존·트레이로만 끝난다
+  }
+}
+
+// pid 파일이 내 것인가 — 동반자 lock 은 새 동반자가 다시 적었을 수 있다. 남의 것을 지우면 그 동반자가 끝난다
+function ownsPetFile() {
+  if (!petFile) return false;
+  if (mode !== "companion") return true;
+  try {
+    return Number(fs.readFileSync(petFile, "utf8").split("\n")[0]) === process.pid;
+  } catch {
+    return false;
+  }
+}
 
 // 창을 만들었으면 ready 를 적어 pokebuddy 가 기다림을 끝내게 하고, 파일이 사라졌으면(pokebuddy stop · 같은 세션에서 다른 펫으로
 // 바꿈) 스스로 끝난다. 한 번도 못 봤으면 끝내지 않는다 — pokebuddy 가 파일을 못 만든 경우까지 곧바로 끝나지 않게
@@ -840,7 +1008,9 @@ function checkPetFile() {
 }
 
 // 펫이 끝날 조건 — 펫을 끝내 줄 부모가 없으므로 스스로 본다.
-// 세션(CLI LLM)이 끝남 · 터미널 셸이 끝남(강제로 닫힌 탭) · pid 파일이 사라짐
+//   session    세션(CLI LLM)이 끝남 · 터미널 셸이 끝남(강제로 닫힌 탭) · pid 파일이 사라짐
+//   window     확장 호스트(hostPid)가 끝남 · 창 기록이 사라짐(trackRecord) · pid 파일이 사라짐
+//   companion  lock 파일이 사라짐 (companion stop) · 트레이·메뉴의 내리기
 function watchLifetime() {
   const check = () => {
     if ((hostPid && !pkstate.pidAlive(hostPid)) || (termPid && !pkstate.pidAlive(termPid))) {
@@ -868,10 +1038,7 @@ let shortcutWarned = false;
 function bindShortcuts() {
   const shortcuts = {
     "CommandOrControl+Alt+P": () => applyClickThrough(!config.clickThrough),
-    "CommandOrControl+Alt+H": () => {
-      userHidden = !userHidden; // 폴링이 되돌리지 않도록 상태로 남긴다
-      pollAnchor();
-    },
+    "CommandOrControl+Alt+H": () => toggleHidden(),
     "CommandOrControl+Alt+Q": () => app.quit(),
     // 항상 보이기 — 켜면 크롬 등 다른 앱을 봐도 펫이 남는다 (설정에 저장됨)
     "CommandOrControl+Alt+K": () => {
@@ -891,6 +1058,186 @@ function bindShortcuts() {
     console.log(JSON.stringify({ shortcuts: "이어받음" }));
   }
   return missed.length === 0;
+}
+
+// 직접 숨기기·보이기 — 폴링이 되돌리지 않도록 상태로 남긴다 (Cmd+Alt+H · 우클릭 · 트레이)
+function toggleHidden() {
+  userHidden = !userHidden;
+  pollAnchor();
+  refreshTray();
+}
+
+// ── 게임 연결 ──────────────────────────────────────────────────────────────
+
+// 독립 펫이 살아 있나 — 창 펫이 저장 잠금을 내줄지 정할 때. 자기 자신은 빼고 본다
+function companionAlive() {
+  try {
+    const pid = Number(fs.readFileSync(PATHS.companionLock, "utf8").split("\n")[0]);
+    return pid > 0 && pid !== process.pid && pkstate.pidAlive(pid);
+  } catch {
+    return false;
+  }
+}
+
+// 게임 시계 — 상태가 바뀌는 순간(waving 은 4초만 머물러 10초 시계로는 놓친다)과 10초마다.
+// visible 이면 켜 둔 시간, running 이면 일한 시간이 친밀도로 쌓인다. 문구(쿨다운 남은 시간)도 이때 새로 그린다
+function gameTick(state, changed) {
+  if (!game) return;
+  if (mode === "window" && game.isWriter() && companionAlive()) game.resign(); // 독립 펫이 우선
+  const now = Date.now();
+  if (!changed && now - lastGameTick < RULES.io.tickMs) return;
+  lastGameTick = now;
+  game.tick(now, { visible, agent: state });
+  refreshTray();
+}
+
+// 펫이 보여 줄 종 — 저장된 파티의 active. 저장이 없으면 첫 실행: 명령에 스타터를 직접 줬으면 그걸로 바로 시작하고,
+// 아니면 선택 창을 띄운다. 다른 펫이 저장을 쥐고 있어(reader) 파티가 아직 없으면 그쪽이 첫 실행을 맡는다.
+// 반환: 슬러그. 선택 창을 그냥 닫았으면 null (시작하지 않는다)
+async function chooseSpecies() {
+  const snap = game.snapshot();
+  if (snap && snap.active) return snap.active.species;
+  if (game.corrupted) process.stderr.write("게임 저장 파일이 깨져 save.json.bak 으로 옮기고 새로 시작한다\n");
+  if (game.hasSave() || !game.isWriter()) return config.slug;
+  if (config.fromEnv.has("slug") && STARTERS.includes(config.slug)) {
+    const r = game.start(config.slug);
+    if (r.ok) return config.slug;
+  }
+  const slug = await pickStarter();
+  if (!slug) return null;
+  return game.start(slug).ok ? slug : null;
+}
+
+// 첫 실행 선택 창 — 스타터 29종을 세대별로. 고르면 슬러그, 닫으면 null
+function pickStarter() {
+  return new Promise((resolve) => {
+    picking = true;
+    const picker = new BrowserWindow({
+      width: 560,
+      height: 640,
+      title: "pokebuddy",
+      resizable: false,
+      minimizable: false,
+      fullscreenable: false,
+      webPreferences: { preload: path.join(PATHS.project, "preload.js") },
+    });
+    let done = false;
+    const finish = (slug) => {
+      if (done) return;
+      done = true;
+      picking = false;
+      ipcMain.removeHandler("picker-list");
+      ipcMain.removeListener("picker-start", onStart);
+      resolve(slug);
+      if (!picker.isDestroyed()) picker.close();
+    };
+    const onStart = (_e, slug) => finish(STARTERS.includes(slug) ? slug : null);
+    ipcMain.handle("picker-list", () => pickerPayload());
+    ipcMain.on("picker-start", onStart);
+    picker.on("closed", () => finish(null));
+    picker.loadFile("renderer/picker.html");
+  });
+}
+
+// 선택 창에 줄 목록 — 세대별 3종 × 9 + 피카츄·이브이. 이름은 지금 언어로
+function pickerPayload() {
+  const lang = i18n.getLang();
+  const groups = [];
+  for (let g = 0; g < 9; g++) groups.push({ label: t("starter.gen", { n: g + 1 }), slugs: STARTERS.slice(g * 3, g * 3 + 3) });
+  groups.push({ label: t("starter.others"), slugs: STARTERS.slice(27) });
+  return {
+    title: t("starter.title"),
+    start: t("starter.start"),
+    groups: groups.map((g) => ({ label: g.label, items: g.slugs.map((slug) => ({ slug, name: petName(slug, lang) })) })),
+  };
+}
+
+// 밥·놀기 항목 — 쿨다운이 남았으면 흐리게, 이유(남은 시간)를 항목 자체에 ("밥 주기 · 3시간 뒤")
+function actItem(kind, nextAt) {
+  const what = t(`menu.${kind}`);
+  if (nextAt) return { label: t("menu.later", { what, when: i18n.untilWord(nextAt) }), enabled: false };
+  return {
+    label: what,
+    click: () => {
+      game
+        .act(kind)
+        .then((r) => {
+          // 반응 — 지금은 만졌을 때와 같은 동작. 열매를 향해 걸어가 먹는 연출(approach)은 다음 손질 [스펙 미확정]
+          if (r && r.ok) buddy?.click();
+          refreshTray();
+        })
+        .catch(() => {});
+    },
+  };
+}
+
+// 우클릭·트레이 메뉴 — 문구는 언어 파일(lib/i18n)에서. 호칭(펫·동반자)은 쓰지 않고 동사만 (사용자 결정 2026-09-17).
+// 게임이 있으면 첫 줄에 이름·친밀도·기분, 그 아래 밥 주기·놀아주기. 없으면(세션 펫) 이름만.
+// 고스트 모드(클릭 통과)는 설정 항목이다 — 설정창(M4)이 생기기 전까지는 트레이에만 둔다. 켜면 펫을 우클릭할 수 없어
+// 우클릭 메뉴에 있어도 끌 수 없다. 트레이가 없는 세션·창 펫은 단축키(Cmd/Ctrl+Alt+P)로 끈다
+function menuTemplate({ tray: forTray = false } = {}) {
+  const items = [];
+  const active = game ? game.snapshot()?.active : null;
+  if (active) {
+    const vars = {
+      name: petName(active.species, i18n.getLang()),
+      affinity: active.affinity,
+      next: active.nextThreshold,
+      mood: i18n.moodWord(active.mood),
+    };
+    items.push({ label: t(active.nextThreshold ? "menu.info" : "menu.infoMax", vars), enabled: false }, { type: "separator" });
+    items.push(actItem("feed", active.feedNextAt), actItem("play", active.playNextAt), { type: "separator" });
+  } else {
+    items.push({ label: displayName(), enabled: false }, { type: "separator" });
+  }
+  items.push({ label: t(userHidden ? "menu.show" : "menu.hide"), click: () => toggleHidden() });
+  if (forTray) {
+    items.push({
+      label: t("menu.ghost"),
+      type: "checkbox",
+      checked: !!config.clickThrough,
+      // 동반자의 토글은 저장하지 않는다 — 전역 설정이라 세션 펫의 다음 실행까지 번진다. 모드별 설정은 설정창(M4)에서
+      click: () => applyClickThrough(!config.clickThrough, mode !== "companion"),
+    });
+    items.push({ label: t("menu.openConfig"), click: () => shell.openPath(PATHS.config) });
+  }
+  items.push({ type: "separator" }, { label: t("menu.quit"), click: () => app.quit() });
+  return items;
+}
+
+function refreshTray() {
+  if (tray) tray.setContextMenu(Menu.buildFromTemplate(menuTemplate({ tray: true })));
+}
+
+// 트레이 아이콘 — 펫의 서 있는 그림 첫 프레임을 잘라 쓴다 (PMD). 그림이 없으면 흰 네모 — 빈 아이콘은 mac 에서 보이지 않는다
+function trayIcon() {
+  const size = process.platform === "darwin" ? 18 : 16;
+  try {
+    const sheet = art && art.kind === "pmd" && art.anims && art.anims.Idle;
+    if (sheet) {
+      return nativeImage
+        .createFromDataURL(sheet.dataUrl)
+        .crop({ x: 0, y: 0, width: sheet.fw, height: sheet.fh })
+        .resize({ height: size });
+    }
+  } catch {
+    // 잘라내기 실패 — 아래 대체
+  }
+  return nativeImage.createFromBitmap(Buffer.alloc(size * size * 4, 0xff), { width: size, height: size });
+}
+
+// 동반자의 트레이 — 늘 떠 있는 펫이라 끝낼 길이 트레이·우클릭뿐이다 (전역 단축키는 잡지 않는다)
+function createTray() {
+  try {
+    tray = new Tray(trayIcon());
+    tray.setToolTip(t("tray.title", { name: displayName() }));
+    refreshTray();
+    // Windows 는 왼쪽 클릭에 메뉴가 열리지 않는다 — 어느 버튼이든 메뉴
+    tray.on("click", () => tray?.popUpContextMenu());
+  } catch (e) {
+    process.stderr.write(`트레이 아이콘을 만들지 못함 — ${e.message}. 우클릭 메뉴나 pokebuddy companion stop 으로 내린다\n`);
+    tray = null;
+  }
 }
 
 // 펫이 못 뜬 이유를 남긴다 — 실패해도 조용히 넘어간다
@@ -936,11 +1283,32 @@ ipcMain.on("pointer", (_e, msg) => {
     buddy.drop();
   } else if (msg.type === "click") {
     buddy.click();
+    game?.act("poke").catch(() => {}); // 콕 찌르기 — 하루 10회까지 친밀도. 넘으면 코어가 조용히 거른다
+  } else if (msg.type === "menu") {
+    // 우클릭 — 네이티브 메뉴. 프레임 없는 창이라 렌더러가 그리지 않고 메인이 띄운다
+    Menu.buildFromTemplate(menuTemplate()).popup({ window: win });
   }
 });
 
 app.whenReady().then(async () => {
+  if (duplicate) return; // 둘째 동반자 — 이미 quit 을 불렀다
   if (process.platform === "darwin") app.dock?.hide();
+  // 수명 감시는 첫 실행 선택 창보다 먼저 — 고르는 동안 companion stop(lock 삭제)·확장 호스트 종료가 와도 끝나야 한다
+  watchLifetime();
+  // 어느 종을 그릴지 — 저장된 파티가 명령의 이름보다 먼저다. 첫 실행이면 선택 창
+  if (game) {
+    const species = await chooseSpecies();
+    if (!species) {
+      reportFailure(t("starter.skipped"));
+      app.quit();
+      return;
+    }
+    if (species !== config.slug) {
+      process.env.POKEBUDDY_SLUG = species;
+      config = settings.load(); // 집(자리) 키가 종 이름을 품어 다시 읽는다. 환경변수로 준 이름은 파일에 저장되지 않는다
+    }
+    game.onChange(() => refreshTray());
+  }
   art = await loadArt(config, PATHS, settings.spritePath, (want, got) => {
     process.stderr.write(`${config.slug}: ${want} 그림을 못 구해 ${got} 로 대체\n`);
   });
@@ -966,21 +1334,30 @@ app.whenReady().then(async () => {
     return;
   }
   clearFailure();
+  if (!claimPetFile()) {
+    // 살아 있는 다른 동반자가 lock 을 쥐고 있다 — 이쪽이 물러난다
+    process.stderr.write("동반자가 이미 떠 있음 — 이 프로세스는 끝낸다\n");
+    app.quit();
+    return;
+  }
   createWindow();
+  if (mode === "companion") createTray();
 
-  if (!bindShortcuts()) {
+  // 전역 단축키 — 동반자는 잡지 않는다. 늘 먼저 떠 있어 세션 펫이 영영 못 잡고, Cmd+Alt+Q 가 동반자를 끄게 된다. 트레이·우클릭으로 대신
+  if (mode !== "companion" && !bindShortcuts()) {
     const retry = setInterval(() => {
       if (bindShortcuts()) clearInterval(retry);
     }, SHORTCUT_RETRY_MS);
     intervals.push(retry);
   }
 
-  watchLifetime();
+  checkPetFile(); // 창이 생겼으니 pid 파일에 ready 를 적는다 — pokebuddy 명령이 이걸 보고 기다림을 끝낸다
 
   intervals.push(
     setInterval(() => {
       const { state, promptAt } = currentInfo();
       buddy?.state(state, promptAt);
+      gameTick(state, state !== lastState);
       if (state !== lastState) {
         lastState = state;
         win?.webContents.send("state", state);
@@ -1004,11 +1381,18 @@ app.on("before-quit", () => {
   for (const id of intervals) clearInterval(id);
   for (const w of watchers) w.close();
   servedHelper?.stop();
+  tray?.destroy();
+  tray = null;
+  game?.close(); // 남은 누적(켜 둔 시간)을 파일에 내리고 저장 잠금을 놓는다
 });
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
-  // 떠 있는 펫 목록에서 빠진다 — 남겨 두면 status 가 끝난 펫을 센다 (죽은 번호는 pokebuddy 가 다음에 청소한다)
-  if (petFile) fs.rmSync(petFile, { force: true });
+  // 떠 있는 펫 목록에서 빠진다 — 남겨 두면 status 가 끝난 펫을 센다 (죽은 번호는 pokebuddy 가 다음에 청소한다).
+  // 동반자 lock 은 내 pid 일 때만 — 새 동반자가 다시 적은 것을 지우면 그쪽이 끝난다
+  if (petFile && ownsPetFile()) fs.rmSync(petFile, { force: true });
 });
-app.on("window-all-closed", () => app.quit());
+// 첫 실행 선택 창은 펫 창보다 먼저 열리고 닫힌다 — 그때는 끝내지 않는다 (chooseSpecies 가 이어서 펫 창을 만든다)
+app.on("window-all-closed", () => {
+  if (!picking) app.quit();
+});

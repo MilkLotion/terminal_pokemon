@@ -1,8 +1,9 @@
 // pokebuddy setup / uninstall — 남의 컴퓨터에 설치하는 부분이라 가장 조심스럽게 다룬다.
 //
 //   1. 펫 데이터 폴더   ~/.claude/pokebuddy — 훅은 이 폴더가 없으면 아무것도 안 한다
-//   2. 상태 훅         ~/.claude/scripts/hooks/pokebuddy-state.cjs 복사 + 쓰고 있는 CLI LLM 마다 이벤트 등록
-//                      claude settings.json · gemini settings.json · codex hooks.json
+//   2. 상태 훅         dist/hooks/pokebuddy-state.js(TS 빌드 산출물)를 ~/.claude/scripts/hooks/pokebuddy-state.cjs 로 복사 +
+//                      쓰고 있는 CLI LLM 마다 이벤트 등록 — claude settings.json · gemini settings.json · codex hooks.json
+//                      dist/ 가 없으면(git clone 직후) tsc 가 있을 때 npm run build 를 먼저 돌리고, 못 하면 훅 단계를 건너뛰고 알린다
 //   3. 에디터 확장      VS Code 계열에 탭 구분 확장 설치 (에디터 CLI 가 있을 때만)
 //   4. 옛 이름          termimon·pkmon 데이터 폴더를 가져오고, 옛 훅 등록·훅 파일·확장·데이터 폴더를 걷는다
 //
@@ -15,10 +16,12 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { PATHS, LEGACY_HOME_ITEMS, migrateLegacyHome } = require("../config.js");
+const { electronPath } = require("../lib/electron.js");
 
 const PROJECT = path.join(__dirname, "..");
 const HOOK_NAME = "pokebuddy-state.cjs";
-const HOOK_SOURCE = path.join(PROJECT, "hooks", HOOK_NAME);
+// 훅 원본은 TS 빌드 산출물 (src/hooks/pokebuddy-state.ts → dist/). 목적지 이름은 .cjs — 내용이 CJS 라 그대로 돈다
+const HOOK_SOURCE = path.join(PROJECT, "dist", "hooks", "pokebuddy-state.js");
 const EXTENSION_ID = "local.pokebuddy-active-terminal";
 // 옛 이름(termimon·pkmon) 시절에 설치한 것 — setup 이 새 이름으로 바꾸고, uninstall 이 함께 지운다
 const LEGACY_HOOK_NAMES = ["termimon-state.cjs", "pkmon-state.cjs"];
@@ -332,6 +335,108 @@ function runEditor(cli, args) {
 
 const say = (line = "") => process.stdout.write(`${line}\n`);
 
+// 훅 원본(dist/)이 있게 한다 — git clone 으로 받았으면 dist/ 가 없다 (빌드 산출물이라 저장소에 넣지 않는다. npm 배포본에는 prepack 이 넣는다).
+// tsc 가 있으면(개발 의존성 설치됨) npm run build 를 돌린다. buildVsix 와 같은 태도 — 미리 보기에서는 만들지 않고 예정으로만 둔다.
+// 없는 원본을 등록하면 CLI 이벤트마다 없는 파일을 실행하게 되므로, 못 만들면 부르는 쪽이 훅 단계(파일·등록)를 건너뛴다
+// 반환: { ready: true, built? } · { ready: false, willBuild: true } (미리 보기) · { ready: false, note } (못 만듦)
+const TSC = path.join(PROJECT, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc");
+function ensureHookSource({ dryRun = false } = {}) {
+  if (fs.existsSync(HOOK_SOURCE)) return { ready: true };
+  if (!fs.existsSync(TSC)) return { ready: false, note: `${HOOK_SOURCE} 없음 — 빌드가 필요하다 (npm run build)` };
+  if (dryRun) return { ready: false, willBuild: true };
+  try {
+    // npm 은 셸을 거쳐 찾는다 (Windows 의 npm.cmd). 출력은 버린다 — 실패는 파일 유무로 판정
+    execSync("npm run build", { cwd: PROJECT, stdio: "ignore", timeout: 180_000, windowsHide: true });
+  } catch {
+    // 아래에서 파일 유무로 판정
+  }
+  if (fs.existsSync(HOOK_SOURCE)) return { ready: true, built: true };
+  return { ready: false, note: "npm run build 가 실패 — 직접 돌려 오류를 확인한다" };
+}
+
+// CLI 하나에 훅을 등록한다 — setup 이 전부에, 설정창 "연결" 버튼이 하나에 쓴다. 출력하지 않고 결과만 돌려준다.
+// 반환: { skipped } (CLI 를 안 씀) · { error, wrote:false } (설정 파일을 못 읽음) ·
+//       { changed, what[], legacy[], added[], fixed[], wrote, backup?, error?, notes[] }
+function registerTarget(t, { dryRun = false } = {}) {
+  if (!t.always && !fs.existsSync(t.dir())) return { skipped: `설치 안 됨 (${t.dir()} 없음) — 건너뜀` };
+  const read = readSettings(t);
+  if (read.error) return { error: read.error, wrote: false };
+  // 옛 이름 등록은 걷고 새 훅으로 다시 등록한다 — 두면 옛 훅과 새 훅이 함께 돈다
+  const legacy = removeHooks(read.data, isLegacy);
+  const { added, fixed } = addHooks(read.data, t);
+  const what = [
+    legacy.length ? `옛 이름(termimon·pkmon) 훅 ${legacy.length}개 걷음${dryRun ? " 예정" : ""}` : "",
+    added.length ? `이벤트 ${added.length}개 추가${dryRun ? " 예정" : ""}: ${added.join(", ")}` : "",
+    fixed.length ? `없는 경로를 가리키던 ${fixed.length}개 고침${dryRun ? " 예정" : ""}: ${fixed.join(", ")}` : "",
+  ].filter(Boolean);
+  const out = { changed: what.length > 0, what, legacy, added, fixed, wrote: false, notes: hookNotes(t, read.data, added.length > 0) };
+  if (out.changed && !dryRun) {
+    const wrote = writeSettings(t, read.data, read.existed);
+    out.wrote = !wrote.error;
+    if (wrote.error) out.error = wrote.error;
+    else out.backup = wrote.backup;
+  }
+  return out;
+}
+
+// CLI 하나의 훅 등록을 걷는다 (옛 이름 등록도 함께). 반환: { skipped } · { error } · { removed[], wrote, backup? }
+function unregisterTarget(t, { dryRun = false } = {}) {
+  if (!fs.existsSync(settingsFile(t))) return { skipped: "설정 파일 없음", removed: [] };
+  const read = readSettings(t);
+  if (read.error) return { error: read.error, removed: [] };
+  const removed = removeHooks(read.data, (h) => isOurs(h) || isLegacy(h));
+  const out = { removed, wrote: false };
+  if (removed.length && !dryRun) {
+    const wrote = writeSettings(t, read.data, read.existed);
+    out.wrote = !wrote.error;
+    if (wrote.error) out.error = wrote.error;
+    else out.backup = wrote.backup;
+  }
+  return out;
+}
+
+const targetOf = (cli) => TARGETS.find((t) => t.cli === cli) || null;
+
+// 훅 파일을 최신으로 둔다 — 등록만 있고 파일이 없으면 CLI 이벤트마다 없는 파일을 실행한다.
+// 반환: "최신" | "복사함" | "바꿈" | "빌드 뒤 복사 예정"(미리 보기, dist 없음) | null (원본을 만들 수 없다 — 부르는 쪽이 등록도 멈춘다)
+function ensureHookFile({ dryRun = false } = {}) {
+  const source = ensureHookSource({ dryRun });
+  if (!source.ready) return source.willBuild ? "빌드 뒤 복사 예정" : null;
+  const target = hookTarget();
+  const exists = fs.existsSync(target);
+  const same = exists && fs.readFileSync(target).equals(fs.readFileSync(HOOK_SOURCE));
+  if (same) return "최신";
+  if (!dryRun) {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(HOOK_SOURCE, target);
+  }
+  return exists ? "바꿈" : "복사함";
+}
+
+// 에이전트 연결 — 설정창 "연결" 버튼·커맨드 agent.connect 가 부른다 (src/agents). 훅 파일을 두고 그 CLI 에 등록한다
+function connectCli(cli, { dryRun = false } = {}) {
+  const t = targetOf(cli);
+  if (!t) return { ok: false, reason: "unknown-cli" };
+  if (!fs.existsSync(PATHS.home) && !dryRun) fs.mkdirSync(PATHS.home, { recursive: true }); // 훅은 이 폴더가 없으면 아무것도 안 한다
+  const hookFile = ensureHookFile({ dryRun });
+  // 훅 원본이 없으면 등록하지 않는다 — 없는 파일을 등록하면 CLI 이벤트마다 죽은 명령이 돈다. reason 은 ConnectResult(src/agents/registry.ts)의 것만
+  if (hookFile === null) return { ok: false, reason: "settings-error", detail: `훅 파일을 만들 수 없음 — ${ensureHookSource({ dryRun }).note}`, hookFile: "없음" };
+  const r = registerTarget(t, { dryRun });
+  if (r.skipped) return { ok: false, reason: "not-installed", detail: r.skipped, hookFile };
+  if (r.error && !r.wrote) return { ok: false, reason: "settings-error", detail: r.error, hookFile };
+  return { ok: true, reason: "ok", changed: r.changed, added: r.added, fixed: r.fixed, backup: r.backup || null, notes: r.notes, hookFile, error: r.error || null };
+}
+
+// 에이전트 연결 해제 — 그 CLI 의 훅 등록만 걷는다. 훅 파일은 다른 CLI 가 쓰고 있을 수 있어 남긴다
+function disconnectCli(cli, { dryRun = false } = {}) {
+  const t = targetOf(cli);
+  if (!t) return { ok: false, reason: "unknown-cli" };
+  const r = unregisterTarget(t, { dryRun });
+  if (r.skipped) return { ok: true, reason: "ok", removed: [], detail: r.skipped };
+  if (r.error) return { ok: false, reason: "settings-error", detail: r.error, removed: r.removed };
+  return { ok: true, reason: "ok", removed: r.removed, backup: r.backup || null };
+}
+
 // sudo 로 돌리면 ~/.claude 아래에 root 소유 파일이 생겨, 이후 Claude·펫이 그 파일을 못 고친다
 function refuseRoot(what) {
   if (typeof process.getuid !== "function" || process.getuid() !== 0) return false;
@@ -384,51 +489,52 @@ function setup({ dryRun = false, editor = true } = {}) {
   say(`펫 데이터 폴더  ${PATHS.home}  ${homeExists ? "있음" : dryRun ? "만들 예정" : "만듦"}`);
   if (!homeExists && !dryRun) fs.mkdirSync(PATHS.home, { recursive: true });
 
-  // 2. 훅 파일 — 같으면 건너뛴다. 다르면 새 버전으로 바꾼다 (훅은 이 도구의 일부라 사용자가 고칠 파일이 아니다)
+  // 2. 훅 파일 — 원본은 dist/hooks/pokebuddy-state.js. 없으면 빌드해 보고(tsc 가 있을 때), 못 만들면 훅 단계(파일·등록)를 건너뛴다.
+  //    같으면 건너뛴다. 다르면 새 버전으로 바꾼다 (훅은 이 도구의 일부라 사용자가 고칠 파일이 아니다)
+  let legacyKept = false; // 옛 이름 훅 등록이 남았을 수 있다 — 그러면 옛 훅 파일을 지우지 않는다
+  const source = ensureHookSource({ dryRun });
+  const skipHooks = !source.ready && !source.willBuild;
   const target = hookTarget();
-  const same = fs.existsSync(target) && fs.readFileSync(target).equals(fs.readFileSync(HOOK_SOURCE));
-  say(`훅 파일        ${target}  ${same ? "최신" : fs.existsSync(target) ? (dryRun ? "새 버전으로 바꿀 예정" : "새 버전으로 바꿈") : dryRun ? "복사할 예정" : "복사함"}`);
-  if (!same && !dryRun) {
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.copyFileSync(HOOK_SOURCE, target);
+  if (skipHooks) {
+    say(`훅 파일        ${source.note} — 훅 단계(파일·등록) 건너뜀`);
+    process.exitCode = 1;
+    legacyKept = true; // 등록을 손대지 않았으니 옛 등록도 그대로다
+  } else if (source.willBuild) {
+    say(`훅 파일        ${target}  dist/ 없음 — npm run build 뒤 복사할 예정`);
+  } else {
+    if (source.built) say(`훅 빌드        npm run build  dist/ 가 없어 만듦`);
+    const same = fs.existsSync(target) && fs.readFileSync(target).equals(fs.readFileSync(HOOK_SOURCE));
+    say(`훅 파일        ${target}  ${same ? "최신" : fs.existsSync(target) ? (dryRun ? "새 버전으로 바꿀 예정" : "새 버전으로 바꿈") : dryRun ? "복사할 예정" : "복사함"}`);
+    if (!same && !dryRun) {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(HOOK_SOURCE, target);
+    }
   }
 
-  // 3. CLI 마다 훅 등록 — 쓰고 있는 CLI(설정 폴더가 있는 것)만. 하나가 실패해도 나머지는 계속한다
-  let legacyKept = false; // 옛 이름 훅 등록이 남았을 수 있다 — 그러면 옛 훅 파일을 지우지 않는다
-  for (const t of TARGETS) {
+  // 3. CLI 마다 훅 등록 — 쓰고 있는 CLI(설정 폴더가 있는 것)만. 하나가 실패해도 나머지는 계속한다. 훅 원본이 없으면 통째로 건너뛴다
+  for (const t of skipHooks ? [] : TARGETS) {
     const label = `훅 등록        ${t.name.padEnd(12)}`;
-    if (!t.always && !fs.existsSync(t.dir())) {
-      say(`${label}설치 안 됨 (${t.dir()} 없음) — 건너뜀`);
+    const r = registerTarget(t, { dryRun });
+    if (r.skipped) {
+      say(`${label}${r.skipped}`);
       continue;
     }
-    const read = readSettings(t);
-    if (read.error) {
-      say(`${label}${read.error}`);
+    if (r.error && !r.wrote) {
+      say(`${label}${r.error}`);
       process.exitCode = 1;
       legacyKept = true;
       continue;
     }
-    // 옛 이름 등록은 걷고 새 훅으로 다시 등록한다 — 두면 옛 훅과 새 훅이 함께 돈다
-    const legacy = removeHooks(read.data, isLegacy);
-    const { added, fixed } = addHooks(read.data, t);
-    const what = [
-      legacy.length ? `옛 이름(termimon·pkmon) 훅 ${legacy.length}개 걷음${dryRun ? " 예정" : ""}` : "",
-      added.length ? `이벤트 ${added.length}개 추가${dryRun ? " 예정" : ""}: ${added.join(", ")}` : "",
-      fixed.length ? `없는 경로를 가리키던 ${fixed.length}개 고침${dryRun ? " 예정" : ""}: ${fixed.join(", ")}` : "",
-    ].filter(Boolean);
-    if (!what.length) say(`${label}${settingsFile(t)}  이미 등록됨`);
+    if (!r.changed) say(`${label}${settingsFile(t)}  이미 등록됨`);
     else {
-      say(`${label}${settingsFile(t)}  ${what.join(" · ")}`);
-      if (!dryRun) {
-        const wrote = writeSettings(t, read.data, read.existed);
-        if (wrote.error) {
-          say(`               ${wrote.error}`);
-          process.exitCode = 1;
-          if (legacy.length) legacyKept = true;
-        } else if (wrote.backup) say(`               백업: ${wrote.backup}`);
-      }
+      say(`${label}${settingsFile(t)}  ${r.what.join(" · ")}`);
+      if (r.error) {
+        say(`               ${r.error}`);
+        process.exitCode = 1;
+        if (r.legacy.length) legacyKept = true;
+      } else if (r.backup) say(`               백업: ${r.backup}`);
     }
-    for (const note of hookNotes(t, read.data, added.length > 0)) say(`               ${note}`);
+    for (const note of r.notes) say(`               ${note}`);
   }
 
   // 옛 훅 파일 — 옛 등록을 다 걷었을 때만 지운다. 등록만 남고 파일이 없으면 CLI 이벤트마다 없는 파일을 실행한다
@@ -441,7 +547,17 @@ function setup({ dryRun = false, editor = true } = {}) {
     }
   }
 
-  // 4. 에디터 확장 — 같은 창의 여러 터미널 탭 중 펫을 띄운 탭에서만 보이게 한다
+  // 3.5 실행 경로 — VS Code 확장이 창마다 펫을 직접 띄우는 데 쓴다. Dock 으로 띄운 VS Code 는 PATH 에 npm 전역 폴더가
+  // 없고 Node 버전도 다를 수 있어, 명령 이름 대신 Electron 실행 파일과 이 폴더의 절대 경로를 적어 둔다.
+  // Node 버전 관리자로 경로가 바뀌면 setup 을 다시 돌려 갱신한다. Electron 을 못 받았으면 null 로 적고 알린다
+  const cliInfo = { electron: electronPath(), project: PROJECT, version: require("../package.json").version };
+  say(
+    `실행 경로      ${PATHS.cli}  ${dryRun ? "적을 예정" : "적음"}` +
+      (cliInfo.electron ? "" : " — Electron 이 없어 확장이 펫을 못 띄운다 (네트워크가 되는 곳에서 다시 setup)"),
+  );
+  if (!dryRun) fs.writeFileSync(PATHS.cli, `${JSON.stringify(cliInfo, null, 2)}\n`);
+
+  // 4. 에디터 확장 — 창마다 펫을 띄우고, 같은 창의 여러 터미널 탭 중 활성 탭을 알려 준다
   let vsix = vsixFile();
   const clis = editor ? editorClis() : [];
   // git clone 설치 — 묶는 스크립트로 vsix 를 만든다. 미리 보기에서는 파일을 만들지 않고 예정으로만 둔다
@@ -477,7 +593,10 @@ function setup({ dryRun = false, editor = true } = {}) {
   say();
   if (dryRun) say("실제로 적용하려면: pokebuddy setup");
   else if (process.exitCode) say("설치가 덜 끝났다 — 위 메시지를 확인한 뒤 다시 pokebuddy setup");
-  else say("끝. CLI(claude·codex·gemini)를 새로 열고 !pokebuddy eevee 로 띄워 보세요. 일반 터미널에서는 pokebuddy eevee");
+  else {
+    say("끝. CLI(claude·codex·gemini)를 새로 열고 !pokebuddy eevee 로 띄워 보세요. 일반 터미널에서는 pokebuddy eevee");
+    say("    늘 떠 있는 동반자는 pokebuddy companion. VS Code 는 창을 다시 불러오면 창마다 펫이 뜬다 (설정 pokebuddy.autoLaunch)");
+  }
 }
 
 // 옛 이름(termimon·pkmon) 확장이 깔려 있으면 지운다 — 두면 옛 데이터 폴더에 창 기록을 계속 쓴다.
@@ -608,6 +727,12 @@ function uninstall({ dryRun = false, purge = false, editor = true } = {}) {
     }
   }
 
+  // 실행 경로 기록 — 남겨 두면 확장이 지워진 프로그램을 띄우려 든다
+  if (fs.existsSync(PATHS.cli)) {
+    say(`실행 경로      ${PATHS.cli}  ${dryRun ? "지울 예정" : "지움"}`);
+    if (!dryRun) fs.rmSync(PATHS.cli, { force: true });
+  }
+
   for (const { name, file: cli } of editor ? editorClis() : []) {
     removeLegacyExtensions(name, cli, dryRun);
     if (dryRun) {
@@ -639,8 +764,8 @@ function uninstall({ dryRun = false, purge = false, editor = true } = {}) {
 // 반환: { file, current, clis: [{ name, used, error?, registered?, total? }] } — used 가 false 면 그 CLI 를 안 쓴다
 function hookInstalled() {
   const file = fs.existsSync(hookTarget());
-  // 업데이트 뒤 훅 파일이 옛 버전인지 — 내용이 번들과 다르면 pokebuddy setup 으로 바꿔야 한다
-  const current = file && fs.readFileSync(hookTarget()).equals(fs.readFileSync(HOOK_SOURCE));
+  // 업데이트 뒤 훅 파일이 옛 버전인지 — 내용이 번들(dist/)과 다르면 pokebuddy setup 으로 바꿔야 한다. dist/ 가 없으면(빌드 전) 최신으로 볼 수 없다
+  const current = file && fs.existsSync(HOOK_SOURCE) && fs.readFileSync(hookTarget()).equals(fs.readFileSync(HOOK_SOURCE));
   const clis = TARGETS.map((t) => {
     if (!t.always && !fs.existsSync(t.dir())) return { name: t.name, used: false };
     const read = readSettings(t);
@@ -655,4 +780,4 @@ function hookInstalled() {
   return { file, current, clis };
 }
 
-module.exports = { setup, uninstall, hookInstalled };
+module.exports = { setup, uninstall, hookInstalled, connectCli, disconnectCli, TARGET_CLIS: TARGETS.map((t) => ({ cli: t.cli, name: t.name })) };

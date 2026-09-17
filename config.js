@@ -25,7 +25,22 @@ const PATHS = {
   pmd: path.join(POKEBUDDY_HOME, "pmd"), // PMD 스프라이트 묶음 캐시 (CC BY-NC — 저장소엔 넣지 않는다)
   // 떠 있는 펫 — 펫마다 pid 파일 하나 (petFile). 재부팅하면 비워지도록 임시 폴더에 둔다
   pets: path.join(os.tmpdir(), "pokebuddy-pets"),
+  // 동반자(pokebuddy companion) — 기기당 하나. 내용은 pid 파일과 같은 규약(`pid\nready`). 지우면 동반자가 스스로 끝난다.
+  // 확장·CLI 는 이 파일의 pid 가 살아 있는지로 "동반자가 떠 있나"를 판정한다 (파일 존재가 아니라 pid 생존)
+  companionLock: path.join(POKEBUDDY_HOME, "companion.lock"),
+  // setup 이 적는 실행 경로 { electron, project, version } — VS Code 확장이 PATH·Node 버전과 무관하게 펫을 직접 띄우는 데 쓴다
+  cli: path.join(POKEBUDDY_HOME, "cli.json"),
+  // 게임 (game/) — 저장은 writer 프로세스 하나만 쓴다. 나머지는 mailbox 로 요청한다
+  save: path.join(POKEBUDDY_HOME, "save.json"), // 게임 진행 (game/save.js)
+  saveLock: path.join(POKEBUDDY_HOME, "save.lock"), // 저장을 쓰는 프로세스의 pid (game/writer.js)
+  mailbox: path.join(POKEBUDDY_HOME, "mailbox"), // 명령 통로 — 요청 파일 하나 = 요청 하나 (game/mailbox.js)
 };
+
+// 실행 모드 — 펫이 무엇에 묶여 살고 무엇을 따르는가 (POKEBUDDY_MODE)
+//   session    (기본) pokebuddy <종> · !pokebuddy <종> — 그 세션(CLI LLM 또는 터미널 셸)에 묶인 샌드박스 펫
+//   window     VS Code 확장이 창마다 띄운 펫 — 그 창 위에만, 그 창의 활성 터미널 상태를 따른다. 확장 호스트와 함께 끝난다
+//   companion  pokebuddy companion — 기기당 하나, 항상 위. 맨 앞 터미널 창을 따른다. 트레이로 끝낸다
+const MODES = new Set(["session", "window", "companion"]);
 
 // 사용자가 손대는 값 — PATHS.config 에 저장된다
 const USER_DEFAULTS = {
@@ -37,6 +52,7 @@ const USER_DEFAULTS = {
   clickThrough: false, // true 면 펫 위 클릭이 아래 터미널로 통과한다 (Cmd+Alt+P)
   pos: "fix", // fix = 따라가는 창 안에만 있게 가둔다 · free = 화면 아무 데나 둘 수 있다
   fps: 7, // 스프라이트시트 모드에서만 쓰는 프레임 속도
+  lang: "ko", // 화면 문구 언어 — ko · en (lib/i18n). POKEBUDDY_LANG 으로 이번 실행만 바꿀 수 있다
 };
 
 // 손댈 일 없는 내부 기본값 — 바꿀 일이 생기면 여기만 고친다
@@ -102,9 +118,13 @@ function load() {
   if (!("art" in saved) && saved.useGif === "off") config.art = "sheet";
   if (env.POKEBUDDY_SLUG) config.slug = env.POKEBUDDY_SLUG; // 위치 키를 만들기 전에 펫 이름부터 확정
 
+  const mode = MODES.has(env.POKEBUDDY_MODE) ? env.POKEBUDDY_MODE : "session";
+
   // 창 위치는 드래그할 때 자동 저장되는 값 — 사용자가 적을 일은 없다
-  // 펫마다 따로 기억한다. 한 칸만 두면 두 마리를 띄웠을 때 한 마리를 옮기는 순간 다른 마리 자리가 덮인다
-  config.windowKey = `${config.slug}#${Number(env.POKEBUDDY_INDEX) || 0}`;
+  // 펫마다 따로 기억한다. 한 칸만 두면 두 마리를 띄웠을 때 한 마리를 옮기는 순간 다른 마리 자리가 덮인다.
+  // 모드도 가른다 — 동반자·창 펫이 세션 펫과 같은 키를 쓰면 함께 떠 있을 때 서로 집을 덮는다
+  config.windowKey =
+    mode === "session" ? `${config.slug}#${Number(env.POKEBUDDY_INDEX) || 0}` : `${mode === "window" ? "w" : "companion"}:${config.slug}`;
   const perPet = (saved.windows || {})[config.windowKey];
   config.window = {
     dx: INTERNAL.anchorDx,
@@ -154,6 +174,7 @@ function load() {
 
   // pokebuddy 명령이 넘기는 실행 정보 — 설정이 아니라 이번 실행의 맥락이다
   config.runtime = {
+    mode, // session · window · companion (위 MODES)
     termPid: Number(env.POKEBUDDY_TERM_PID) || null, // 이 터미널 탭에서만 표시
     hostPid: Number(env.POKEBUDDY_HOST_PID) || null, // 이 프로세스(CLI LLM)가 끝나면 펫도 끝난다
     session: Number(env.POKEBUDDY_SESSION) || null, // pid 파일 이름의 세션 번호 (petFile)
@@ -189,7 +210,10 @@ function save(config, patch = {}) {
   if (config.windowKey) out.windows[config.windowKey] = config.window;
   try {
     fs.mkdirSync(PATHS.home, { recursive: true });
-    fs.writeFileSync(PATHS.config, `${JSON.stringify(out, null, 2)}\n`);
+    // tmp 에 쓰고 rename — 동반자·창 펫·세션 펫이 함께 떠 있으면 같은 파일을 여럿이 쓴다. 쓰다 죽어도 반쪽 파일이 남지 않는다
+    const tmp = `${PATHS.config}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, `${JSON.stringify(out, null, 2)}\n`);
+    fs.renameSync(tmp, PATHS.config);
   } catch {
     // 저장 실패는 무시 — 위치 기억만 못 한다
   }
@@ -207,4 +231,24 @@ function petFile(session, pid, index, slug) {
   return path.join(PATHS.pets, `${session}-${pid}-${index}-${slug}.pid`);
 }
 
-module.exports = { PATHS, USER_DEFAULTS, INTERNAL, LEGACY_HOME_ITEMS, load, save, spritePath, petFile, migrateLegacyHome };
+// 창 펫(window 모드)의 pid 파일 — w-<확장 호스트 pid>-<펫 pid>.pid. 펫이 스스로 만들고, 사라지면 스스로 끝난다.
+// 세션 펫 파일(숫자로 시작)과 모양을 달리해 livePets 목록에 섞이지 않는다
+const WINDOW_PET_FILE = /^w-(\d+)-(\d+)\.pid$/;
+function windowPetFile(hostPid, pid) {
+  return path.join(PATHS.pets, `w-${hostPid}-${pid}.pid`);
+}
+
+module.exports = {
+  PATHS,
+  MODES,
+  USER_DEFAULTS,
+  INTERNAL,
+  LEGACY_HOME_ITEMS,
+  WINDOW_PET_FILE,
+  load,
+  save,
+  spritePath,
+  petFile,
+  windowPetFile,
+  migrateLegacyHome,
+};
