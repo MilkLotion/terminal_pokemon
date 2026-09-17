@@ -4,6 +4,7 @@
   "menu.ghost": "Ghost mode",
   "menu.openConfig": "Open config file",
   "menu.quit": "Quit",
+  "menu.pet": "{name} · {nature}",
   "menu.feed": "Feed",
   "menu.play": "Play",
   "menu.evolve": "Evolve",

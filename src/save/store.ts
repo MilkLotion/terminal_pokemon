@@ -282,7 +282,7 @@ function migrateV1(raw: Raw): SaveV2 | null {
   return {
     v: SAVE_RULES.version,
     points: nonNeg(raw.points),
-    slots: SAVE_RULES.slots.min,
+    slots: clamp(party.length, SAVE_RULES.slots.min, SAVE_RULES.slots.max), // 1판 마리가 더 많으면 마리 수만큼 칸 (design.md 저장 v2)
     party,
     daily: { date, streak: Math.max(1, Math.floor(num(d.streak, 1))), interacted },
     totals: emptyTotals(),

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:" />
+    <title>pokebuddy</title>
+    <style>
+      /* 첫 실행 — 함께 다닐 포켓몬을 고르는 창. 문구·이름은 메인이 언어에 맞춰 넘긴다 (picker.ts) */
+      :root {
+        --ground: #f2f4f6;
+        --surface: #ffffff;
+        --ink: #182130;
+        --muted: #61707f;
+        --line: #d3dae2;
+        --accent: #d9463b;
+        --accent-soft: #fbe7e4;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ground: #12181f;
+          --surface: #1a222c;
+          --ink: #e8eef4;
+          --muted: #98a6b6;
+          --line: #2b3642;
+          --accent: #f26b60;
+          --accent-soft: #3a2320;
+        }
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--ground);
+        color: var(--ink);
+        font: 14px/1.5 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      body {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        padding: 20px 20px 16px;
+        box-sizing: border-box;
+        gap: 12px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+      }
+      #list {
+        overflow-y: auto;
+        display: grid;
+        gap: 6px;
+        align-content: start;
+        padding-right: 4px;
+      }
+      .gen {
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        margin-top: 8px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+      .cell {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        border-radius: 8px;
+        padding: 10px 8px;
+        text-align: center;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .cell:hover {
+        border-color: var(--muted);
+      }
+      .cell.pick {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        font-weight: 600;
+      }
+      .cell small {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+      }
+      footer {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 12px;
+      }
+      #chosen {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        padding: 9px 22px;
+        font: inherit;
+        font-weight: 600;
+        color: #fff;
+        background: var(--accent);
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 id="title"></h1>
+    <div id="list"></div>
+    <footer>
+      <span id="chosen"></span>
+      <button id="start" disabled></button>
+    </footer>
+    <script type="module" src="../../dist/renderer/picker.js"></script>
+  </body>
+</html>

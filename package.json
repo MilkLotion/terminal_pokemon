@@ -16,28 +16,23 @@
     "desktop-pet",
     "electron"
   ],
-  "main": "main.js",
+  "main": "dist/main/app.js",
   "bin": {
-    "pokebuddy": "bin/pokebuddy",
-    "pokebuddy-status": "bin/pokebuddy-status"
+    "pokebuddy": "bin/pokebuddy"
   },
   "files": [
-    "main.js",
-    "preload.js",
     "config.js",
     "art/",
-    "buddy/",
     "cli/",
-    "game/",
     "dist/",
     "data/",
+    "src/renderer/*.html",
+    "assets/logo/out/",
     "lib/",
-    "renderer/",
     "helpers/winbounds",
     "helpers/winbounds.ps1",
     "helpers/winbounds.swift",
     "bin/pokebuddy",
-    "bin/pokebuddy-status",
     "scripts/postinstall.js",
     "scripts/build-helper.js",
     "vscode-extension/pokebuddy-active-terminal-*.vsix"
@@ -50,15 +45,17 @@
     "win32"
   ],
   "scripts": {
-    "start": "electron .",
+    "start": "npm run build && electron .",
     "build:helper": "node scripts/build-helper.js",
     "build:vsix": "node scripts/build-vsix.js",
     "prepack": "npm run build && node scripts/build-helper.js && node scripts/build-vsix.js",
     "postinstall": "node scripts/postinstall.js",
-    "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit",
-    "selftest": "npm run build && node dist/tools/selftest-save.js && node dist/tools/selftest-dex.js && node dist/tools/selftest-agents.js && node scripts/selftest-game.js",
-    "data:build": "npm run build && node dist/tools/build-names.js && node dist/tools/build-species.js && node dist/tools/build-evo.js && node dist/tools/build-unlocks.js"
+    "prepare": "npm run build",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json",
+    "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "selftest": "npm run build && node dist/tools/selftest-save.js && node dist/tools/selftest-dex.js && node dist/tools/selftest-agents.js && node dist/tools/selftest-follow.js && node dist/tools/selftest-motion.js && node dist/tools/selftest-stage.js",
+    "data:build": "npm run build && node dist/tools/build-names.js && node dist/tools/build-species.js && node dist/tools/build-evo.js && node dist/tools/build-unlocks.js",
+    "logo:build": "npm run build && node dist/tools/build-logo.js"
   },
   "dependencies": {
     "electron": "44.4.0"

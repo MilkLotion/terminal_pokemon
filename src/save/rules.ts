@@ -8,7 +8,7 @@ import type { AgentName, CommandSource, NatureId } from "../shared/types.js";
 
 export const SAVE_RULES = {
   version: 2 as const, // save.json 스키마 버전 (v). 1 은 읽어서 이전한다
-  slots: { min: 1, max: 5 }, // 무대 슬롯 — 처음 1, 최대 5 (design.md 상점)
+  slots: { min: 1, max: 6 }, // 파티 칸 — 처음 1, 최대 6, 원작 파티 여섯 칸 (design.md 상점)
   log: { keep: 200 }, // 기록 — 최근 건수만 남긴다
   // 새 마리·빠진 필드의 기본값
   pet: {

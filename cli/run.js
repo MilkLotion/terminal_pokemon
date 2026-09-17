@@ -6,15 +6,15 @@
 //
 // 명령(CLI)을 pokebuddy 가 띄우지 않는다. 예전처럼 감싸서 띄우면 claude 의 부모가 터미널 셸이 아니라 pokebuddy(node)가 되는데,
 // 그렇게 뜬 claude 는 화면이 달랐다 (상태줄 이모지가 ♦ 로 나오고 탭 제목이 안 바뀜).
-// 펫은 따로 떠서 스스로 세션이 끝났는지 본다 (main.js)
+// 펫은 따로 떠서 스스로 세션이 끝났는지 본다 (src/main/lifetime.ts)
 const { execFile, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const settings = require("../config.js");
 const dex = require("../lib/dex.js");
-const state = require("../lib/state.js");
+const state = require("../dist/follow/state.js");
 const { electronPath } = require("../lib/electron.js");
-const { TERM_PROGRAM_APPS } = require("../lib/follow.js");
+const { TERM_PROGRAM_APPS } = require("../dist/follow/front.js");
 const i18n = require("../lib/i18n.js");
 const { petName } = require("../lib/names.js");
 const { optionEnv, petList } = require("./args.js");
@@ -46,20 +46,14 @@ function anchorApp(env = process.env) {
   return "";
 }
 
-// 입력 이름 → 펫 이름. 소문자로 맞추고, 모르는 이름이면 비슷한 이름을 알려 준다.
-// 도감표로 검사한다 — codex 스프라이트 저장소가 있으면 거기 폴더명(2D 가 없으면 -3d)을 따른다
-function resolveSlug(input, source) {
+// 입력 이름 → 펫 이름. 소문자로 맞추고, 모르는 이름이면 비슷한 이름을 알려 준다. 도감표로 검사한다
+function resolveSlug(input) {
   const name = String(input).toLowerCase().replace(/\s+/g, "");
-  if (source && fs.existsSync(path.join(source, "pets"))) {
-    for (const cand of [name, `${name}-3d`]) {
-      if (fs.existsSync(path.join(source, "pets", cand, "spritesheet.webp"))) return { slug: cand };
-    }
-  }
   if (dex.dexOf(name) != null) return { slug: name };
   return { error: true, hints: dex.suggest(name) };
 }
 
-// 펫이 스스로 끝났을 때 남긴 이유 (main.js reportFailure) — since 이후 것만
+// 펫이 스스로 끝났을 때 남긴 이유 (src/main/lifetime.ts reportFailure) — since 이후 것만
 function lastError(since) {
   try {
     const e = JSON.parse(fs.readFileSync(PATHS.lastError, "utf8"));
@@ -164,7 +158,7 @@ async function stop(names = [], { all = false } = {}) {
   let chosen;
   if (all || words.includes("all")) chosen = pets;
   else if (words.length) {
-    // 스프라이트시트 저장소가 있으면 2D 가 없는 펫은 -3d 로 떠 있다 (resolveSlug)
+    // 이름 끝의 -3d(옛 codex 팩 그림체 — 도감표는 같은 종으로 본다)로 띄운 펫도 종 이름으로 내린다
     const matches = (pet, name) => pet.slug === name || pet.slug === `${name}-3d`;
     chosen = pets.filter((pet) => words.some((name) => matches(pet, name)));
     const missing = words.filter((name) => !pets.some((pet) => matches(pet, name)));
@@ -205,10 +199,9 @@ async function run(opts) {
     process.exitCode = 1;
     return;
   }
-  const source = settings.load().source;
   const wanted = [];
   for (const input of petList(opts.pet)) {
-    const got = resolveSlug(input, source);
+    const got = resolveSlug(input);
     if (got.error) {
       process.stderr.write(`펫 이름을 찾을 수 없음: ${input}\n`);
       if (got.hints.length) process.stderr.write(`  비슷한 이름:\n${got.hints.map((h) => `    ${h}\n`).join("")}`);
@@ -301,7 +294,7 @@ async function run(opts) {
 }
 
 // pokebuddy companion [<펫>] [이름=값 ...] — 동반자 하나를 띄운다.
-// 세션에 묶이지 않고 기기당 하나. 항상 위에 떠서 맨 앞 터미널 창을 따르고, 트레이나 companion stop 으로 내린다 (main.js companion 모드).
+// 세션에 묶이지 않고 기기당 하나. 항상 위에 떠서 맨 앞 터미널 창을 따르고, 트레이나 companion stop 으로 내린다 (src/main/app.ts companion 모드).
 // VS Code 확장이 창마다 띄운 창 펫은 내린다 — 동반자 하나가 모든 창을 따르므로 겹치면 두 마리가 보인다.
 // 확장은 동반자가 살아 있는 동안 창 펫을 다시 띄우지 않고, 동반자가 내려가면 10초 안에 되살린다
 async function companion(opts = {}) {
@@ -323,7 +316,7 @@ async function companion(opts = {}) {
   const config = settings.load();
   let slug = config.slug;
   if (opts.pet) {
-    const got = resolveSlug(petList(opts.pet)[0] || "", config.source);
+    const got = resolveSlug(petList(opts.pet)[0] || "");
     if (got.error) {
       process.stderr.write(`펫 이름을 찾을 수 없음: ${opts.pet}\n`);
       if (got.hints.length) process.stderr.write(`  비슷한 이름:\n${got.hints.map((h) => `    ${h}\n`).join("")}`);
@@ -376,14 +369,13 @@ async function companion(opts = {}) {
   }
 }
 
-// 저장된 파티의 active 종 — 펫이 저장을 쓰는 중이라 읽기 전용으로 본다. 없으면 null
+// 저장된 파티에서 보이는 첫 마리의 그림 종(look, 없으면 species) — 펫이 저장을 쓰는 중이라 읽기 전용으로 본다.
+// repair:false — 파손 파일을 .bak 으로 옮기는 것은 writer 의 일. 저장이 없거나 보이는 마리가 없으면 null
 function savedSpecies() {
   try {
-    const { createGame } = require("../game");
-    const game = createGame({ paths: PATHS, writer: false, from: "cli" });
-    const snap = game.snapshot();
-    game.close();
-    return snap && snap.active ? snap.active.species : null;
+    const { state: save } = require("../dist/save/store.js").read(PATHS.save, { repair: false });
+    const pet = save ? save.party.find((p) => p.shown) : null;
+    return pet ? (pet.look ?? pet.species) : null;
   } catch {
     return null;
   }

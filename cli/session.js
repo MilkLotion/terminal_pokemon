@@ -1,8 +1,8 @@
 // 이 명령을 실행한 세션과 그 세션의 펫 — pokebuddy 실행·내리기·진단(status)이 같은 규칙을 쓴다.
-// 판정 자체는 lib/state.js 에 있다 (펫 main.js 와 같은 코드)
+// 판정 자체는 src/follow/state.ts 에 있다 (펫과 같은 코드 — dist/follow/state.js 는 npm run build 가 만든다)
 const fs = require("fs");
 const settings = require("../config.js");
-const state = require("../lib/state.js");
+const state = require("../dist/follow/state.js");
 
 const { PATHS } = settings;
 

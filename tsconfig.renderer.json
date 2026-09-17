@@ -1,0 +1,21 @@
+{
+  // 렌더러(브라우저 ESM) — 무대 캔버스 · 스타터 선택 창. src/renderer → dist/renderer. 메인·CLI·도구는 tsconfig.json
+  // 공유 계약은 src/shared/stage.d.ts 만 (선언 파일이라 rootDir 검사 없음). 소스 import 는 ./x.js 확장자로 — 출력이 그대로 브라우저에서 돈다
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "types": [],
+    "rootDir": "src/renderer",
+    "outDir": "dist/renderer",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "sourceMap": false,
+    "declaration": false
+  },
+  "include": ["src/renderer/**/*.ts", "src/shared/stage.d.ts"]
+}

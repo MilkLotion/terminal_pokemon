@@ -3,7 +3,7 @@
 // 테스트 프레임워크 없이 assert 만. 임시 폴더에서만 돌고 끝나면 지운다 — 사용자의 ~/.claude/pokebuddy/ 는 건드리지 않는다.
 // 정규화·이전은 값만으로, 파일·잠금·mailbox 는 실제 파일·프로세스로 확인한다.
 // v1 모양은 리터럴 픽스처(아래 SaveV1 · v1Pet · freshV1)로 만든다 — 옛 game/economy.js 의 newState · newPet · start 가 만들던 모양 그대로.
-//   game/ 에 기대지 않아 S5 에서 game/ 을 걷어도 이 시험은 그대로 돈다
+//   game/ 에 기대지 않는다 — game/ 은 S2 정리에서 지웠다
 // 끝에 "통과" 한 줄. 실패하면 어디서 깨졌는지와 함께 종료 코드 1
 import assert from "node:assert";
 import { spawn } from "node:child_process";
@@ -269,7 +269,7 @@ function testMigrateV1(): void {
   const v2 = some(save.normalize(clone(v1)), "v1 은 파손이 아니다");
   assert.strictEqual(v2.v, 2);
   assert.strictEqual(v2.points, 77);
-  assert.strictEqual(v2.slots, 1);
+  assert.strictEqual(v2.slots, 2); // 1판 마리 둘 → 칸 둘
   assert.ok(Array.isArray(v2.party));
   assert.strictEqual(v2.party.length, 2);
 

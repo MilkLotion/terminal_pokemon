@@ -3,7 +3,7 @@
 
 export type Lang = "ko" | "en";
 
-// 훅이 알려 주는 에이전트 상태 (lib/state.js resolveState 가 주는 값 그대로)
+// 훅이 알려 주는 에이전트 상태 (src/follow/state.ts resolveState 가 주는 값 그대로)
 export type AgentState = "idle" | "running" | "waiting" | "waving" | "failed";
 
 // 펫이 무엇에 묶여 사는가 (config.js MODES)
@@ -135,7 +135,7 @@ export interface LogEntry {
 export interface SaveV2 {
   v: 2;
   points: number;
-  slots: number; // 동시에 무대에 나올 수 있는 마리 수 — 처음 1, 최대 5
+  slots: number; // 파티 칸 수 — 처음 1, 최대 6. party 길이는 이를 넘지 않는다
   party: Pet[];
   daily: { date: string; streak: number; interacted: boolean };
   totals: Totals;

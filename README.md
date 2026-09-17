@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo/out/logo.svg" width="96" alt="pokebuddy">
+
 # pokebuddy
 
 **터미널 위에 떠 있는 포켓몬 펫**
@@ -34,7 +36,7 @@ pokebuddy setup
 
 미리 보기는 `pokebuddy setup --dry-run`, 되돌리기는 `pokebuddy uninstall [--purge]`.
 npm 게시 전에는 `npm pack` 으로 만든 `.tgz` 를 설치한다 — [배포](docs/guide.md#배포-관리자용).
-git clone 으로 쓰려면 [저장소에서 바로 쓰기](docs/guide.md#저장소에서-바로-쓰기-개발용), 예전 `termimon` · `pkmon` 을 쓰고 있었다면 [옛 이름에서 옮겨 오기](docs/guide.md#옛-이름에서-옮겨-오기).
+git clone 으로 쓰려면 [저장소에서 바로 쓰기](docs/guide.md#저장소에서-바로-쓰기-개발용) — 클론한 폴더의 `npm install` 이 TypeScript 빌드(`dist/`)까지 한다. 예전 `termimon` · `pkmon` 을 쓰고 있었다면 [옛 이름에서 옮겨 오기](docs/guide.md#옛-이름에서-옮겨-오기).
 
 ## 사용
 
@@ -70,7 +72,8 @@ pokebuddy companion stop      # 동반자 내리기
 - **돌아다니고 존다** — 한가할 때는 가끔 천천히 걷고 두리번거린다. 입력이 5분 없으면 잠들고, 집어 들면 버둥거리고, 누르면 반응한다
 - **CLI 가 일하면 바빠진다** — CLI 안에서 띄우면 훅이 알려 주는 상태를 따른다. 작업 중에는 빠르게 걷고 공격 · 기 모으기 같은, 한가할 때는 안 하는 동작을 이어 간다
 - **동반자 하나가 모든 창을 따른다** — `pokebuddy companion` 은 세션에 묶이지 않는 펫을 하나 띄운다. 항상 위에 떠서 맨 앞 창이 터미널(VS Code · iTerm2 …)이면 그 창에 붙고, 그 창의 활성 터미널에서 도는 CLI 상태를 따른다. 브라우저를 봐도 마지막 자리에 남는다. 트레이 메뉴로 내린다
-- **돌본다** — 동반자·창 펫은 친밀도가 쌓인다. 켜 두기, 우클릭 메뉴의 밥 주기·놀아주기, 콕 찌르기, claude·codex 가 일한 시간과 턴 완료가 전부 원천이고 하루 상한이 있다. 친밀도는 줄지 않고 기분만 오르내린다. 진화·상점은 다음 단계
+- **여러 마리가 한 무대에** — 동반자·창 펫은 파티 중 보이게 둔 마리(최대 6)를 따라가는 창 크기의 투명한 무대 창 하나에 함께 그린다. 마리마다 따로 끌어 옮기고, 겹치면 서로 비켜선다
+- **돌본다** — 동반자·창 펫은 친밀도가 쌓인다. 켜 두기, 밥 주기·놀아주기, 콕 찌르기, claude·codex 가 일한 시간과 턴 완료가 원천이고 하루 상한이 있다. 친밀도는 줄지 않고 기분만 오르내린다. 지금은 무대 통합 중이라 적립이 멈춰 있다 — 다음 단계에서 되살리고 진화·상점이 이어진다
 - **VS Code 창마다 펫** — 확장(0.3.0)이 창을 열 때 그 창의 펫을 띄운다. 그 창 위에만 보이고 그 창의 활성 터미널을 따르며, 창을 닫으면 사라진다. 동반자가 떠 있으면 띄우지 않는다. 설정 `pokebuddy.autoLaunch`, 명령 팔레트 `pokebuddy: 이 창에 펫 띄우기 · 내리기`
 
 | 상태 | 언제 | 동작 (PMD) |
@@ -82,7 +85,7 @@ pokebuddy companion stop      # 동반자 내리기
 | `idle` | 그 밖 · Esc 로 도구를 멈춤 | 대기 · 느린 산책 · 수면 |
 
 훅이 없는 CLI 나 일반 터미널에서는 늘 한가한 것으로 보고 산책 · 수면 · 만지기 반응만 한다.
-창은 공격 동작이 들어갈 만큼 크지만 그림이 없는 곳의 클릭은 아래 창으로 통과한다.
+무대 창은 따라가는 창만큼 크지만 그림이 없는 곳의 클릭은 아래 창으로 통과한다.
 
 ## 옵션
 
@@ -90,10 +93,8 @@ pokebuddy companion stop      # 동반자 내리기
 
 | 옵션 | 값 | 뜻 |
 |---|---|---|
-| `dot=` | 숫자 | 도트 한 칸의 px — 펫 크기. PMD 는 3~4 권장 |
+| `dot=` | 숫자 | 도트 한 칸의 px — 펫 크기. PMD 는 3~4 권장. 동반자·창 펫은 저장된 마리별 크기를 쓴다 |
 | `buddy=` | `on` · `calm` · `off` | 돌아다니기 · 졸기 · 만지기 반응 |
-| `art=` | `pmd` · `showdown` · `sheet` | 그림 소스 |
-| `pos=` | `fix` · `free` | 따라가는 창 안에 가둘지 |
 | `keep=` | `on` · `off` | 다른 앱을 봐도 숨지 않기 |
 | `click=` | `on` · `off` | 펫 위 클릭을 아래 터미널로 통과 |
 
@@ -109,17 +110,12 @@ pokebuddy companion stop      # 동반자 내리기
 | <kbd>Cmd/Ctrl</kbd> <kbd>Alt</kbd> <kbd>Q</kbd> | 종료 |
 
 전역 단축키는 먼저 뜬 펫 하나만 잡는다. 그 펫이 내려가면 남은 펫이 3초 안에 이어받는다.
-동반자는 전역 단축키를 잡지 않는다 — 트레이와 우클릭 메뉴로 숨기고 내린다. 펫 우클릭 메뉴(잠시 숨기기 · 종료)는 모든 펫에 있고, 트레이에는 고스트 모드(마우스 클릭을 무시)와 설정 파일 열기가 더 있다. 메뉴 문구는 한국어가 기본이고 `lang=en` 으로 영어를 쓸 수 있다.
+동반자는 전역 단축키를 잡지 않는다 — 트레이와 우클릭 메뉴로 숨기고 내린다. 우클릭 메뉴(첫 줄 `이름 · 성격` · 잠시 숨기기 · 종료)는 모든 펫의 마리마다 있고, 트레이에는 고스트 모드(마우스 클릭을 무시)와 설정 파일 열기가 더 있다. 메뉴 문구는 한국어가 기본이고 `lang=en` 으로 영어를 쓸 수 있다.
 
 ## 그림
 
-포켓몬 이미지는 저장소에 없다. 처음 띄울 때 내려받아 캐시하고, 못 받으면 `pmd → showdown → sheet` 순서로 내려간다.
-
-| `art=` | 출처 | 특징 |
-|---|---|---|
-| `pmd` (기본) | [PMDCollab/SpriteCollab](https://sprites.pmdcollab.org) | 종마다 동작 10~40종 — 상태 동작 · buddy 가 된다 |
-| `showdown` | [Pokémon Showdown](https://play.pokemonshowdown.com/sprites/) | 원본 GIF. 화질이 가장 좋고 동작은 하나 |
-| `sheet` | [codex-pokepets](https://github.com/dnnyngyen/codex-pokepets) | 로컬 스프라이트시트. 상태별 줄 9개 |
+그림은 [PMDCollab/SpriteCollab](https://sprites.pmdcollab.org) 한 가지다. 종마다 동작이 10~40종이라 상태 동작 · buddy 가 된다.
+포켓몬 이미지는 저장소에 없다. 처음 띄울 때 `~/.claude/pokebuddy/pmd/` 로 내려받아 캐시하고, 못 받은 종은 무대에 나오지 않는다(이유는 `pokebuddy status`).
 
 ## 요구사항
 
@@ -139,6 +135,7 @@ pokebuddy companion stop      # 동반자 내리기
 | [언제 보이고 언제 숨는가](docs/guide.md#언제-보이고-언제-숨는가) | z-order 배치, 창 추적 헬퍼, 지원 범위 |
 | [CLI LLM 상태 연동](docs/guide.md#cli-llm-상태-연동) | CLI 별 훅 이벤트와 상태 매핑 |
 | [buddy](docs/guide.md#buddy--돌아다니고-졸고-반응하기) | 산책 · 수면 · 반응 타이밍 |
+| [화면 구조](docs/guide.md#화면-구조--무대-창-하나) | 무대 창 하나 · 여러 마리 · 클릭 통과 · 코드 자리 · 자체 확인 |
 | [문제 확인](docs/guide.md#문제-확인) | `pokebuddy status`, 디버그 로그 |
 | [배포 (관리자용)](docs/guide.md#배포-관리자용) | `npm pack`, 게시 전 확인 |
 | [설계 — 상주 동반자와 육성](docs/design.md) | 확정 결정, 세 층 구조, 친밀도 · 진화 · 상점, 마일스톤 |

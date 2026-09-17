@@ -4,7 +4,7 @@
 // 파일은 'wx'(없을 때만 만들기)로 만든다 — 동시에 뜬 둘이 "없네" 하고 같이 쓰는 것을 막는다.
 // 누가 writer 가 되는지(독립 펫이 있으면 그것, 없으면 먼저 뜬 창 펫)는 부르는 쪽(main)이 정한다 —
 // 여기는 claim · release · isMine · owner 만 내놓는다. 창 펫이 독립 펫에 자리를 내주려면 release 뒤 독립 펫이 claim 한다
-// pidAlive 는 lib/state.js 와 같은 로직을 여기 다시 둔다 — 옛 JS 에 기대지 않기 위해 (S2 에서 follow/ 로 옮겨지면 그쪽 것을 쓴다)
+// pidAlive 는 src/follow/state.ts 와 같은 로직을 여기 다시 둔다 — 저장 모듈이 창 추적 모듈에 기대지 않게
 import fs from "node:fs";
 import path from "node:path";
 

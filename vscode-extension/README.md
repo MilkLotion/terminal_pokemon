@@ -47,7 +47,9 @@ VS Code 창마다 두 가지를 한다.
 **띄우는 방법** — `pokebuddy` 명령을 부르지 않고 Electron 을 직접 띄운다. `pokebuddy setup` 이 적어 둔
 `~/.claude/pokebuddy/cli.json`(`{ electron, project, version }`)의 경로를 쓴다. Dock 으로 띄운 VS Code 의 확장 호스트는
 PATH 에 npm 전역 폴더가 없고 Node 버전도 다를 수 있어 명령 이름을 믿을 수 없다.
+`project` 는 pokebuddy 패키지 폴더라 Electron 이 그 `package.json` 의 `main`(`dist/main/app.js`)을 연다 — git clone 으로 받았으면 `npm install`(빌드까지 한다) 또는 `npm run build` 가 먼저다.
 환경변수 `POKEBUDDY_MODE=window` · `POKEBUDDY_HOST_PID`(이 확장 호스트) · `POKEBUDDY_ANCESTORS`(확장 호스트, 그 부모 = VS Code 메인)를 넘긴다.
+펫은 저장(`~/.claude/pokebuddy/save.json`)의 파티를 그 창 크기의 투명한 무대 창 하나에 함께 그린다.
 실행 파일이 없으면(Node 버전 관리자로 경로가 바뀜) 한 번 알린다 — `pokebuddy setup` 을 다시 돌리면 갱신된다.
 
 ## 이 확장이 하는 일과 하지 않는 일

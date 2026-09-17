@@ -1,7 +1,7 @@
-// 그림을 받아 캐시하는 공통 부분. showdown(GIF) 과 pmd(ZIP) 가 같이 쓴다.
+// 그림을 받아 캐시하는 공통 부분. pmd(ZIP) 가 쓴다 (art/pmd-load.js).
 //
 // 지금까지 이 프로젝트의 받기 코드에는 타임아웃이 없었다. 응답이 영영 안 오면
-// loadArt() 의 await 가 막혀 창이 아예 안 뜬다. 여기서 상한을 건다.
+// 그림 로더(src/main/art.ts → loadPmd)의 await 가 막혀 마리가 무대에 영영 안 나온다. 여기서 상한을 건다.
 const fs = require("fs");
 const path = require("path");
 

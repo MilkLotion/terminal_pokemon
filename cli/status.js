@@ -4,7 +4,7 @@ const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const settings = require("../config.js");
-const state = require("../lib/state.js");
+const state = require("../dist/follow/state.js");
 const dex = require("../lib/dex.js");
 const { parseCredits } = require("../art/pmd-load.js");
 const { currentSession, livePets, companionPid, liveWindowPets } = require("./session.js");
@@ -169,19 +169,24 @@ function status(petArg) {
   else if (cliInfo.electron && fs.existsSync(cliInfo.electron)) say(`실행 경로 기록: ${PATHS.cli} (v${cliInfo.version})`);
   else say(`실행 경로 기록: Electron 경로가 없음 — pokebuddy setup 을 다시 (${cliInfo.electron || "null"})`);
 
-  // 게임 진행 — 저장 파일을 읽기 전용으로 본다 (쓰는 쪽은 떠 있는 펫). 세션 펫은 게임을 모른다
+  // 게임 진행 — 저장 v2 를 읽기 전용으로 본다 (쓰는 쪽은 떠 있는 동반자·창 펫). repair:false — 파손 파일을 옮기는 것은 writer 의 일.
+  // 세션 펫은 저장을 모른다
   try {
-    const { createGame } = require("../game");
-    const game = createGame({ paths: PATHS, writer: false, from: "cli" });
-    const snap = game.snapshot();
-    game.close();
-    i18n.setLang(i18n.langOf(config));
-    if (!snap || !snap.active) say(`\n게임: 저장 없음 — pokebuddy companion 첫 실행에서 포켓몬을 고른다 (${PATHS.save})`);
+    const { state: save, corrupted, reason } = require("../dist/save/store.js").read(PATHS.save, { repair: false });
+    const { nature } = require("../dist/dex/natures.js");
+    const lang = i18n.langOf(config);
+    if (corrupted) say(`\n게임: 저장이 깨짐 — 펫이 다음에 열 때 save.json.bak 으로 옮기고 새로 시작한다 (${PATHS.save})`);
+    else if (reason === "unreadable") say(`\n게임: 저장을 읽지 못함 — 잠김·권한. 잠시 뒤 다시 (${PATHS.save})`);
+    else if (!save) say(`\n게임: 저장 없음 — 처음 띄울 때 스타터를 고른다 (${PATHS.save})`);
     else {
-      const a = snap.active;
-      const next = a.nextThreshold ? `/${a.nextThreshold}` : "";
-      say(`\n게임: ${petName(a.species, i18n.getLang())} · 친밀도 ${a.affinity}${next} · 기분 ${i18n.moodWord(a.mood)} · 포인트 ${snap.points}`);
-      say(`  오늘 ${snap.daily.gained}/${snap.daily.cap} · 연속 ${snap.daily.streak}일 · 파티 ${snap.party.length}마리${snap.corrupted ? " · 저장이 깨져 .bak 으로 옮겼음" : ""}`);
+      say(`\n게임: 칸 ${save.slots} · 포인트 ${save.points} · 파티 ${save.party.length}마리 (${PATHS.save})`);
+      // 마리마다 이름(별명 우선) · 성격(표의 이름, 모르면 id) · 보임 · 친밀도
+      const pets = save.party.map((p) => {
+        const n = nature(p.nature);
+        const natureLabel = (n && (n.name[lang] || n.name.ko)) || p.nature;
+        return `${p.nick ?? petName(p.species, lang)}(${natureLabel} · ${p.shown ? "보임" : "숨김"} · 친밀도 ${p.affinity})`;
+      });
+      if (pets.length) say(`  ${pets.join(", ")}`);
     }
   } catch (e) {
     say(`\n게임: 읽지 못함 — ${e.message}`);

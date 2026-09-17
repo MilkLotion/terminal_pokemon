@@ -22,6 +22,15 @@ process.stdout.on("error", (e) => {
 
 const { parseArgs, USAGE } = require("../cli/args.js");
 
+// 펫 실행·내리기·진단은 TS 빌드 산출물(dist/follow — 세션·창 판정)을 부른다. git clone 뒤 빌드 전이면 여기서 먼저 알린다
+// (레지스트리에서 받은 패키지는 dist/ 가 들어 있어 이 줄에 걸리지 않는다)
+function needDist() {
+  const path = require("path");
+  if (require("fs").existsSync(path.join(__dirname, "..", "dist", "follow", "state.js"))) return;
+  process.stderr.write("빌드 산출물(dist/)이 없다 — 프로젝트 폴더에서 npm run build 먼저\n");
+  process.exit(1);
+}
+
 const parsed = parseArgs(process.argv.slice(2));
 
 switch (parsed.kind) {
@@ -42,9 +51,11 @@ switch (parsed.kind) {
     });
     break;
   case "status":
+    needDist();
     require("../cli/status.js").status(parsed.rest[0]);
     break;
   case "stop":
+    needDist();
     require("../cli/run.js").stop(parsed.rest, { all: parsed.flags.has("--all") });
     break;
   case "companion":
@@ -52,6 +63,7 @@ switch (parsed.kind) {
       process.stderr.write(`${parsed.error}\n\n${USAGE}\n`);
       process.exit(2);
     }
+    needDist();
     if (parsed.stop) require("../cli/run.js").companionStop();
     else require("../cli/run.js").companion(parsed.opts || {});
     break;
@@ -60,5 +72,6 @@ switch (parsed.kind) {
       process.stderr.write(`${parsed.error}\n\n${USAGE}\n`);
       process.exit(2);
     }
+    needDist();
     require("../cli/run.js").run(parsed.opts);
 }

@@ -2,8 +2,8 @@
 //
 // vsix 는 정해진 파일 몇 개를 담은 zip 이다.
 //   [Content_Types].xml      확장자별 MIME
-//   extension.vsixmanifest   식별자·버전·엔진 (package.json 에서 만든다)
-//   extension/…              확장 파일
+//   extension.vsixmanifest   식별자·버전·엔진·아이콘 (package.json 에서 만든다)
+//   extension/…              확장 파일 — package.json · extension.js · readme · LICENSE · 아이콘(package.json 의 icon, 있으면)
 // 이 확장은 의존성이 없는 파일 몇 개라, 이 모양만 맞추면 VS Code 가 그대로 설치한다.
 const fs = require("fs");
 const path = require("path");
@@ -78,6 +78,7 @@ const xml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 
 function manifest(pkg) {
   const kind = Array.isArray(pkg.extensionKind) ? pkg.extensionKind.join(",") : "";
+  const icon = pkg.icon ? `extension/${pkg.icon}` : "";
   return `<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
@@ -95,7 +96,8 @@ function manifest(pkg) {
       <Property Id="Microsoft.VisualStudio.Code.LocalizedLanguages" Value="" />
       <Property Id="Microsoft.VisualStudio.Code.ExecutesCode" Value="true" />
     </Properties>
-    <License>extension/LICENSE.txt</License>
+    <License>extension/LICENSE.txt</License>${icon ? `
+    <Icon>${xml(icon)}</Icon>` : ""}
   </Metadata>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Code"/>
@@ -104,14 +106,15 @@ function manifest(pkg) {
   <Assets>
     <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true" />
     <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="extension/readme.md" Addressable="true" />
-    <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE.txt" Addressable="true" />
+    <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE.txt" Addressable="true" />${icon ? `
+    <Asset Type="Microsoft.VisualStudio.Services.Icons.Default" Path="${xml(icon)}" Addressable="true" />` : ""}
   </Assets>
 </PackageManifest>
 `;
 }
 
 const CONTENT_TYPES = `<?xml version="1.0" encoding="utf-8"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension=".js" ContentType="application/javascript"/><Default Extension=".json" ContentType="application/json"/><Default Extension=".md" ContentType="text/markdown"/><Default Extension=".txt" ContentType="text/plain"/><Default Extension=".vsixmanifest" ContentType="text/xml"/></Types>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension=".js" ContentType="application/javascript"/><Default Extension=".json" ContentType="application/json"/><Default Extension=".md" ContentType="text/markdown"/><Default Extension=".txt" ContentType="text/plain"/><Default Extension=".vsixmanifest" ContentType="text/xml"/><Default Extension=".png" ContentType="image/png"/></Types>
 `;
 
 function build() {
@@ -125,6 +128,8 @@ function build() {
     ["extension/readme.md", read("README.md")],
     ["extension/LICENSE.txt", read("LICENSE")],
   ];
+  // 아이콘 — package.json 의 icon 이 가리키는 파일(logo.png). 없으면 아이콘 없이 묶는다
+  if (pkg.icon) entries.push([`extension/${pkg.icon}`, read(pkg.icon)]);
   // 이 확장의 예전 버전 vsix 만 지운다 — 설치가 가장 최신 이름을 고르지만 헷갈리지 않게
   for (const f of fs.readdirSync(EXT_DIR)) if (f.startsWith(`${pkg.name}-`) && f.endsWith(".vsix")) fs.rmSync(path.join(EXT_DIR, f));
   const out = path.join(EXT_DIR, `${pkg.name}-${pkg.version}.vsix`);

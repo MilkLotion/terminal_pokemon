@@ -21,7 +21,7 @@ import path from "node:path";
 
 // ── 타입 — 훅 입력·상태 기록 (shared/types.ts 와 겹치지만 독립 파일이라 여기 둔다) ────────────
 
-// 펫이 아는 동작 상태 (lib/state.js resolveState · shared/types.ts AgentState 와 같은 값)
+// 펫이 아는 동작 상태 (src/follow/state.ts resolveState · shared/types.ts AgentState 와 같은 값)
 type PetState = "idle" | "running" | "waiting" | "waving" | "failed";
 
 // CLI 가 stdin 으로 주는 훅 입력 — 셋이 공통으로 쓰는 필드만. 모르는 필드는 보지 않는다
@@ -53,7 +53,7 @@ interface Usage {
   cacheWrite: number;
 }
 
-// 세션 상태 파일 한 장 — 펫(lib/state.js)과 사용량 읽기(src/agents/usage.ts)가 읽는다
+// 세션 상태 파일 한 장 — 펫(src/follow/state.ts)과 사용량 읽기(src/agents/usage.ts)가 읽는다
 interface StateRecord {
   state: PetState;
   hold?: number;

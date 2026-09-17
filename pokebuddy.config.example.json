@@ -1,10 +1,8 @@
 {
   "slug": "pikachu",
   "dotSize": 2,
-  "art": "pmd",
   "buddy": "on",
   "keepVisible": false,
   "clickThrough": false,
-  "pos": "fix",
-  "fps": 7
+  "lang": "ko"
 }

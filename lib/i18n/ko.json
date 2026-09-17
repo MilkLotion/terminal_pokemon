@@ -4,6 +4,7 @@
   "menu.ghost": "고스트 모드",
   "menu.openConfig": "설정 파일 열기",
   "menu.quit": "종료",
+  "menu.pet": "{name} · {nature}",
   "menu.feed": "밥 주기",
   "menu.play": "놀아주기",
   "menu.evolve": "진화하기",

@@ -1,5 +1,5 @@
 // 설정 한 곳 — 기본값·경로·사용자 설정을 여기서만 정한다
-// main.js, cli/(pokebuddy 명령), 진단 도구가 모두 이 파일을 참고한다
+// 메인(src/main/paths.ts 가 감싼다), cli/(pokebuddy 명령), 진단 도구가 모두 이 파일을 참고한다
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -21,7 +21,6 @@ const PATHS = {
   home: POKEBUDDY_HOME,
   state: path.join(POKEBUDDY_HOME, "state"), // 훅이 세션 상태를 적는 곳
   windows: path.join(POKEBUDDY_HOME, "windows"), // VS Code 창마다 자기 상태를 적는 곳 (창 하나당 파일 하나)
-  gifs: path.join(POKEBUDDY_HOME, "gifs"), // 원본 GIF 캐시
   pmd: path.join(POKEBUDDY_HOME, "pmd"), // PMD 스프라이트 묶음 캐시 (CC BY-NC — 저장소엔 넣지 않는다)
   // 떠 있는 펫 — 펫마다 pid 파일 하나 (petFile). 재부팅하면 비워지도록 임시 폴더에 둔다
   pets: path.join(os.tmpdir(), "pokebuddy-pets"),
@@ -30,10 +29,10 @@ const PATHS = {
   companionLock: path.join(POKEBUDDY_HOME, "companion.lock"),
   // setup 이 적는 실행 경로 { electron, project, version } — VS Code 확장이 PATH·Node 버전과 무관하게 펫을 직접 띄우는 데 쓴다
   cli: path.join(POKEBUDDY_HOME, "cli.json"),
-  // 게임 (game/) — 저장은 writer 프로세스 하나만 쓴다. 나머지는 mailbox 로 요청한다
-  save: path.join(POKEBUDDY_HOME, "save.json"), // 게임 진행 (game/save.js)
-  saveLock: path.join(POKEBUDDY_HOME, "save.lock"), // 저장을 쓰는 프로세스의 pid (game/writer.js)
-  mailbox: path.join(POKEBUDDY_HOME, "mailbox"), // 명령 통로 — 요청 파일 하나 = 요청 하나 (game/mailbox.js)
+  // 저장 (src/save/) — 저장은 writer 프로세스 하나만 쓴다. 나머지는 mailbox 로 요청한다
+  save: path.join(POKEBUDDY_HOME, "save.json"), // 게임 진행 v2 (src/save/store.ts)
+  saveLock: path.join(POKEBUDDY_HOME, "save.lock"), // 저장을 쓰는 프로세스의 pid (src/save/writer.ts)
+  mailbox: path.join(POKEBUDDY_HOME, "mailbox"), // 명령 통로 — 요청 파일 하나 = 요청 하나 (src/save/mailbox.ts)
 };
 
 // 실행 모드 — 펫이 무엇에 묶여 살고 무엇을 따르는가 (POKEBUDDY_MODE)
@@ -42,30 +41,24 @@ const PATHS = {
 //   companion  pokebuddy companion — 기기당 하나, 항상 위. 맨 앞 터미널 창을 따른다. 트레이로 끝낸다
 const MODES = new Set(["session", "window", "companion"]);
 
-// 사용자가 손대는 값 — PATHS.config 에 저장된다
+// 사용자가 손대는 값 — PATHS.config 에 저장된다. 그림은 PMD 한 가지라 그림 고르는 값은 없다
+// 여기 없는 키(옛 그림·위치 옵션 art · pos · fps 등)는 읽을 때 버리고, 다음에 저장할 때 파일에서도 빠진다 (load · save)
 const USER_DEFAULTS = {
-  slug: "pikachu", // 펫 이름 (codex-pokepets 의 pets/ 폴더명)
-  dotSize: 2, // 도트 한 칸을 몇 px 로 볼지 — 펫 크기를 좌우한다. 0 이면 원본 그대로
-  art: "pmd", // 그림 소스 — pmd(동작 여러 개) · showdown(원본 GIF, 동작 하나) · sheet(codex 팩)
-  buddy: "on", // 창 안을 돌아다니고 졸고 만지면 반응 — on · calm(덜 돌아다님) · off. PMD 에서만 동작
+  slug: "pikachu", // 펫 이름 — 종 슬러그 (lib/dex.json)
+  dotSize: 2, // 도트 한 칸을 몇 px 로 볼지 — 세션 펫 크기. 동반자·창 펫은 저장의 마리 크기(Pet.size)를 쓴다
+  buddy: "on", // 창 안을 돌아다니고 졸고 만지면 반응 — on · calm(덜 돌아다님) · off
   keepVisible: false, // true 면 크롬 등 다른 앱을 봐도 펫이 남는다 (Cmd+Alt+K)
   clickThrough: false, // true 면 펫 위 클릭이 아래 터미널로 통과한다 (Cmd+Alt+P)
-  pos: "fix", // fix = 따라가는 창 안에만 있게 가둔다 · free = 화면 아무 데나 둘 수 있다
-  fps: 7, // 스프라이트시트 모드에서만 쓰는 프레임 속도
   lang: "ko", // 화면 문구 언어 — ko · en (lib/i18n). POKEBUDDY_LANG 으로 이번 실행만 바꿀 수 있다
 };
 
 // 손댈 일 없는 내부 기본값 — 바꿀 일이 생기면 여기만 고친다
 const INTERNAL = {
-  source: null, // codex-pokepets 저장소 경로 — art=sheet 에만 쓴다. POKEBUDDY_SOURCE 로 준다
-  scale: 1, // 스프라이트시트 모드 창 배율
-  motionAssist: "off", // 스프라이트 위에 움직임 덧붙이기 — off · auto · on
-  pingPong: "auto", // 루프가 끊긴 스프라이트 왕복 재생 — auto · on · off
   anchorDx: -24, // 따라갈 창의 오른쪽 아래 기준 위치
   anchorDy: -60,
 };
 
-// 객체가 아니면(null·배열·숫자로 망가진 파일) 없는 것으로 친다 — "art" in null 같은 데서 죽지 않게
+// 객체가 아니면(null·배열·숫자로 망가진 파일) 없는 것으로 친다 — "slug" in null 같은 데서 죽지 않게
 function readJson(file) {
   try {
     const data = JSON.parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
@@ -77,7 +70,7 @@ function readJson(file) {
 
 // 옛 이름(termimon·pkmon) 데이터 폴더에서 가져올 것 — 설정·위치와 그림 캐시.
 // electron(캐시)·state·windows(실행 중 기록)는 새로 생기는 값이라 가져오지 않는다
-const LEGACY_HOME_ITEMS = ["config.json", "pmd", "gifs"];
+const LEGACY_HOME_ITEMS = ["config.json", "pmd"];
 
 // 새 데이터 폴더가 아직 없으면 옛 폴더에서 가져온다 — 이름을 바꾼 뒤 처음 실행할 때 한 번.
 // 항목마다 최근 이름 폴더부터 찾는다 — termimon 을 거치지 않고 pkmon 에서 바로 올라와도 가져오게
@@ -113,9 +106,9 @@ function load() {
   migrateLegacyConfig();
   const saved = readJson(PATHS.config);
   const env = process.env;
-  const config = { ...USER_DEFAULTS, ...INTERNAL, ...saved };
-  // 예전엔 useGif 로 갈랐다. 같은 축이 둘이면 모순 조합(art=pmd + gif=off)이 생겨 art 로 합쳤다
-  if (!("art" in saved) && saved.useGif === "off") config.art = "sheet";
+  // 파일에서는 USER_DEFAULTS 의 키만 가져온다 — 옛 키(art · pos · fps 등)는 조용히 버린다
+  const known = Object.fromEntries(Object.keys(USER_DEFAULTS).filter((key) => key in saved).map((key) => [key, saved[key]]));
+  const config = { ...USER_DEFAULTS, ...INTERNAL, ...known };
   if (env.POKEBUDDY_SLUG) config.slug = env.POKEBUDDY_SLUG; // 위치 키를 만들기 전에 펫 이름부터 확정
 
   const mode = MODES.has(env.POKEBUDDY_MODE) ? env.POKEBUDDY_MODE : "session";
@@ -154,17 +147,9 @@ function load() {
 
   if (env.POKEBUDDY_SLUG) override("slug", env.POKEBUDDY_SLUG);
   if (env.POKEBUDDY_DOT_SIZE) override("dotSize", Number(env.POKEBUDDY_DOT_SIZE));
-  if (env.POKEBUDDY_ART) override("art", env.POKEBUDDY_ART);
-  // 예전 gif=off·gif=on — art 를 따로 주지 않았을 때만 art 로 옮긴다
-  else if (asBool(env.POKEBUDDY_USE_GIF) === false) override("art", "sheet");
-  else if (asBool(env.POKEBUDDY_USE_GIF) === true) override("art", "showdown");
   if (env.POKEBUDDY_BUDDY) override("buddy", env.POKEBUDDY_BUDDY);
-  if (env.POKEBUDDY_FPS) override("fps", Number(env.POKEBUDDY_FPS) || config.fps);
   boolOverride("keepVisible", env.POKEBUDDY_KEEP_VISIBLE);
   boolOverride("clickThrough", env.POKEBUDDY_CLICK_THROUGH);
-  if (env.POKEBUDDY_POS) override("pos", env.POKEBUDDY_POS);
-  if (env.POKEBUDDY_SCALE) override("scale", Number(env.POKEBUDDY_SCALE) || config.scale);
-  if (env.POKEBUDDY_SOURCE) override("source", env.POKEBUDDY_SOURCE);
   // buddy 는 on·calm·off 세 가지. on/off 자리에 true/false·1/0 도 받는다 — 모르는 값이면 켠다(기본)
   const buddyBool = asBool(config.buddy);
   if (buddyBool !== null) config.buddy = buddyBool ? "on" : "off";
@@ -219,11 +204,6 @@ function save(config, patch = {}) {
   }
 }
 
-// codex 스프라이트시트 경로 — 저장소를 모르면 null
-function spritePath(config, slug = config.slug) {
-  return config.source ? path.join(config.source, "pets", slug, "spritesheet.webp") : null;
-}
-
 // 펫 하나의 pid 파일 — <세션>-<펫 pid>-<순번>-<펫 이름>.pid. pokebuddy 가 만들고, 펫이 창을 띄우면 ready 를 적고,
 // 파일이 사라지면 펫이 스스로 끝난다 (pokebuddy stop · 같은 펫을 옵션만 바꿔 다시 띄움).
 // 이름·순번을 파일 이름에 둔다 — 내용은 펫이 ready 를 적으며 덮어쓰고, 이름은 pokebuddy stop <펫> 이, 순번은 옆자리 배치가 쓴다
@@ -247,7 +227,6 @@ module.exports = {
   WINDOW_PET_FILE,
   load,
   save,
-  spritePath,
   petFile,
   windowPetFile,
   migrateLegacyHome,

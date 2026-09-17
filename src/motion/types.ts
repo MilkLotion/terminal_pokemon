@@ -1,0 +1,78 @@
+// 움직임 모듈의 타입 — 마리별 brain 의 입출력, 성격 배율 자리, 겹침 밀어내기
+import type { Play, StageState } from "../shared/stage";
+
+// 성격 배율 자리 — S2 는 NEUTRAL_PARAMS (전부 1 · 0). S3 가 natures 축 → 값
+export interface MotionParams {
+  paceScale: number; // 걷는 속도 배율 (활동성)
+  pauseScale: number; // 쉬는 시간 배율 (활동성 반대)
+  fidgetScale: number; // 제자리 동작 확률 배율
+  sleepScale: number; // 잠들기까지 시간 배율 (안정성)
+  reactScale: number; // 만지기 반응 길이 배율 (대담함)
+  socialPull: number; // −1~+1 다른 마리에게 다가감 (사교성) — S3 에서 씀
+  cursorPull: number; // −1~+1 커서를 쫓음/피함 (대담함) — S3 에서 씀
+}
+
+// art 에서 뽑은 보유 동작 (옛 body.js capabilities)
+export interface MotionCaps {
+  have: Set<string>;
+  durOf(anim: string): number;
+  work: Record<string, "once" | "loop">;
+  workOnly: Set<string>;
+  zoom: number;
+}
+
+export interface RoamBox {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+export interface MotionInput {
+  now: number;
+  agent: StageState;
+  box: RoamBox | null;
+  visible: boolean;
+}
+
+export type Phase = "rest" | "walk" | "look" | "fidget" | "work" | "sleep" | "wake" | "react" | "react-yield" | "held" | "yield";
+
+export interface MotionOut {
+  roam: { x: number; y: number };
+  act: Play | null;
+  phase: Phase;
+  rhythm: "idle" | "work";
+}
+
+export interface PetMotion {
+  tick(input: MotionInput): MotionOut;
+  // 옛 body.js state — 활동 bump 규칙 포함. promptAt 은 초 단위. now 를 안 주면 마지막 tick 의 now 로 친다
+  state(agent: StageState, promptAt: number | null, now?: number): void;
+  focus(key: string | null, now?: number): void;
+  pickup(now: number): void;
+  drag(dx: number, dy: number): void;
+  drop(now: number): void;
+  click(now: number): void;
+  rehome(now: number): void;
+}
+
+export interface PetMotionOptions {
+  caps: MotionCaps;
+  params?: MotionParams;
+  mode?: "on" | "calm";
+  timeScale?: number;
+  rng?: () => number;
+  log?: ((o: Record<string, unknown>) => void) | null;
+  now?: number; // 만든 시각 — 마지막 사용자 활동의 시작값 (막 켰으면 사용자가 있는 것). 없으면 첫 tick 의 now
+}
+
+// 겹침 밀어내기 (arrange)
+export interface BodyRect {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  movable: boolean;
+}
+export type Nudge = Map<string, { dx: number; dy: number }>;

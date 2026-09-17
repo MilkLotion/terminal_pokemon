@@ -11,7 +11,7 @@
 const USAGE = `사용 — 터미널에서 그대로, CLI LLM(claude·codex·gemini) 안에서는 앞에 ! 를 붙인다:
   pokebuddy <펫> [이름=값 ...]                              이 세션에 펫 더하기 — 떠 있는 펫 이름이면 그 펫을 바꾼다
   pokebuddy stop [펫 ...|all]                               이 세션의 펫 내리기 — 여러 마리면 체크리스트로 고른다
-  pokebuddy companion [<펫>] [이름=값 ...]                  동반자 띄우기 — 기기당 하나, 항상 위, 맨 앞 터미널 창을 따른다
+  pokebuddy companion [<펫>] [buddy=값] [click=값]          동반자 띄우기 — 기기당 하나, 항상 위, 맨 앞 터미널 창을 따른다
   pokebuddy companion stop                                  동반자 내리기
   pokebuddy setup [--dry-run] [--no-editor]                 CLI LLM 상태 훅·에디터 확장 설치
   pokebuddy uninstall [--dry-run] [--purge] [--no-editor]   설치한 것 되돌리기 (--purge 면 설정·캐시까지)
@@ -21,29 +21,25 @@ const USAGE = `사용 — 터미널에서 그대로, CLI LLM(claude·codex·gemi
   pokebuddy eevee                     터미널 — 셸이 끝나면 펫도 사라진다
   !pokebuddy eevee                    CLI LLM 안 — 그 CLI 가 끝나면 사라지고, 일하는 상태에 따라 동작이 바뀐다
   !pokebuddy eevee dot=3 buddy=calm   크게, 덜 돌아다니게 (떠 있던 펫이 이걸로 바뀐다)
-  !pokebuddy eevee art=showdown       원본 GIF (동작은 하나뿐)
   !pokebuddy zapdos+pikachu           여러 마리 (+ 또는 쉼표 — PowerShell 에서 쉼표는 따옴표로 감싼다)
   !pokebuddy stop pikachu             한 마리 내리기 (!pokebuddy stop all 은 전부)
-  pokebuddy companion eevee dot=3     동반자 — 어느 터미널을 보든 그 창의 에이전트 상태를 따른다. 트레이로 끝낸다
+  pokebuddy companion eevee           동반자 — 어느 터미널을 보든 그 창의 에이전트 상태를 따른다. 트레이로 끝낸다
 
 옵션 (이름=값 · --이름 값):
-  pos=fix|free   art=pmd|showdown|sheet   buddy=on|calm|off
-  dot=<숫자>     fps=<숫자>   keep=on|off   click=on|off   scale=<숫자>
-  gif=off|on     (예전 옵션 — art=sheet · art=showdown)`;
+  dot=<숫자>   buddy=on|calm|off   keep=on|off   click=on|off
+  동반자는 buddy · click 만 받는다 — 크기는 저장된 마리 크기를 쓴다 (dot · keep 은 세션 펫 옵션)`;
 
 // 옵션 이름 → 펫 환경변수. 값이 비면 넘기지 않는다
 const OPTIONS = {
   pet: null, // 펫 이름은 환경변수가 아니라 마리마다 따로 넘긴다
-  scale: "POKEBUDDY_SCALE",
-  pos: "POKEBUDDY_POS",
-  gif: "POKEBUDDY_USE_GIF",
-  art: "POKEBUDDY_ART",
   buddy: "POKEBUDDY_BUDDY",
   dot: "POKEBUDDY_DOT_SIZE",
-  fps: "POKEBUDDY_FPS",
   keep: "POKEBUDDY_KEEP_VISIBLE",
   click: "POKEBUDDY_CLICK_THROUGH",
 };
+// 없어진 그림 옵션 — 모르는 옵션으로 멈추되 까닭을 한 줄 붙인다 (옛 art · gif · fps · scale)
+const ART_RETIRED = new Set(["art", "gif", "fps", "scale"]);
+const unknownOption = (a, raw) => `알 수 없는 옵션: ${a}${ART_RETIRED.has(raw.toLowerCase()) ? " — 그림은 PMD 한 가지만 쓴다" : ""}`;
 const ALIASES = { pokebuddy: "pet", pokemon: "pet" };
 // 옵션 이름은 대소문자를 가리지 않는다 (예전 PowerShell 판이 그랬다). 프로토타입 이름(constructor 등)은 거른다
 const optionName = (raw) => {
@@ -106,7 +102,7 @@ function parseOptions(args) {
     const long = a.match(/^--([A-Za-z]+)$/);
     if (long) {
       const key = optionName(long[1]);
-      if (!key) return { error: `알 수 없는 옵션: ${a}` };
+      if (!key) return { error: unknownOption(a, long[1]) };
       if (args.length < 2) return { error: `${a} 에 값이 없음` };
       opts[key] = args[1];
       args.splice(0, 2);
@@ -116,7 +112,7 @@ function parseOptions(args) {
     const kv = a.match(/^([A-Za-z]+)=(.*)$/);
     if (kv) {
       const key = optionName(kv[1]);
-      if (!key) return { error: `알 수 없는 옵션: ${a}` };
+      if (!key) return { error: unknownOption(a, kv[1]) };
       opts[key] = kv[2];
       args.shift();
       continue;
