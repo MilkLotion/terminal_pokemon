@@ -138,6 +138,7 @@ pokebuddy companion stop      # 동반자 내리기
 | [화면 구조](docs/guide.md#화면-구조--무대-창-하나) | 무대 창 하나 · 여러 마리 · 클릭 통과 · 코드 자리 · 자체 확인 |
 | [문제 확인](docs/guide.md#문제-확인) | `pokebuddy status`, 디버그 로그 |
 | [배포 (관리자용)](docs/guide.md#배포-관리자용) | `npm pack`, 게시 전 확인 |
+| [진행 현황](docs/progress.md) | 설계 단계별 진행 · 다음 작업 · 작업 방식 (개발용) |
 | [설계 — 상주 동반자와 육성](docs/design.md) | 확정 결정, 세 층 구조, 친밀도 · 진화 · 상점, 마일스톤 |
 
 ## 라이선스
