@@ -354,7 +354,7 @@ export function stateFor(records: StateRecord[], pids: Iterable<number> | null |
   if (!want.size) return { state: "idle", promptAt: null };
   const record = records.find((r) => Array.isArray(r.ancestors) && r.ancestors.some((pid) => want.has(pid)));
   if (!record) return { state: "idle", promptAt: null };
-  return { state: resolveState(record), promptAt: Number(record.promptAt) || null };
+  return { state: resolveState(record), promptAt: Number(record.promptAt) || null, ...(record.usage ? { tokenWork: true } : {}) };
 }
 
 // 펫이 따를 상태와 마지막 프롬프트 시각(초) — 기록이 없으면 { state: "idle", promptAt: null }
@@ -372,5 +372,5 @@ export function sessionInfo(stateDir: string, { myPids, matchCwd = null, hostPid
     ? records.find((r) => (hasAncestors(r) ? r.ancestors.includes(hostPid) : stateIsMine(r, myPids, matchCwd)))
     : records.find((r) => stateIsMine(r, myPids, matchCwd));
   if (!record) return { state: "idle", promptAt: null };
-  return { state: resolveState(record), promptAt: Number(record.promptAt) || null };
+  return { state: resolveState(record), promptAt: Number(record.promptAt) || null, ...(record.usage ? { tokenWork: true } : {}) };
 }

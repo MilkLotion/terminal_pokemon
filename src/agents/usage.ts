@@ -42,8 +42,11 @@ export function diffUsage(now: Usage, prev: Usage): Usage {
 export const tokensOf = (u: Usage, w: Readonly<UsageWeights> = DEFAULT_WEIGHTS): number =>
   Math.round(u.in * w.in + u.out * w.out + u.cacheRead * w.cacheRead + u.cacheWrite * w.cacheWrite);
 
-const isUsage = (v: unknown): v is Usage =>
-  !!v && typeof v === "object" && ["in", "out", "cacheRead", "cacheWrite"].every((k) => typeof (v as Record<string, unknown>)[k] === "number");
+export const isUsage = (v: unknown): v is Usage =>
+  !!v && typeof v === "object" && ["in", "out", "cacheRead", "cacheWrite"].every((k) => {
+    const n = (v as Record<string, unknown>)[k];
+    return typeof n === "number" && Number.isFinite(n) && n >= 0;
+  });
 
 // 훅 기록 폴더 → 세션별 사용량. 파일 이름이 세션 id 다. usage 가 없는 기록(codex·gemini·옛 훅)은 뺀다
 export function readSessionUsages(stateDir: string): SessionUsage[] {
@@ -73,11 +76,11 @@ export type SeenUsage = Record<string, Usage>;
 // 처음 뜰 때의 기준점 — 지금 누적값을 전부 본 것으로 친다 (옛 사용량은 세지 않는다)
 export const baseline = (current: SessionUsage[]): SeenUsage => Object.fromEntries(current.map((s) => [s.sessionId, { ...s.usage }]));
 
-// 지난번 본 뒤 늘어난 양. 새 세션은 전부 증분. 사라진 세션(7일 뒤 정리)은 seen 에서도 뺀다
+// 지난번 본 뒤 늘어난 양. 일시적으로 못 읽은 세션도 기준점을 유지 — 다음 읽기에서 전체가 다시 적립되지 않게
 export function deltaSince(current: SessionUsage[], seen: SeenUsage): { delta: Usage; perSession: Record<string, Usage>; seen: SeenUsage } {
   let delta: Usage = { ...ZERO_USAGE };
   const perSession: Record<string, Usage> = {};
-  const next: SeenUsage = {};
+  const next: SeenUsage = Object.fromEntries(Object.entries(seen).map(([id, u]) => [id, { ...u }]));
   for (const s of current) {
     const prev = seen[s.sessionId] ?? ZERO_USAGE;
     const d = diffUsage(s.usage, prev);

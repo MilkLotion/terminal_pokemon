@@ -35,7 +35,7 @@ export interface MailServer {
 }
 
 export const CMD = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/;
-export const REQUEST = /^(\d+)-(\d+)-([a-z][a-z0-9.-]*)\.json$/;
+export const REQUEST = /^(\d+)-(\d+)-([a-z][a-z0-9.-]*)(?:-\d+)?\.json$/;
 export const RESULT = /\.result\.json$/;
 
 // 파일 이름에 넣을 수 있는 명령 이름인가 — ".result" 로 끝나면 회신 파일과 헷갈리므로 막는다
@@ -43,6 +43,9 @@ export const isCmdName = (v: unknown): v is CommandName => typeof v === "string"
 
 export const requestName = (at: number, pid: number, cmd: string): string => `${at}-${pid}-${cmd}.json`;
 export const resultName = (name: string): string => name.replace(/\.json$/, ".result.json");
+
+// 같은 밀리초에 같은 명령이 여러 번 와도 요청·회신 파일을 공유하지 않음
+let sequence = 0;
 
 const isObj = (v: unknown): v is Record<string, unknown> => v != null && typeof v === "object" && !Array.isArray(v);
 const isResult = (v: unknown): v is CommandResult => isObj(v) && typeof v.ok === "boolean";
@@ -74,7 +77,7 @@ export function send(dir: string, command: Command, opts: SendOptions = {}): Pro
     const cmd = isObj(command) ? command.cmd : undefined;
     if (!isCmdName(cmd)) return resolve({ ok: false, reason: "bad-cmd", cmd: String(cmd) });
     const at = clock();
-    const name = requestName(at, process.pid, cmd);
+    const name = requestName(at, process.pid, cmd).replace(/\.json$/, `-${++sequence}.json`);
     const file = path.join(dir, name);
     const resultFile = path.join(dir, resultName(name));
     if (!writeAtomic(file, { ...command, at })) return resolve({ ok: false, reason: "send-failed", cmd });

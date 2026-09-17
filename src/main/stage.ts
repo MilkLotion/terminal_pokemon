@@ -7,10 +7,15 @@
 //   brain 은 틱마다 자기 roam 을 돌려주므로 거기에 더하면 다음 틱에 덮인다
 // 그리는 순서 = 파티 순서(뒤가 위). 들고 있는 마리는 맨 뒤로 — 끄는 동안 다른 마리 아래로 들어가지 않게
 import { separate } from "../motion/arrange";
+import { axesAt } from "../dex/natures";
+import { profile } from "../dex/species";
+import { paramsFor, NEUTRAL_PARAMS } from "../motion/params";
 import { capsOf, createPetMotion } from "../motion/pet-motion";
 import type { BodyRect, PetMotion, Phase } from "../motion/types";
 import type { HitReply, Play, PointerMsg, SpriteSheet, StageFrame, StageState } from "../shared/stage";
 import type { Mode } from "../shared/types";
+import type { CareAction } from "../state/types";
+import { MOTION_RULES } from "../motion/rules";
 import { zoomOf, type ArtLoader, type Look } from "./art";
 import { STAGE_RULES, clampInStage, homeOf, homeSpot, roamBox, stackShift, type Home, type Rect, type Size, type Spot } from "./layout";
 import type { PartyPet } from "./party";
@@ -24,6 +29,7 @@ export interface StageOptions {
   window: StageWindow;
   art: ArtLoader;
   ghost(): boolean; // 클릭 통과(고스트) 설정 — 켜져 있으면 히트 판정을 하지 않는다
+  cursor?(): Spot | null;
   onDrop(id: string, home: Home): void; // 놓았다 — 부르는 쪽이 저장한다 (가짜 창 위에서는 부르지 않는다)
   onClick(id: string): void;
   onMenu(id: string): void;
@@ -33,6 +39,8 @@ export interface StageOptions {
 }
 
 interface PetState {
+  quirkKey?: string;
+  care: { action: "feed" | "play"; target: Spot; until: number; eatingAt: number | null; last: number } | null;
   pet: PartyPet;
   look: Look;
   zoom: number;
@@ -59,6 +67,7 @@ export interface Stage {
   releaseHeld(): void; // 들고 있던 마리를 놓은 것으로 친다 — pointerup 이 영영 안 오는 경로의 탈출구. 저장하지 않는다
   resend(): void; // 렌더러가 새로 떴다 — init · 모든 look 의 sheets · 마지막 frame 을 다시 보낸다
   poke(id: string): boolean;
+  care(id: string, action: CareAction): void;
   petIds(): string[];
   petOf(id: string): PartyPet | null;
   heldId(): string | null;
@@ -95,14 +104,17 @@ export function createStage(opts: StageOptions): Stage {
     return pos;
   };
 
-  function makeMotion(id: string, look: Look, zoom: number): PetMotion | null {
+  function makeMotion(pet: PartyPet, look: Look, zoom: number): PetMotion | null {
     if (buddyMode === "off") return null;
+    const params = pet.nature ? paramsFor(axesAt(pet.nature, pet.id, now())) : { ...NEUTRAL_PARAMS };
+    if (pet.nature) params.sleepScale /= profile(pet.species).sleepiness;
     return createPetMotion({
       caps: capsOf({ anims: look.art.anims, work: look.art.work, workOnly: look.art.workOnly, zoom }),
       mode: buddyMode,
       timeScale,
+      params,
       now: now(),
-      log: log ? (o) => log({ pet: id, ...o }) : null,
+      log: log ? (o) => log({ pet: pet.id, ...o }) : null,
     });
   }
 
@@ -183,13 +195,13 @@ export function createStage(opts: StageOptions): Stage {
       let added = false;
       for (const pet of list) {
         const cur = pets.get(pet.id);
-        if (cur) {
+        if (cur && cur.look.look === pet.look) {
           // 집·별명·크기가 바뀌었을 수 있다 (파일 감시). 크기가 바뀌면 배율과 움직임(걷는 속도)을 다시 만든다
           const zoom = zoomOf(pet.size, cur.look.art.body);
-          if (zoom !== cur.zoom) {
+          if (zoom !== cur.zoom || pet.nature !== cur.pet.nature || pet.species !== cur.pet.species) {
             cur.zoom = zoom;
             cur.body = { w: cur.look.art.body.w * zoom, h: cur.look.art.body.h * zoom };
-            cur.motion = makeMotion(pet.id, cur.look, zoom);
+            cur.motion = makeMotion(pet, cur.look, zoom);
           }
           cur.pet = { ...pet, home: { ...pet.home } };
           continue;
@@ -200,13 +212,14 @@ export function createStage(opts: StageOptions): Stage {
           opts.onArtMissing(pet);
           continue;
         }
+        if (held === pet.id) release(pet.id);
         const zoom = zoomOf(pet.size, look.art.body);
         pets.set(pet.id, {
           pet: { ...pet, home: { ...pet.home } },
           look,
           zoom,
           body: { w: look.art.body.w * zoom, h: look.art.body.h * zoom },
-          motion: makeMotion(pet.id, look, zoom),
+          motion: makeMotion(pet, look, zoom),
           roam: { x: 0, y: 0 },
           nudge: { x: 0, y: 0 },
           pos: { x: 0, y: 0 },
@@ -214,6 +227,7 @@ export function createStage(opts: StageOptions): Stage {
           play: null,
           phase: null,
           held: false,
+          care: null,
         });
         sendSheets(look);
         added = true;
@@ -235,6 +249,7 @@ export function createStage(opts: StageOptions): Stage {
 
     setVisible(on) {
       visible = on;
+      if (!on) for (const p of pets.values()) p.care = null;
     },
 
     setState(state, promptAt) {
@@ -253,23 +268,66 @@ export function createStage(opts: StageOptions): Stage {
       win.hoverTick(held != null, opts.ghost());
       if (size.w <= 0 || size.h <= 0) return; // 아직 따라갈 창이 없다
       if (needBurst) burst();
+      const cursor = opts.cursor?.() ?? null;
+      const positions = drawOrder().map((p) => ({ id: p.pet.id, x: p.pos.x + p.body.w / 2, y: p.pos.y + p.body.h / 2 }));
       for (const id of order) {
         const p = pets.get(id);
         if (!p) continue;
-        if (p.motion) {
-          const out = p.motion.tick({ now: t, agent, box: roamBox(spotOf(p), p.body, size), visible });
+        if (p.pet.nature === "quirky" && p.motion) {
+          const axes = axesAt("quirky", id, t);
+          const key = Object.values(axes).join(",");
+          if (key !== p.quirkKey) {
+            const params = paramsFor(axes);
+            params.sleepScale /= profile(p.pet.species).sleepiness;
+            p.motion.tune(params);
+            p.quirkKey = key;
+          }
+        }
+        if (p.motion && !p.care) {
+          const home = spotOf(p);
+          const local = (s: Spot): Spot => ({ x: s.x - home.x - p.nudge.x - p.body.w / 2, y: s.y - home.y - p.nudge.y - p.body.h / 2 });
+          const out = p.motion.tick({ now: t, agent, box: roamBox(home, p.body, size), visible, company: positions.filter((s) => s.id !== id).map(local), cursor: cursor ? local(cursor) : null });
           p.play = out.act;
           p.phase = out.phase;
           if (!p.held) p.roam = out.roam;
         }
         p.pos = p.held && p.dragPos ? p.dragPos : settle(p);
+        const action = p.care;
+        if (action && !p.held && visible) {
+          const dt = Math.max(0, Math.min(STAGE_RULES.care.maxStepMs, t - action.last));
+          action.last = t;
+          if (action.action === "play" && cursor) action.target = clampInStage(cursor.x - p.body.w / 2, cursor.y - p.body.h / 2, p.body, size);
+          action.target = clampInStage(action.target.x, action.target.y, p.body, size);
+          const dx = action.target.x - p.pos.x, dy = action.target.y - p.pos.y;
+          const distance = Math.hypot(dx, dy);
+          const step = Math.min(distance, dt * STAGE_RULES.care.speedPerZoom * p.zoom);
+          const walking = distance > STAGE_RULES.care.arrivalPx && !!p.look.art.anims.Walk;
+          if (walking) {
+            p.pos = clampInStage(p.pos.x + dx / distance * step, p.pos.y + dy / distance * step, p.body, size);
+            p.play = { anim: "Walk", row: MOTION_RULES.rowOf(dx, dy), mode: "loop", rate: 1 };
+          } else {
+            if (action.eatingAt == null) action.eatingAt = t;
+            const anim = [action.action === "feed" ? "Eat" : "Hop", "Nod", "Idle"].find((a) => p.look.art.anims[a]);
+            if (anim) p.play = { anim, row: 0, mode: "loop", rate: 1 };
+          }
+          const home = spotOf(p);
+          p.nudge = { x: p.pos.x - home.x - p.roam.x, y: p.pos.y - home.y - p.roam.y };
+          p.phase = walking ? "walk" : "fidget";
+          if (t >= action.until || (action.action === "feed" && action.eatingAt != null && t - action.eatingAt >= STAGE_RULES.care.eatMs)) {
+            p.care = null;
+            p.motion?.rehome(t);
+            p.roam = { x: 0, y: 0 };
+            p.nudge = { x: p.pos.x - home.x, y: p.pos.y - home.y };
+          }
+        }
       }
       const nudges = separate(rectsOf(false), STAGE_RULES.arrange.step);
       if (nudges.size) applyNudges(nudges);
       const frame: StageFrame = {
         at: t,
         state: agent,
-        pets: drawOrder().map((p) => ({ id: p.pet.id, look: p.look.look, zoom: p.zoom, x: p.pos.x, y: p.pos.y, play: p.play, held: p.held })),
+        pets: drawOrder().map((p) => ({ id: p.pet.id, look: p.look.look, zoom: p.zoom, x: p.pos.x, y: p.pos.y, play: p.play, held: p.held,
+          ...(p.care?.action === "feed" ? { berry: { x: p.care.target.x + p.body.w / 2, y: p.care.target.y + p.body.h - 4 } } : {}) })),
       };
       last = frame;
       if (visible) win.sendFrame(frame);
@@ -281,6 +339,7 @@ export function createStage(opts: StageOptions): Stage {
       if (!p) return;
       const t = now();
       if (msg.type === "grab") {
+        p.care = null;
         if (held && held !== msg.id) release(held);
         held = msg.id;
         p.held = true;
@@ -340,6 +399,15 @@ export function createStage(opts: StageOptions): Stage {
       if (!p) return false;
       p.motion?.click(now());
       return true;
+    },
+
+    care(id, action) {
+      const p = pets.get(id);
+      if (!p) return;
+      p.motion?.click(now());
+      if (action === "poke") return;
+      const t = now();
+      p.care = { action, target: clampInStage(p.pos.x + (p.pos.x > size.w / 2 ? -1 : 1) * STAGE_RULES.care.foodOffsetPx, p.pos.y, p.body, size), until: t + STAGE_RULES.care.durationMs, eatingAt: null, last: t };
     },
 
     petIds: () => order.filter((id) => pets.has(id)),

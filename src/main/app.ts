@@ -23,6 +23,13 @@ import { createStage, type Stage } from "./stage";
 import { createStageWindow, type StageWindow } from "./stage-window";
 import { langOf, natureName, petLabel, setLang, t } from "./text";
 import { createTray, type TrayHandle } from "./tray";
+import { readSessionUsages } from "../agents/usage";
+import { careAvailable, createStateEngine } from "../state/core";
+import { stateLine } from "./text";
+import { STATE_RULES } from "../state/rules";
+
+const stateEngine = createStateEngine();
+let lastStateSave = 0;
 
 // POKEBUDDY_LOG 가 있으면 출력(console·stderr)을 그 파일에 이어 쓴다 — pokebuddy 는 펫에 출력 핸들을 넘기지 않는다
 // (Windows 는 Start-Process 로 띄워 넘길 수도 없다. cli/run.js launchPet)
@@ -205,7 +212,17 @@ function showPetMenu(id: string): void {
   const p = stage?.petOf(id);
   if (!p || !stageWin) return;
   const model = { name: petLabel(p), nature: p.nature ? natureName(p.nature) : null, hidden: userHidden };
-  stageWin.popup(petMenu(model, { toggleHidden, quit: () => app.quit() }));
+  const pet = party?.save()?.party.find((pet) => pet.id === id);
+  const availability = (action: "feed" | "play") => {
+    const result = careAvailable(pet!, action, Date.now());
+    return { enabled: result.ok, reason: result.ok ? undefined : t(`care.${result.reason}`, { n: result.seconds }) };
+  };
+  const status = pet ? stateLine(pet) : undefined;
+  stageWin.popup(petMenu({ ...model, ...(pet ? { status, feed: availability("feed"), play: availability("play") } : {}) }, {
+    toggleHidden, quit: () => app.quit(),
+    feed: () => void commands?.dispatcher.dispatch({ cmd: "feed", target: id, from: "menu" }),
+    play: () => void commands?.dispatcher.dispatch({ cmd: "play", target: id, from: "menu" }),
+  }));
 }
 
 // 파티 목록 → 무대. 그림을 받는 동안 기다린다. 트레이 아이콘·이름도 첫 마리에 맞춘다
@@ -218,8 +235,14 @@ async function refreshParty(): Promise<void> {
 
 function stateTick(): void {
   if (!anchor || !stage) return;
-  const { state, promptAt } = anchor.currentInfo();
+  const { state, promptAt, tokenWork } = anchor.currentInfo();
   stage.setState(state, promptAt);
+  const save = party?.save();
+  if (save && party?.isWriter()) {
+    const now = Date.now();
+    stateEngine.tick(save, { now, shown: stageWin?.isVisible() ? stage.petIds() : [], agent: state, tokenWork: !!tokenWork, usages: readSessionUsages(PATHS.state) });
+    if (now - lastStateSave >= STATE_RULES.saveMs && party.persist()) lastStateSave = now;
+  } else stateEngine.reset();
   if (state !== lastState) {
     lastState = state;
     log?.({ state });
@@ -300,6 +323,13 @@ async function main(): Promise<void> {
     window: stageWin,
     art,
     ghost: () => !!config.clickThrough,
+    cursor: () => {
+      const rect = stageWin?.stage();
+      if (!rect || !stageWin?.isVisible()) return null;
+      const p = screen.getCursorScreenPoint();
+      const x = p.x - rect.x, y = p.y - rect.y;
+      return x >= 0 && y >= 0 && x <= rect.w && y <= rect.h ? { x, y } : null;
+    },
     onDrop: (id, home) => party?.setHome(id, home),
     onClick: (id) => void commands?.dispatcher.dispatch({ cmd: "poke", target: id, from: "pet" }),
     onMenu: showPetMenu,
@@ -337,6 +367,7 @@ async function main(): Promise<void> {
     party,
     stage: {
       poke: (id) => !!stage?.poke(id),
+      care: (id, action) => stage?.care(id, action),
       petIds: () => stage?.petIds() ?? [],
       size: () => stageWin?.size() ?? { w: 0, h: 0 },
       visible: () => !!stageWin?.isVisible(),

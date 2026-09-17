@@ -2,9 +2,9 @@
 //
 // 게임 숫자(친밀도·기분·쿨다운)는 여기 없다 — state 모듈의 규칙표에. 여기는 save.json 의 모양을 채우는 기본값과
 // 파일 IO 의 재시도·TTL 만. 숫자는 전부 자리표시자 — 써 보며 고친다.
-// 성격·에이전트·보낸 이 목록은 타입(shared/types.ts)의 유니언을 런타임에 검사하기 위한 사본 —
-//   [리팩토링 대상] data/natures.json 이 생기면 성격 목록은 dex 모듈이 소유하고 여기서는 빌려 쓴다
+// 성격 검증은 dex가 소유. 에이전트·보낸 이 목록은 공유 타입의 런타임 검사
 import type { AgentName, CommandSource, NatureId } from "../shared/types.js";
+import { isNatureId as dexNatureId } from "../dex/natures";
 
 export const SAVE_RULES = {
   version: 2 as const, // save.json 스키마 버전 (v). 1 은 읽어서 이전한다
@@ -31,20 +31,11 @@ export const SAVE_RULES = {
   },
 };
 
-// 원작 25개 성격 — shared/types.ts NatureId 와 같은 목록. 저장 파일의 값 검증용
-export const NATURE_IDS: readonly NatureId[] = [
-  "hardy", "lonely", "brave", "adamant", "naughty",
-  "bold", "docile", "relaxed", "impish", "lax",
-  "timid", "hasty", "serious", "jolly", "naive",
-  "modest", "mild", "quiet", "bashful", "rash",
-  "calm", "gentle", "sassy", "careful", "quirky",
-];
-
 export const AGENT_NAMES: readonly AgentName[] = ["claude", "codex", "gemini"];
 
 export const COMMAND_SOURCES: readonly CommandSource[] = ["menu", "tray", "settings", "cli", "vscode", "pet"];
 
-export const isNatureId = (v: unknown): v is NatureId => typeof v === "string" && (NATURE_IDS as readonly string[]).includes(v);
+export const isNatureId = (v: unknown): v is NatureId => typeof v === "string" && dexNatureId(v);
 export const isAgentName = (v: unknown): v is AgentName => typeof v === "string" && (AGENT_NAMES as readonly string[]).includes(v);
 export const isCommandSource = (v: unknown): v is CommandSource =>
   typeof v === "string" && (COMMAND_SOURCES as readonly string[]).includes(v);

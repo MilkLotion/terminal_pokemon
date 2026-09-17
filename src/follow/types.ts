@@ -59,6 +59,7 @@ export interface HostInfo {
 export interface StateInfo {
   state: AgentState;
   promptAt: number | null;
+  tokenWork?: boolean;
 }
 
 // 헬퍼 실행 명령 — Electron 을 모른다. serve 는 줄 단위로 계속 답하는 방식(Windows ps1 -Serve)

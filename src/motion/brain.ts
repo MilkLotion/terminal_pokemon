@@ -12,7 +12,7 @@
 import type { Play, StageState } from "../shared/stage";
 import { MOTION_RULES } from "./rules";
 import type { MotionMode, MotionRules, Range } from "./rules";
-import type { MotionInput, MotionOut, Phase, RoamBox } from "./types";
+import type { MotionInput, MotionOut, Phase, RoamBox, MotionParams } from "./types";
 
 export interface BrainOptions {
   have: Set<string>; // 보유 동작 이름
@@ -24,6 +24,7 @@ export interface BrainOptions {
   timeScale?: number; // 시간을 한꺼번에 줄인다 — 시험용 (POKEBUDDY_BUDDY_TIMESCALE)
   rng?: () => number; // [0, 1) — 시험에서 고정한다
   rules?: MotionRules; // 배율이 곱해진 규칙표
+  pulls?: Pick<MotionParams, "socialPull" | "cursorPull">;
 }
 
 // brain 의 tick 입력 — PetMotion 입력에 마지막 사용자 활동 시각을 더한 것 (pet-motion 이 관리)
@@ -32,6 +33,7 @@ export interface BrainInput extends MotionInput {
 }
 
 export interface Brain {
+  tune(rules: MotionRules, pulls: Pick<MotionParams, "socialPull" | "cursorPull">): void;
   tick(input: BrainInput): MotionOut;
   pickup(now: number): void;
   drag(dx: number, dy: number): void;
@@ -59,6 +61,7 @@ export function createBrain({
   timeScale = 1,
   rng = Math.random,
   rules = MOTION_RULES,
+  pulls = { socialPull: 0, cursorPull: 0 },
 }: BrainOptions): Brain {
   const { WALK, MOVES, FIDGET_ROWS, WORK_ROWS, LOOK_AROUND, SCALED, rowOf, isSignal } = rules;
   const T = {
@@ -86,7 +89,7 @@ export function createBrain({
       walkChance: rules.RHYTHM.work.walkChance,
     },
   };
-  const M = rules.MODES[mode] ?? rules.MODES.on;
+  let M = rules.MODES[mode] ?? rules.MODES.on;
   const between = ([lo, hi]: Range): number => lo + rng() * (hi - lo);
   const first = (list: readonly string[]): string | null => list.find((a) => have.has(a)) ?? null;
   // 부르는 쪽이 비어 있지 않은 목록만 준다
@@ -126,6 +129,7 @@ export function createBrain({
   let heldUntil = 0; // 집어 든 직후 아파하는 동작이 끝나는 시각
   let dragAcc = { x: 0, y: 0 }; // 마지막으로 방향을 바꾼 뒤 끈 거리
   let wasVisible = true;
+  let surroundings: Pick<MotionInput, "company" | "cursor"> = {};
 
   // 쉬는 틈을 연다 — 다음 행동 시각과, 한가할 때는 그 사이 제자리 동작 시각들.
   // 걸어온 쪽 보기가 끝난 뒤를 칸(동작 최대 길이 + 여유)으로 나눠, 칸마다 할지 말지와 칸 안의 시각을 뽑는다.
@@ -156,6 +160,23 @@ export function createBrain({
   // 집 중심으로 뽑으면 집 근처만 맴돈다 (1540px 창에서 왼쪽 절반에 머문 시간 0% 실측).
   // 뽑은 곳이 want 보다 가까우면 몇 번 다시 뽑는다 — 끝내 가까우면 그중 가장 먼 곳까지만 걷는다
   function wanderTarget(box: RoamBox, want: number): { x: number; y: number } {
+    const goals: { x: number; y: number; pull: number }[] = [];
+    if (pulls.socialPull && surroundings.company?.length) {
+      const near = [...surroundings.company].sort((a, b) => Math.hypot(a.x - roam.x, a.y - roam.y) - Math.hypot(b.x - roam.x, b.y - roam.y))[0]!;
+      goals.push({ ...near, pull: pulls.socialPull });
+    }
+    if (pulls.cursorPull && surroundings.cursor) goals.push({ ...surroundings.cursor, pull: pulls.cursorPull });
+    if (goals.length && rng() < Math.max(...goals.map((g) => Math.abs(g.pull)))) {
+      const goal = goals[Math.floor(rng() * goals.length)]!;
+      const sign = Math.sign(goal.pull);
+      const dx = (goal.x - roam.x) * sign;
+      const dy = (goal.y - roam.y) * sign;
+      const length = Math.hypot(dx, dy);
+      if (length > 1) {
+        const k = Math.min(want, sign > 0 ? Math.max(0, length - 24) : want) / length;
+        return { x: Math.max(box.minX, Math.min(box.maxX, roam.x + dx * k)), y: Math.max(box.minY, Math.min(box.maxY, roam.y + dy * k)) };
+      }
+    }
     let best = { gx: roam.x, gy: roam.y, len: -1 }; // 첫 표본이 늘 이긴다 (옛 코드의 null 시작과 같다)
     for (let i = 0; i < 4; i++) {
       const gx = box.minX + rng() * (box.maxX - box.minX);
@@ -273,7 +294,8 @@ export function createBrain({
   const out = (): MotionOut => ({ roam: { ...roam }, act, phase, rhythm });
 
   // 한 틱 — 입력: 시각, CLI 상태, 마지막 사용자 활동 시각, 산책 범위(없으면 null), 보이는지
-  function tick({ now, agent, activeAt, box, visible }: BrainInput): MotionOut {
+  function tick({ now, agent, activeAt, box, visible, company, cursor }: BrainInput): MotionOut {
+    surroundings = { company, cursor };
     const working = agent === "running";
     const want: "idle" | "work" = working ? "work" : "idle";
     if (!begun) {
@@ -426,6 +448,17 @@ export function createBrain({
 
   return {
     tick,
+    tune(next, nextPulls) {
+      T.quiet = next.TIMES.quiet * timeScale;
+      T.sleep = next.TIMES.sleep * timeScale;
+      T.reactMin = next.TIMES.reactMin * timeScale;
+      for (const key of ["idle", "work"] as const) {
+        RH[key].pause = scaled("pause", next.RHYTHM[key].pause);
+        RH[key].pace = scaled("pace", next.RHYTHM[key].pace);
+      }
+      M = next.MODES[mode] ?? next.MODES.on;
+      pulls = nextPulls;
+    },
     // 사용자가 집어 들었다 — 걷기·수면 무엇이든 멈추고 아파한다
     pickup(now) {
       phase = "held";

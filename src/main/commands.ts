@@ -1,11 +1,14 @@
 // 커맨드 배선 — dispatcher 를 만들고 무대가 받는 명령을 등록한다. writer 면 mailbox 를 잇는다 (CLI·확장·읽기 전용 펫의 요청).
 // S2 등록: quit · settings.set(hidden · clickThrough · keepVisible) · party.show / party.hide · pet.set(home 만) · poke · snapshot.
-// 밥·놀기·진화·상점은 S3~S4 에서 핸들러와 함께 들어온다. 결과는 문구가 아니라 코드 — 문구는 표면이 만든다
+// S3 밥·놀기·찌르기는 상태 코어와 저장·연출을 연결. 진화·상점은 S4. 결과 문구는 표면이 구성
 import { bridgeMailbox, createDispatcher, type Dispatcher } from "../commands/dispatcher";
 import type { MailServer } from "../save/mailbox";
 import type { Command, CommandResult, Mode } from "../shared/types";
 import type { Size } from "./layout";
 import type { PartySource } from "./party";
+import { care } from "../state/core";
+import type { CareAction } from "../state/types";
+import { send } from "../save/mailbox";
 
 export interface CommandSettings {
   hidden(): boolean;
@@ -20,7 +23,7 @@ export interface CommandContext {
   mode: Mode;
   mailboxDir: string;
   party: PartySource;
-  stage: { poke(id: string): boolean; petIds(): string[]; size(): Size; visible(): boolean };
+  stage: { poke(id: string): boolean; care?(id: string, action: CareAction): void; petIds(): string[]; size(): Size; visible(): boolean };
   settings: CommandSettings;
   quit(): void;
   log?: ((o: Record<string, unknown>) => void) | null;
@@ -92,11 +95,25 @@ export function createCommands(ctx: CommandContext): Commands {
     return { ok: true, reason: "ok", id, home: { dx, dy } };
   });
 
-  // 콕 찌르기 — S2 는 반응 동작만. 친밀도는 S3
-  dispatcher.register("poke", (c) => {
+  for (const action of ["feed", "play", "poke"] as const) dispatcher.register(action, async (c) => {
     const id = target(c);
     if (!id) return { ok: false, reason: "no-pet" };
-    return ctx.stage.poke(id) ? { ok: true, reason: "ok", id } : { ok: false, reason: "no-pet", id };
+    if (ctx.party.kind === "sandbox") return action === "poke" && ctx.stage.poke(id) ? { ok: true, reason: "ok", id } : { ok: false, reason: "sandbox" };
+    if (!ctx.party.isWriter()) {
+      const result = await send(ctx.mailboxDir, c);
+      if (result.ok) ctx.stage.care?.(id, action);
+      return result;
+    }
+    const save = ctx.party.save();
+    if (!save) return { ok: false, reason: "no-pet" };
+    const previous = structuredClone(save);
+    const result = care(save, id, action, Date.now());
+    if (result.ok && !ctx.party.persist()) {
+      Object.assign(save, previous);
+      return { ok: false, reason: "save-failed" };
+    }
+    if (result.ok) ctx.stage.care?.(id, action);
+    return result;
   });
 
   dispatcher.register("snapshot", () => {

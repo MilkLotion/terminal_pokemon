@@ -494,6 +494,10 @@ async function testMailbox(): Promise<void> {
     const r5 = await save.send(dir, { cmd: "poke", from: "pet" }, sendOpts);
     assert.strictEqual(r5.ok, true, "죽지 않고 다음 요청을 받는다");
 
+    const sameTime = Date.now();
+    const simultaneous = await Promise.all(["p1", "p2"].map((target) => save.send(dir, { cmd: "feed", target, from: "cli" }, { ...sendOpts, clock: () => sameTime })));
+    assert.deepStrictEqual(simultaneous.map((r) => r.target), ["p1", "p2"], "동일 시각·명령도 두 요청과 회신이 독립");
+
     // 손으로 둔 요청 — from 을 모르면 cli, target 아닌 값은 버린다
     const before = seen.length;
     save.writeAtomic(path.join(dir, save.requestName(Date.now(), 1, "play")), { cmd: "play", from: "bogus", target: 7, args: [1] });

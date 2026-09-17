@@ -53,5 +53,12 @@
   "shop.points": "포인트 {n}",
   "dex.title": "도감",
   "dex.line": "{name} · {days}일째 · 친밀도 {affinity}/{next}",
-  "log.title": "기록"
+  "log.title": "기록",
+  "state.hungry": "배고픔 · 밥을 주세요",
+  "state.mood": "기분 {mood}",
+  "state.hunger": "배고픔 {n}",
+  "state.evolution": "다음 진화까지 친밀도 {n}",
+  "care.full": "배부름",
+  "care.cooldown": "{n}초 뒤",
+  "care.daily-cap": "오늘은 그만"
 }

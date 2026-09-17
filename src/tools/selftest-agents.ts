@@ -49,6 +49,8 @@ try {
     fs.writeFileSync(path.join(dir, "s1.json"), JSON.stringify({ cli: "claude", state: "idle", at: 1000, usageAt: 1005, usage: { in: 5, out: 6, cacheRead: 7, cacheWrite: 8 } }));
     fs.writeFileSync(path.join(dir, "s2.json"), JSON.stringify({ cli: "codex", state: "running", at: 1001 }));
     fs.writeFileSync(path.join(dir, "bad.json"), "{");
+    fs.writeFileSync(path.join(dir, "negative.json"), JSON.stringify({ usage: { in: -1, out: 0, cacheRead: 0, cacheWrite: 0 } }));
+    fs.writeFileSync(path.join(dir, "infinite.json"), '{"usage":{"in":1e999,"out":0,"cacheRead":0,"cacheWrite":0}}');
     const list = agents.readSessionUsages(dir);
     assert.strictEqual(list.length, 1);
     assert.strictEqual(some(list[0]).sessionId, "s1");
@@ -68,10 +70,14 @@ try {
     r = agents.deltaSince(cur2, r.seen);
     assert.deepStrictEqual(r.delta, { in: 40, out: 20, cacheRead: 0, cacheWrite: 0 }); // a 130−100 + b 10, out 60−50 + 10
     assert.deepStrictEqual(Object.keys(r.perSession).sort(), ["a", "b"]);
-    // 세션 a 가 사라지면 seen 에서도 빠진다
+    // 일시적으로 못 읽은 세션의 기준점도 남겨 중복 적립 방지
     r = agents.deltaSince(cur2.slice(1), r.seen);
-    assert.deepStrictEqual(Object.keys(r.seen), ["b"]);
+    assert.deepStrictEqual(Object.keys(r.seen).sort(), ["a", "b"]);
     assert.strictEqual(agents.tokensOf(r.delta), 0);
+    r = agents.deltaSince(cur2, r.seen);
+    assert.strictEqual(agents.tokensOf(r.delta), 0, "다시 읽힌 누적값은 재적립하지 않음");
+    r = agents.deltaSince([{ ...cur2[0]!, usage: { ...cur2[0]!.usage, in: 135 } }], r.seen);
+    assert.strictEqual(agents.tokensOf(r.delta), 5, "복구 후 새 사용량만 적립");
   });
 
   ok("registry: 세 에이전트, 사용량 출처", () => {

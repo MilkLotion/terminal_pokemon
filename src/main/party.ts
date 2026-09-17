@@ -16,6 +16,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomNature } from "../dex/natures";
+import { profile } from "../dex/species";
 import * as mailbox from "../save/mailbox";
 import { SAVE_RULES } from "../save/rules";
 import * as store from "../save/store";
@@ -51,6 +52,7 @@ export interface PartySource {
   setHome(id: string, home: Home): void; // 놓은 자리 — writer 는 파일, reader 는 mailbox, 샌드박스는 config.json
   setShown(id: string, shown: boolean): Promise<CommandResult>;
   save(): SaveV2 | null; // snapshot 용 (샌드박스는 null)
+  persist(): boolean; // 상태 모듈이 바꾼 저장 — 실제 lock 소유권 확인 뒤 쓰기
   onChange(cb: () => void): () => void; // 목록·집이 바뀌었다 (파일 감시 · 역할 전환 · begin)
   onRole(cb: (isWriter: boolean) => void): () => void;
   stop(): void;
@@ -98,6 +100,7 @@ export function nextPetId(party: Pet[]): string {
 // 첫 실행 — 스타터 한 마리를 파티에 넣고 그 종을 해금 목록에 더한다. 성격은 무작위 (옛 game/index.js start 의 자리)
 export function starterInto(save: SaveV2, species: string, now: number, rng: () => number = Math.random): Pet {
   const pet = store.emptyPet({ id: nextPetId(save.party), species, now, nature: randomNature(rng).id });
+  pet.mood = profile(species).moodBase;
   save.party.push(pet);
   if (!save.unlocked.includes(species)) save.unlocked.push(species);
   return pet;
@@ -165,6 +168,10 @@ export function createSaveParty(opts: SavePartyOptions): PartySource {
 
   function persist(): boolean {
     if (!amWriter || !state) return false;
+    if (!writer.isMine(paths.saveLock, pid)) {
+      resign();
+      return false;
+    }
     const ok = store.write(paths.save, state);
     if (!ok) log?.({ party: "save-write-failed" });
     return ok;
@@ -267,6 +274,7 @@ export function createSaveParty(opts: SavePartyOptions): PartySource {
 
   // writer 를 그만둔다 — lock 을 놓고 읽기 전용으로. 다른 펫(독립 펫)에 자리를 내줄 때
   function resign(): void {
+    if (amWriter && state && writer.isMine(paths.saveLock, pid)) store.write(paths.save, state);
     if (amWriter) writer.release(paths.saveLock, pid);
     amWriter = false;
     cacheKey = null;
@@ -298,7 +306,7 @@ export function createSaveParty(opts: SavePartyOptions): PartySource {
     kind: "save",
     pets: () => (state ? shownFor(state, mode).map(toPartyPet) : []),
     all: () => (state ? state.party.map(toPartyPet) : []),
-    isWriter: () => amWriter,
+    isWriter: () => amWriter && writer.isMine(paths.saveLock, pid),
     needsStarter: () => amWriter && (!state || state.party.length === 0),
     begin(species) {
       if (!amWriter) return false;
@@ -328,6 +336,7 @@ export function createSaveParty(opts: SavePartyOptions): PartySource {
       return { ok: true, reason: "ok", id, shown };
     },
     save: () => state,
+    persist,
     onChange(cb) {
       changeCbs.add(cb);
       return () => changeCbs.delete(cb);
@@ -337,6 +346,7 @@ export function createSaveParty(opts: SavePartyOptions): PartySource {
       return () => roleCbs.delete(cb);
     },
     stop() {
+      if (amWriter) persist();
       closed = true;
       if (timer) clearInterval(timer);
       timer = null;
@@ -379,6 +389,7 @@ export function createSandboxParty({ config, saveConfig }: SandboxPartyOptions):
     },
     setShown: async (id) => ({ ok: false, reason: "not-writer", id }),
     save: () => null,
+    persist: () => false,
     onChange(cb) {
       changeCbs.add(cb);
       return () => changeCbs.delete(cb);

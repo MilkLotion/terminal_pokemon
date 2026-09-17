@@ -55,6 +55,7 @@ export function createPetMotion({
     timeScale,
     rng,
     rules,
+    pulls: params,
   });
 
   let lastNow: number | null = bornAt ?? null; // 마지막으로 본 시각 — now 를 안 주는 state·focus 의 기준
@@ -117,6 +118,7 @@ export function createPetMotion({
 
   return {
     state,
+    tune: (next) => brain.tune(applyParams(next, MOTION_RULES), next),
     focus,
     tick,
     pickup(now) {

@@ -184,7 +184,7 @@ function status(petArg) {
       const pets = save.party.map((p) => {
         const n = nature(p.nature);
         const natureLabel = (n && (n.name[lang] || n.name.ko)) || p.nature;
-        return `${p.nick ?? petName(p.species, lang)}(${natureLabel} · ${p.shown ? "보임" : "숨김"} · 친밀도 ${p.affinity})`;
+        return `${p.nick ?? petName(p.species, lang)}(${natureLabel} · ${p.shown ? "보임" : "숨김"} · 친밀도 ${Math.floor(p.affinity)} · ${i18n.t("state.hunger", { n: Math.round(p.hunger) })} · ${i18n.t("state.mood", { mood: i18n.moodWord(p.mood) })})`;
       });
       if (pets.length) say(`  ${pets.join(", ")}`);
     }

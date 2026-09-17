@@ -33,6 +33,9 @@ export interface MotionInput {
   agent: StageState;
   box: RoamBox | null;
   visible: boolean;
+  // 집·밀어내기를 뺀 산책 좌표 — 중립이면 입력이 있어도 사용하지 않음
+  company?: { x: number; y: number }[];
+  cursor?: { x: number; y: number } | null;
 }
 
 export type Phase = "rest" | "walk" | "look" | "fidget" | "work" | "sleep" | "wake" | "react" | "react-yield" | "held" | "yield";
@@ -45,6 +48,7 @@ export interface MotionOut {
 }
 
 export interface PetMotion {
+  tune(params: MotionParams): void;
   tick(input: MotionInput): MotionOut;
   // 옛 body.js state — 활동 bump 규칙 포함. promptAt 은 초 단위. now 를 안 주면 마지막 tick 의 now 로 친다
   state(agent: StageState, promptAt: number | null, now?: number): void;

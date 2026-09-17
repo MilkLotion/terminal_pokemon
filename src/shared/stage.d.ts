@@ -45,6 +45,7 @@ export interface Play {
 
 // 무대 위 마리 하나 — x·y 는 무대 안 좌표(DIP)의 "몸" 좌상단. 그림은 몸 칸 가운데에 맞춰 렌더러가 그린다
 export interface StagePet {
+  berry?: { x: number; y: number };
   id: string;
   look: string;
   zoom: number; // 도트 배율 (Pet.size 를 그림 크기로 가둔 값)

@@ -27,6 +27,21 @@ export const isNatureId = (id: string, opts?: DexOptions): id is NatureId => nat
 // 축 값 — 모르는 id 면 전부 0. 항상 새 객체
 export const axesOf = (id: string, opts?: DexOptions): Record<Axis, AxisValue> => ({ ...(nature(id, opts)?.axes ?? NEUTRAL_AXES) });
 
+export const QUIRK_RULES = { periodMs: 90_000, durationMs: 10_000 };
+
+// 변덕은 마리별로 어긋난 주기에 한 축이 잠깐 바뀜 — 시각 주입, 저장·재시작에도 같은 결과
+export function axesAt(id: string, petId: string, now: number): Record<Axis, AxisValue> {
+  const axes = axesOf(id);
+  if (id !== "quirky") return axes;
+  let seed = 0;
+  for (const char of petId) seed = (Math.imul(seed, 31) + char.charCodeAt(0)) >>> 0;
+  const shifted = now + seed % QUIRK_RULES.periodMs;
+  if (shifted % QUIRK_RULES.periodMs >= QUIRK_RULES.durationMs) return axes;
+  const cycle = Math.floor(shifted / QUIRK_RULES.periodMs);
+  axes[AXES[(seed + cycle) % AXES.length]!] = cycle % 2 ? -1 : 1;
+  return axes;
+}
+
 // 무작위 하나 — rng 는 [0, 1) 을 돌려주는 함수 (시험에서 고정)
 export function randomNature(rng: () => number = Math.random, opts?: DexOptions): Nature {
   const list = table(opts);

@@ -9,6 +9,9 @@ export interface PetMenuModel {
   name: string;
   nature: string | null; // 성격의 화면 이름 — 세션 샌드박스 펫처럼 없으면 이름만
   hidden: boolean;
+  status?: string;
+  feed?: { enabled: boolean; reason?: string };
+  play?: { enabled: boolean; reason?: string };
 }
 export interface TrayMenuModel {
   name: string;
@@ -20,6 +23,8 @@ export interface MenuActions {
   quit(): void;
   toggleGhost?(): void;
   openConfig?(): void;
+  feed?(): void;
+  play?(): void;
 }
 
 // 첫 줄 — "이브이 · 용감". 성격이 없으면 이름만
@@ -28,7 +33,9 @@ export const petLine = (model: Pick<PetMenuModel, "name" | "nature">): string =>
 
 export function petMenu(model: PetMenuModel, act: MenuActions): MenuItemConstructorOptions[] {
   return [
-    { label: petLine(model), enabled: false },
+    { label: [petLine(model), model.status].filter(Boolean).join(" · "), enabled: false },
+    ...(model.feed ? [{ label: t("menu.feed") + (model.feed.reason ? ` · ${model.feed.reason}` : ""), enabled: model.feed.enabled, click: () => act.feed?.() }] : []),
+    ...(model.play ? [{ label: t("menu.play") + (model.play.reason ? ` · ${model.play.reason}` : ""), enabled: model.play.enabled, click: () => act.play?.() }] : []),
     { type: "separator" },
     { label: t(model.hidden ? "menu.show" : "menu.hide"), click: () => act.toggleHidden() },
     { type: "separator" },

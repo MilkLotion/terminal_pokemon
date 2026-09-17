@@ -99,6 +99,16 @@ function paint() {
   if (!frame) return;
   // 그리는 순서 = 배열 순서 (뒤가 위)
   for (const pet of frame.pets) {
+    if (pet.berry) {
+      const x = Math.round(pet.berry.x * dpr), y = Math.round(pet.berry.y * dpr);
+      const unit = Math.max(1, Math.round(3 * dpr));
+      ctx.fillStyle = "#d65073";
+      ctx.fillRect(x - unit * 2, y - unit * 3, unit * 4, unit * 3);
+      ctx.fillStyle = "#78b65a";
+      ctx.fillRect(x, y - unit * 4, unit * 2, unit);
+      ctx.fillStyle = "#ffb3bf";
+      ctx.fillRect(x - unit, y - unit * 2, unit, unit);
+    }
     const art = store.get(pet.look);
     const shown = animators.get(pet.id)?.current();
     if (!art || !shown) continue;

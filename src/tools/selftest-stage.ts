@@ -21,6 +21,12 @@ import * as writer from "../save/writer";
 import type { LookSheets, PointerMsg, StageFrame, StageState } from "../shared/stage";
 import type { AgentState, Mode, Pet, SaveV2 } from "../shared/types";
 import { devSaveState } from "./dev-save";
+import { createStage } from "../main/stage";
+import type { Look, ArtLoader } from "../main/art";
+import type { StageWindow } from "../main/stage-window";
+import type { PartyPet } from "../main/party";
+import { createCommands } from "../main/commands";
+import { send } from "../save/mailbox";
 
 const out = (line: string): void => {
   process.stdout.write(`${line}\n`);
@@ -260,6 +266,97 @@ async function partyTests(): Promise<void> {
   }
 }
 
+async function stageRuntimeTests(): Promise<void> {
+  let now = T0;
+  const sent: string[] = [];
+  const looks = new Map<string, Look>();
+  const art: ArtLoader = {
+    async loadLook(look) {
+      if (!looks.has(look)) {
+        const sheet = sheets.anims.Idle!;
+        const bundle = { ...sheets, look, anims: { Idle: sheet, Walk: sheet, Eat: sheet, Hop: sheet } };
+        looks.set(look, { look, sheets: bundle, art: { ...bundle, kind: "pmd", zoom: 2, work: {}, workOnly: [], credits: [], dex: "1", from: "test" } });
+      }
+      return looks.get(look)!;
+    },
+    cached: (look) => looks.get(look) ?? null,
+  };
+  const win = { sendSheets: (s: LookSheets) => sent.push(s.look), sendInit() {}, sendFrame() {}, sendClickThrough() {}, hoverTick() {}, setPassing() {} } as unknown as StageWindow;
+  const stage = createStage({ mode: "companion", index: 0, buddyMode: "on", timeScale: 1, window: win, art, ghost: () => false, cursor: () => ({ x: 100, y: 100 }), onDrop() {}, onClick() {}, onMenu() {}, onArtMissing() { throw new Error("그림 누락"); }, now: () => now });
+  const pet: PartyPet = { id: "p1", species: "eevee", look: "eevee", size: 2, nature: "hardy", home: { dx: -24, dy: -60 }, shown: true, nick: null };
+  stage.setStage({ x: 0, y: 0, w: 800, h: 600 }, { w: 800, h: 600 }, false);
+  stage.setVisible(true);
+  await stage.setParty([pet]);
+  stage.tick();
+  eq(stage.lastFrame()?.pets[0]?.look, "eevee", "무대가 첫 그림을 사용");
+  stage.pointer({ type: "grab", id: "p1", x: 0, y: 0 });
+  await stage.setParty([{ ...pet, species: "umbreon", look: "umbreon" }]);
+  stage.tick();
+  eq(stage.lastFrame()?.pets[0]?.look, "umbreon", "같은 id 의 그림 교체 반영");
+  eq(stage.heldId(), null, "그림 교체 중 들고 있던 상태 해제");
+  eq(sent, ["eevee", "umbreon"], "교체된 시트를 전송");
+  const oldX = stage.lastFrame()!.pets[0]!.x;
+  stage.care("p1", "feed");
+  for (let n = 0; n < 20; n++) { now += 40; stage.tick(); }
+  ok(stage.lastFrame()!.pets[0]!.x < oldX, "먹이 쪽으로 걸어감");
+  ok(stage.lastFrame()!.pets[0]!.berry, "먹이 좌표가 프레임에 있음");
+  for (let n = 0; n < 90; n++) { now += 40; stage.tick(); }
+  ok(!stage.lastFrame()!.pets[0]!.berry, "먹은 뒤 열매 제거");
+  stage.care("p1", "play");
+  const before = stage.lastFrame()!.pets[0]!.x;
+  for (let n = 0; n < 25; n++) { now += 40; stage.tick(); }
+  ok(stage.lastFrame()!.pets[0]!.x < before, "놀기는 커서를 따라감");
+  stage.setVisible(false);
+  stage.setVisible(true);
+  now += 40; stage.tick();
+  ok(stage.lastFrame()!.pets[0]!.x >= 0, "숨김 후에도 무대 안에 있음");
+  await stage.setParty([]);
+  stage.tick();
+  eq(stage.petIds(), [], "빈 파티에서 무대 제거");
+
+  const paths = pathsIn(tmpDir("lost-writer"));
+  store.write(paths.save, devSaveState(["eevee"], { now: T0 }));
+  const party = createSaveParty({ paths, mode: "companion", savedWindows: () => ({}) });
+  const other = spawnIdle();
+  try {
+    fs.writeFileSync(paths.saveLock, String(other.pid));
+    ok(!party.isWriter(), "잠금 상실을 즉시 인식");
+    const original = fs.readFileSync(paths.save, "utf8");
+    party.save()!.points = 999;
+    ok(!party.persist(), "잠금을 잃은 프로세스의 쓰기 거절");
+    eq(fs.readFileSync(paths.save, "utf8"), original, "다른 writer 의 저장을 덮지 않음");
+  } finally { party.stop(); other.kill(); }
+
+  const commandPaths = pathsIn(tmpDir("care-commands"));
+  const initial = devSaveState(["eevee"], { now: T0 });
+  initial.party[0]!.hunger = 80;
+  store.write(commandPaths.save, initial);
+  const source = createSaveParty({ paths: commandPaths, mode: "companion", savedWindows: () => ({}) });
+  let animations = 0;
+  const commands = createCommands({ mode: "companion", mailboxDir: commandPaths.mailbox, party: source,
+    stage: { poke: () => true, care: () => void animations++, petIds: () => ["p1"], size: () => ({ w: 800, h: 600 }), visible: () => true },
+    settings: { hidden: () => false, setHidden() {}, clickThrough: () => false, setClickThrough() {}, keepVisible: () => true, setKeepVisible() {} }, quit() {},
+  });
+  try {
+    commands.setWriter(true);
+    const fed = await send(commandPaths.mailbox, { cmd: "feed", target: "p1", from: "cli" });
+    ok(fed.ok, "mailbox → dispatcher → 상태 → 저장 왕복");
+    eq(store.read(commandPaths.save, { repair: false }).state!.party[0]!.hunger, 40, "밥 효과가 디스크에 저장");
+    eq(animations, 1, "저장 성공 뒤 연출 요청");
+    const again = await commands.dispatcher.dispatch({ cmd: "feed", target: "p1", from: "menu" });
+    eq(again.reason, "cooldown", "중복 밥 거절");
+    eq(animations, 1, "거절된 명령은 연출하지 않음");
+    const old = structuredClone(source.save());
+    // 저장 경로를 디렉터리로 바꿔 쓰기 실패 재현 — 임시 폴더 안에서만
+    fs.unlinkSync(commandPaths.save);
+    fs.mkdirSync(commandPaths.save);
+    const failed = await commands.dispatcher.dispatch({ cmd: "play", target: "p1", from: "menu" });
+    eq(failed.reason, "save-failed", "저장 실패를 성공으로 응답하지 않음");
+    eq(source.save(), old, "저장 실패 시 돌봄·보상 롤백");
+    eq(animations, 1, "저장 실패 시 연출하지 않음");
+  } finally { commands.stop(); source.stop(); }
+}
+
 // ── anchor — 가짜 헬퍼로 상태기 (Windows 는 셸 스크립트를 execFile 로 못 돌려 건너뛴다) ──
 async function anchorTests(): Promise<void> {
   if (process.platform === "win32") {
@@ -339,6 +436,7 @@ async function anchorTests(): Promise<void> {
 (async () => {
   try {
     await partyTests();
+    await stageRuntimeTests();
     await anchorTests();
     out(`통과 (${passed}건)`);
   } catch (e) {

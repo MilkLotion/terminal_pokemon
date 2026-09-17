@@ -53,5 +53,12 @@
   "shop.points": "{n} pts",
   "dex.title": "Pokédex",
   "dex.line": "{name} · day {days} · Bond {affinity}/{next}",
-  "log.title": "Log"
+  "log.title": "Log",
+  "state.hungry": "Hungry · time to eat",
+  "state.mood": "Mood: {mood}",
+  "state.hunger": "Hunger: {n}",
+  "state.evolution": "{n} affinity to next evolution",
+  "care.full": "Full",
+  "care.cooldown": "In {n} seconds",
+  "care.daily-cap": "Enough for today"
 }
