@@ -1,6 +1,6 @@
 <div align="center">
 
-# termimon
+# pokebuddy
 
 **터미널 위에 떠 있는 포켓몬 펫**
 
@@ -21,38 +21,38 @@ Claude Code · Codex CLI · Gemini CLI 안에서 띄우면 그 CLI 가 일하는
 ## 설치
 
 ```bash
-npm install -g termimon
-termimon setup
+npm install -g pokebuddy
+pokebuddy setup
 ```
 
 `setup` 은 처음 한 번만 실행한다. 바꾸기 전에 백업을 남기고, 여러 번 실행해도 결과가 같다.
 
-- **상태 훅** — 쓰고 있는 CLI(claude · codex · gemini)마다 `termimon-state.cjs` 를 등록
+- **상태 훅** — 쓰고 있는 CLI(claude · codex · gemini)마다 `pokebuddy-state.cjs` 를 등록
 - **탭 구분 확장** — VS Code 계열 에디터에 설치 (에디터 CLI 를 찾았을 때만)
-- **데이터 폴더** — `~/.claude/termimon` (설정·위치·그림 캐시)
+- **데이터 폴더** — `~/.claude/pokebuddy` (설정·위치·그림 캐시)
 
-미리 보기는 `termimon setup --dry-run`, 되돌리기는 `termimon uninstall [--purge]`.
+미리 보기는 `pokebuddy setup --dry-run`, 되돌리기는 `pokebuddy uninstall [--purge]`.
 npm 게시 전에는 `npm pack` 으로 만든 `.tgz` 를 설치한다 — [배포](docs/guide.md#배포-관리자용).
-git clone 으로 쓰려면 [저장소에서 바로 쓰기](docs/guide.md#저장소에서-바로-쓰기-개발용), 예전 `pkmon` 을 쓰고 있었다면 [pkmon 에서 옮겨 오기](docs/guide.md#pkmon-에서-옮겨-오기).
+git clone 으로 쓰려면 [저장소에서 바로 쓰기](docs/guide.md#저장소에서-바로-쓰기-개발용), 예전 `termimon` · `pkmon` 을 쓰고 있었다면 [옛 이름에서 옮겨 오기](docs/guide.md#옛-이름에서-옮겨-오기).
 
 ## 사용
 
 일반 터미널에서는 그대로 치고, CLI LLM 안에서는 입력창에 `!` 를 붙인다.
 
 ```bash
-termimon eevee               # 일반 터미널 — 셸이 끝나면 사라진다
-!termimon eevee              # CLI LLM 안 — 그 CLI 가 끝나면 사라진다
-!termimon zapdos+pikachu     # 여러 마리 — 겹치지 않게 옆으로 놓인다
-!termimon eevee dot=3        # 떠 있는 펫이면 옵션만 바꿔 같은 자리에 다시 띄운다
-!termimon stop               # 내리기 — 여러 마리면 골라서
+pokebuddy eevee               # 일반 터미널 — 셸이 끝나면 사라진다
+!pokebuddy eevee              # CLI LLM 안 — 그 CLI 가 끝나면 사라진다
+!pokebuddy zapdos+pikachu     # 여러 마리 — 겹치지 않게 옆으로 놓인다
+!pokebuddy eevee dot=3        # 떠 있는 펫이면 옵션만 바꿔 같은 자리에 다시 띄운다
+!pokebuddy stop               # 내리기 — 여러 마리면 골라서
 ```
 
 | 명령 | 하는 일 |
 |---|---|
-| `termimon <펫> [이름=값 ...]` | 이 세션에 펫을 더한다. 떠 있는 펫 이름이면 그 펫을 바꾼다 |
-| `termimon stop [펫 ...\|all]` | 이 세션의 펫을 내린다. 일반 터미널에서 여러 마리면 체크리스트로 고른다 |
-| `termimon status [펫]` | 훅 등록, 세션 판정, 떠 있는 펫, PMD 저작자를 한 번에 보여 준다 |
-| `termimon setup` · `termimon uninstall` | 설치 · 되돌리기 |
+| `pokebuddy <펫> [이름=값 ...]` | 이 세션에 펫을 더한다. 떠 있는 펫 이름이면 그 펫을 바꾼다 |
+| `pokebuddy stop [펫 ...\|all]` | 이 세션의 펫을 내린다. 일반 터미널에서 여러 마리면 체크리스트로 고른다 |
+| `pokebuddy status [펫]` | 훅 등록, 세션 판정, 떠 있는 펫, PMD 저작자를 한 번에 보여 준다 |
+| `pokebuddy setup` · `pokebuddy uninstall` | 설치 · 되돌리기 |
 
 펫 이름은 [codex-pokepets 의 `pets/` 폴더명](https://github.com/dnnyngyen/codex-pokepets/tree/main/pets)을 쓴다 (`pikachu` · `gengar-3d` · `rotom-wash`).
 없는 이름은 그 펫만 건너뛰고 비슷한 이름을 알려 준다.
@@ -88,7 +88,7 @@ termimon eevee               # 일반 터미널 — 셸이 끝나면 사라진�
 | `keep=` | `on` · `off` | 다른 앱을 봐도 숨지 않기 |
 | `click=` | `on` · `off` | 펫 위 클릭을 아래 터미널로 통과 |
 
-같은 값을 환경변수 `TERMIMON_*` 로도 줄 수 있다. 전체 목록과 설정 파일은 [설명서 — 설정](docs/guide.md#설정).
+같은 값을 환경변수 `POKEBUDDY_*` 로도 줄 수 있다. 전체 목록과 설정 파일은 [설명서 — 설정](docs/guide.md#설정).
 
 ## 단축키
 
@@ -128,7 +128,7 @@ termimon eevee               # 일반 터미널 — 셸이 끝나면 사라진�
 | [언제 보이고 언제 숨는가](docs/guide.md#언제-보이고-언제-숨는가) | z-order 배치, 창 추적 헬퍼, 지원 범위 |
 | [CLI LLM 상태 연동](docs/guide.md#cli-llm-상태-연동) | CLI 별 훅 이벤트와 상태 매핑 |
 | [buddy](docs/guide.md#buddy--돌아다니고-졸고-반응하기) | 산책 · 수면 · 반응 타이밍 |
-| [문제 확인](docs/guide.md#문제-확인) | `termimon status`, 디버그 로그 |
+| [문제 확인](docs/guide.md#문제-확인) | `pokebuddy status`, 디버그 로그 |
 | [배포 (관리자용)](docs/guide.md#배포-관리자용) | `npm pack`, 게시 전 확인 |
 
 ## 라이선스
@@ -136,5 +136,5 @@ termimon eevee               # 일반 터미널 — 셸이 끝나면 사라진�
 코드는 [MIT](LICENSE).
 
 PMD 스프라이트는 [PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab) 기여자들의 작품이며 **CC BY-NC 4.0** 이다.
-저장소에 넣지 않고 실행할 때 사용자 컴퓨터로 받아 캐시만 한다. 펫별 저작자는 `termimon status <펫>` 으로 확인한다.
+저장소에 넣지 않고 실행할 때 사용자 컴퓨터로 받아 캐시만 한다. 펫별 저작자는 `pokebuddy status <펫>` 으로 확인한다.
 포켓몬 권리는 Nintendo · Game Freak · Creatures Inc. 에 있으며, 개인 · 비상업 팬 용도로만 쓴다.

@@ -1,10 +1,10 @@
-// termimon setup / uninstall — 남의 컴퓨터에 설치하는 부분이라 가장 조심스럽게 다룬다.
+// pokebuddy setup / uninstall — 남의 컴퓨터에 설치하는 부분이라 가장 조심스럽게 다룬다.
 //
-//   1. 펫 데이터 폴더   ~/.claude/termimon — 훅은 이 폴더가 없으면 아무것도 안 한다
-//   2. 상태 훅         ~/.claude/scripts/hooks/termimon-state.cjs 복사 + 쓰고 있는 CLI LLM 마다 이벤트 등록
+//   1. 펫 데이터 폴더   ~/.claude/pokebuddy — 훅은 이 폴더가 없으면 아무것도 안 한다
+//   2. 상태 훅         ~/.claude/scripts/hooks/pokebuddy-state.cjs 복사 + 쓰고 있는 CLI LLM 마다 이벤트 등록
 //                      claude settings.json · gemini settings.json · codex hooks.json
 //   3. 에디터 확장      VS Code 계열에 탭 구분 확장 설치 (에디터 CLI 가 있을 때만)
-//   4. 옛 이름(pkmon)   데이터 폴더를 가져오고, 옛 훅 등록·훅 파일·확장·데이터 폴더를 걷는다
+//   4. 옛 이름          termimon·pkmon 데이터 폴더를 가져오고, 옛 훅 등록·훅 파일·확장·데이터 폴더를 걷는다
 //
 // 원칙
 //   - 설정 파일은 백업을 남기고, 이미 있는 항목은 건드리지 않고, 몇 번을 돌려도 결과가 같다
@@ -17,17 +17,17 @@ const path = require("path");
 const { PATHS, LEGACY_HOME_ITEMS, migrateLegacyHome } = require("../config.js");
 
 const PROJECT = path.join(__dirname, "..");
-const HOOK_NAME = "termimon-state.cjs";
+const HOOK_NAME = "pokebuddy-state.cjs";
 const HOOK_SOURCE = path.join(PROJECT, "hooks", HOOK_NAME);
-const EXTENSION_ID = "local.termimon-active-terminal";
-// 옛 이름(pkmon) 시절에 설치한 것 — setup 이 새 이름으로 바꾸고, uninstall 이 함께 지운다
-const LEGACY_HOOK_NAME = "pkmon-state.cjs";
-const LEGACY_EXTENSION_ID = "local.pkmon-active-terminal";
+const EXTENSION_ID = "local.pokebuddy-active-terminal";
+// 옛 이름(termimon·pkmon) 시절에 설치한 것 — setup 이 새 이름으로 바꾸고, uninstall 이 함께 지운다
+const LEGACY_HOOK_NAMES = ["termimon-state.cjs", "pkmon-state.cjs"];
+const LEGACY_EXTENSION_IDS = ["local.termimon-active-terminal", "local.pkmon-active-terminal"];
 
 // Claude Code 는 CLAUDE_CONFIG_DIR 로 설정 폴더를 옮길 수 있다
 const claudeDir = () => process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
 const hookTarget = () => path.join(claudeDir(), "scripts", "hooks", HOOK_NAME);
-const legacyHookTarget = () => path.join(claudeDir(), "scripts", "hooks", LEGACY_HOOK_NAME);
+const legacyHookTargets = () => LEGACY_HOOK_NAMES.map((name) => path.join(claudeDir(), "scripts", "hooks", name));
 
 // 훅을 등록할 CLI — 설정 파일 모양이 셋 다 { hooks: { 이벤트: [{ matcher?, hooks: [{ type: "command", command, … }] }] } } 다.
 //   events   이벤트 → matcher (undefined 면 넣지 않는다 — 모든 경우에 맞는다)
@@ -69,7 +69,7 @@ const TARGETS = [
       AfterAgent: undefined,
       SessionEnd: undefined,
     },
-    handler: (command) => ({ name: "termimon-state", type: "command", command, timeout: 5000 }),
+    handler: (command) => ({ name: "pokebuddy-state", type: "command", command, timeout: 5000 }),
   },
   {
     cli: "codex",
@@ -96,7 +96,7 @@ const CODEX_HOOKS_SINCE = [0, 124, 0];
 const settingsFile = (target) => path.join(target.dir(), target.file);
 
 const isOurs = (hook) => typeof hook?.command === "string" && hook.command.includes(HOOK_NAME);
-const isLegacy = (hook) => typeof hook?.command === "string" && hook.command.includes(LEGACY_HOOK_NAME);
+const isLegacy = (hook) => typeof hook?.command === "string" && LEGACY_HOOK_NAMES.some((name) => hook.command.includes(name));
 
 // 경로에 공백이 있어도(Windows 사용자 이름 등) 깨지지 않게 따옴표로 감싼다.
 // claude 는 인자 없이 — 예전 등록과 같은 모양이라야 이미 등록됨으로 보인다
@@ -203,7 +203,7 @@ function writeSettings(target, data, existed) {
     const mode = existed ? fs.statSync(file).mode & 0o777 : 0o600;
     let backup = null;
     if (existed) {
-      backup = `${link}.termimon-backup-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+      backup = `${link}.pokebuddy-backup-${new Date().toISOString().replace(/[:.]/g, "-")}`;
       fs.copyFileSync(file, backup);
     }
     const tmp = `${file}.${process.pid}.tmp`;
@@ -296,7 +296,7 @@ function editorName(real) {
 
 function vsixFile() {
   const dir = path.join(PROJECT, "vscode-extension");
-  // 지금 이름의 확장만 — 같은 폴더에 남은 옛 이름(pkmon) vsix 를 설치하지 않게
+  // 지금 이름의 확장만 — 같은 폴더에 남은 옛 이름(termimon·pkmon) vsix 를 설치하지 않게
   const prefix = `${EXTENSION_ID.split(".")[1]}-`;
   try {
     const hits = fs.readdirSync(dir).filter((f) => f.startsWith(prefix) && f.endsWith(".vsix")).sort();
@@ -335,13 +335,13 @@ const say = (line = "") => process.stdout.write(`${line}\n`);
 // sudo 로 돌리면 ~/.claude 아래에 root 소유 파일이 생겨, 이후 Claude·펫이 그 파일을 못 고친다
 function refuseRoot(what) {
   if (typeof process.getuid !== "function" || process.getuid() !== 0) return false;
-  say(`termimon ${what} 은 sudo 없이 실행한다 — 관리자 권한으로 만든 파일은 이후 일반 사용자가 고칠 수 없다`);
+  say(`pokebuddy ${what} 은 sudo 없이 실행한다 — 관리자 권한으로 만든 파일은 이후 일반 사용자가 고칠 수 없다`);
   process.exitCode = 1;
   return true;
 }
 
 // Electron 실행 파일을 받아 둔다. 설치 때(postinstall) 못 받았으면(오프라인·--ignore-scripts) 여기서 받는다.
-// 펫을 띄울 때는 받지 않으므로(!termimon 이 그만큼 멈춘다) setup 이 유일한 두 번째 기회다
+// 펫을 띄울 때는 받지 않으므로(!pokebuddy 가 그만큼 멈춘다) setup 이 유일한 두 번째 기회다
 function ensureElectron(dryRun) {
   let dir;
   try {
@@ -365,17 +365,17 @@ function ensureElectron(dryRun) {
     require("electron"); // Electron 44: 실행 파일이 없으면 이 순간 받는다
     say("Electron       준비됨");
   } catch (e) {
-    say(`Electron       받지 못함 (${String(e.message).split("\n")[0]}) — 네트워크를 확인하고 다시 termimon setup`);
+    say(`Electron       받지 못함 (${String(e.message).split("\n")[0]}) — 네트워크를 확인하고 다시 pokebuddy setup`);
     process.exitCode = 1;
   }
 }
 
 function setup({ dryRun = false, editor = true } = {}) {
   if (refuseRoot("setup")) return;
-  say(dryRun ? "termimon setup — 미리 보기 (아무것도 바꾸지 않는다)\n" : "termimon setup\n");
+  say(dryRun ? "pokebuddy setup — 미리 보기 (아무것도 바꾸지 않는다)\n" : "pokebuddy setup\n");
   ensureElectron(dryRun);
 
-  // 0. 옛 이름(pkmon) 데이터 폴더에서 설정·위치·그림 캐시를 가져온다 — 새 폴더를 만드는 1 보다 먼저.
+  // 0. 옛 이름(termimon·pkmon) 데이터 폴더에서 설정·위치·그림 캐시를 가져온다 — 새 폴더를 만드는 1 보다 먼저.
   // 명령을 한 번이라도 실행했으면 config.load 가 이미 가져왔다. 옛 폴더 지우기는 옛 훅·확장을 걷은 뒤 맨 끝에
   if (!dryRun) migrateLegacyHome();
 
@@ -412,7 +412,7 @@ function setup({ dryRun = false, editor = true } = {}) {
     const legacy = removeHooks(read.data, isLegacy);
     const { added, fixed } = addHooks(read.data, t);
     const what = [
-      legacy.length ? `옛 이름(pkmon) 훅 ${legacy.length}개 걷음${dryRun ? " 예정" : ""}` : "",
+      legacy.length ? `옛 이름(termimon·pkmon) 훅 ${legacy.length}개 걷음${dryRun ? " 예정" : ""}` : "",
       added.length ? `이벤트 ${added.length}개 추가${dryRun ? " 예정" : ""}: ${added.join(", ")}` : "",
       fixed.length ? `없는 경로를 가리키던 ${fixed.length}개 고침${dryRun ? " 예정" : ""}: ${fixed.join(", ")}` : "",
     ].filter(Boolean);
@@ -432,8 +432,8 @@ function setup({ dryRun = false, editor = true } = {}) {
   }
 
   // 옛 훅 파일 — 옛 등록을 다 걷었을 때만 지운다. 등록만 남고 파일이 없으면 CLI 이벤트마다 없는 파일을 실행한다
-  const legacyHook = legacyHookTarget();
-  if (fs.existsSync(legacyHook)) {
+  for (const legacyHook of legacyHookTargets()) {
+    if (!fs.existsSync(legacyHook)) continue;
     if (legacyKept) say(`옛 훅 파일     ${legacyHook}  설정에서 옛 등록을 다 걷지 못해 남김`);
     else {
       say(`옛 훅 파일     ${legacyHook}  ${dryRun ? "지울 예정" : "지움"}`);
@@ -470,61 +470,64 @@ function setup({ dryRun = false, editor = true } = {}) {
       }
     }
   }
-  for (const { name, file: cli } of clis) removeLegacyExtension(name, cli, dryRun);
+  for (const { name, file: cli } of clis) removeLegacyExtensions(name, cli, dryRun);
 
-  removeLegacyHome(dryRun);
+  removeLegacyHomes(dryRun);
 
   say();
-  if (dryRun) say("실제로 적용하려면: termimon setup");
-  else if (process.exitCode) say("설치가 덜 끝났다 — 위 메시지를 확인한 뒤 다시 termimon setup");
-  else say("끝. CLI(claude·codex·gemini)를 새로 열고 !termimon eevee 로 띄워 보세요. 일반 터미널에서는 termimon eevee");
+  if (dryRun) say("실제로 적용하려면: pokebuddy setup");
+  else if (process.exitCode) say("설치가 덜 끝났다 — 위 메시지를 확인한 뒤 다시 pokebuddy setup");
+  else say("끝. CLI(claude·codex·gemini)를 새로 열고 !pokebuddy eevee 로 띄워 보세요. 일반 터미널에서는 pokebuddy eevee");
 }
 
-// 옛 이름(pkmon) 확장이 깔려 있으면 지운다 — 두면 옛 데이터 폴더에 창 기록을 계속 쓴다.
+// 옛 이름(termimon·pkmon) 확장이 깔려 있으면 지운다 — 두면 옛 데이터 폴더에 창 기록을 계속 쓴다.
 // 목록으로 먼저 본다 — 없는 확장을 지우면 실패로 끝나 "없음"과 "못 지움"을 가를 수 없다
-function removeLegacyExtension(name, cli, dryRun) {
+function removeLegacyExtensions(name, cli, dryRun) {
   let installed;
   try {
-    installed = runEditor(cli, ["--list-extensions"])
+    const ids = runEditor(cli, ["--list-extensions"])
       .split(/\r?\n/)
-      .some((id) => id.trim().toLowerCase() === LEGACY_EXTENSION_ID);
+      .map((id) => id.trim().toLowerCase());
+    installed = LEGACY_EXTENSION_IDS.filter((id) => ids.includes(id));
   } catch {
     return;
   }
-  if (!installed) return;
-  if (dryRun) {
-    say(`에디터 확장    ${name}: 옛 확장 ${LEGACY_EXTENSION_ID} 제거할 예정`);
-    return;
-  }
-  try {
-    runEditor(cli, ["--uninstall-extension", LEGACY_EXTENSION_ID]);
-    say(`에디터 확장    ${name}: 옛 확장 ${LEGACY_EXTENSION_ID} 제거함`);
-  } catch (e) {
-    say(`에디터 확장    ${name}: 옛 확장 제거 실패 (${String(e.message).split("\n")[0]})`);
+  for (const id of installed) {
+    if (dryRun) {
+      say(`에디터 확장    ${name}: 옛 확장 ${id} 제거할 예정`);
+      continue;
+    }
+    try {
+      runEditor(cli, ["--uninstall-extension", id]);
+      say(`에디터 확장    ${name}: 옛 확장 ${id} 제거함`);
+    } catch (e) {
+      say(`에디터 확장    ${name}: 옛 확장 ${id} 제거 실패 (${String(e.message).split("\n")[0]})`);
+    }
   }
 }
 
-// 옛 이름(pkmon) 데이터 폴더를 지운다 — 가져올 것(LEGACY_HOME_ITEMS)이 새 폴더에 다 있을 때만.
+// 옛 이름(termimon·pkmon) 데이터 폴더를 지운다 — 가져올 것(LEGACY_HOME_ITEMS)이 새 폴더에 다 있을 때만.
 // 가져오기 전에 새 폴더가 먼저 생겨 못 가져왔으면 남기고 알린다
-function removeLegacyHome(dryRun) {
-  const old = PATHS.legacyHome;
-  if (!fs.existsSync(old)) return;
-  if (dryRun && !fs.existsSync(PATHS.home)) {
-    say(`옛 데이터      ${old}  설정·위치·그림 캐시를 ${PATHS.home} 로 가져오고 지울 예정`);
-    return;
-  }
-  const missing = LEGACY_HOME_ITEMS.filter((item) => fs.existsSync(path.join(old, item)) && !fs.existsSync(path.join(PATHS.home, item)));
-  if (missing.length) {
-    say(`옛 데이터      ${old}  남김 — 새 폴더에 없는 것: ${missing.join(", ")} (필요하면 ${PATHS.home} 로 옮긴 뒤 다시 setup)`);
-    return;
-  }
-  say(`옛 데이터      ${old}  ${dryRun ? "지울 예정" : "지움"} (가져올 것은 ${PATHS.home} 에 있음)`);
-  if (dryRun) return;
-  try {
-    fs.rmSync(old, { recursive: true, force: true });
-  } catch (e) {
-    // Windows — 떠 있는 옛 펫이 electron 폴더를 잡고 있다
-    say(`               다 지우지 못함 (${e.code || e.message}) — 떠 있는 옛 펫을 내린 뒤 다시 termimon setup`);
+function removeLegacyHomes(dryRun) {
+  for (const old of PATHS.legacyHomes) {
+    if (!fs.existsSync(old)) continue;
+    if (dryRun && !fs.existsSync(PATHS.home)) {
+      say(`옛 데이터      ${old}  설정·위치·그림 캐시를 ${PATHS.home} 로 가져오고 지울 예정`);
+      continue;
+    }
+    const missing = LEGACY_HOME_ITEMS.filter((item) => fs.existsSync(path.join(old, item)) && !fs.existsSync(path.join(PATHS.home, item)));
+    if (missing.length) {
+      say(`옛 데이터      ${old}  남김 — 새 폴더에 없는 것: ${missing.join(", ")} (필요하면 ${PATHS.home} 로 옮긴 뒤 다시 setup)`);
+      continue;
+    }
+    say(`옛 데이터      ${old}  ${dryRun ? "지울 예정" : "지움"} (가져올 것은 ${PATHS.home} 에 있음)`);
+    if (dryRun) continue;
+    try {
+      fs.rmSync(old, { recursive: true, force: true });
+    } catch (e) {
+      // Windows — 떠 있는 옛 펫이 electron 폴더를 잡고 있다
+      say(`               다 지우지 못함 (${e.code || e.message}) — 떠 있는 옛 펫을 내린 뒤 다시 pokebuddy setup`);
+    }
   }
 }
 
@@ -560,7 +563,7 @@ function hookNotes(target, data, added) {
 
 function uninstall({ dryRun = false, purge = false, editor = true } = {}) {
   if (refuseRoot("uninstall")) return;
-  say(dryRun ? "termimon uninstall — 미리 보기 (아무것도 바꾸지 않는다)\n" : "termimon uninstall\n");
+  say(dryRun ? "pokebuddy uninstall — 미리 보기 (아무것도 바꾸지 않는다)\n" : "pokebuddy uninstall\n");
 
   // 설치할 때 폴더가 없어 건너뛴 CLI 도 본다 — 그 뒤에 설정 파일이 생겼을 수 있다
   for (const t of TARGETS) {
@@ -575,7 +578,7 @@ function uninstall({ dryRun = false, purge = false, editor = true } = {}) {
       process.exitCode = 1;
       continue;
     }
-    const removed = removeHooks(read.data, (h) => isOurs(h) || isLegacy(h)); // 옛 이름(pkmon) 등록도 함께
+    const removed = removeHooks(read.data, (h) => isOurs(h) || isLegacy(h)); // 옛 이름(termimon·pkmon) 등록도 함께
     if (!removed.length) say(`${label}${settingsFile(t)}  등록된 훅 없음`);
     else if (dryRun) say(`${label}이벤트 ${removed.length}개에서 뺄 예정: ${removed.join(", ")}`);
     else {
@@ -598,15 +601,15 @@ function uninstall({ dryRun = false, purge = false, editor = true } = {}) {
       say(`훅 파일        ${target}  ${dryRun ? "지울 예정" : "지움"}`);
       if (!dryRun) fs.rmSync(target, { force: true });
     } else say("훅 파일        없음");
-    const legacyHook = legacyHookTarget();
-    if (fs.existsSync(legacyHook)) {
+    for (const legacyHook of legacyHookTargets()) {
+      if (!fs.existsSync(legacyHook)) continue;
       say(`옛 훅 파일     ${legacyHook}  ${dryRun ? "지울 예정" : "지움"}`);
       if (!dryRun) fs.rmSync(legacyHook, { force: true });
     }
   }
 
   for (const { name, file: cli } of editor ? editorClis() : []) {
-    removeLegacyExtension(name, cli, dryRun);
+    removeLegacyExtensions(name, cli, dryRun);
     if (dryRun) {
       say(`에디터 확장    ${name}: 제거할 예정`);
       continue;
@@ -622,13 +625,13 @@ function uninstall({ dryRun = false, purge = false, editor = true } = {}) {
   if (purge) {
     say(`펫 데이터      ${PATHS.home}  ${dryRun ? "지울 예정" : "지움"} (설정·위치·그림 캐시)`);
     if (!dryRun) fs.rmSync(PATHS.home, { recursive: true, force: true });
-    if (fs.existsSync(PATHS.legacyHome)) {
-      say(`옛 데이터      ${PATHS.legacyHome}  ${dryRun ? "지울 예정" : "지움"}`);
-      if (!dryRun) fs.rmSync(PATHS.legacyHome, { recursive: true, force: true });
+    for (const old of PATHS.legacyHomes.filter((dir) => fs.existsSync(dir))) {
+      say(`옛 데이터      ${old}  ${dryRun ? "지울 예정" : "지움"}`);
+      if (!dryRun) fs.rmSync(old, { recursive: true, force: true });
     }
   } else {
     say(`펫 데이터      ${PATHS.home}  남김 (설정·위치·그림 캐시까지 지우려면 --purge)`);
-    if (fs.existsSync(PATHS.legacyHome)) say(`옛 데이터      ${PATHS.legacyHome}  남김 (--purge 면 함께 지운다)`);
+    for (const old of PATHS.legacyHomes.filter((dir) => fs.existsSync(dir))) say(`옛 데이터      ${old}  남김 (--purge 면 함께 지운다)`);
   }
 }
 
@@ -636,7 +639,7 @@ function uninstall({ dryRun = false, purge = false, editor = true } = {}) {
 // 반환: { file, current, clis: [{ name, used, error?, registered?, total? }] } — used 가 false 면 그 CLI 를 안 쓴다
 function hookInstalled() {
   const file = fs.existsSync(hookTarget());
-  // 업데이트 뒤 훅 파일이 옛 버전인지 — 내용이 번들과 다르면 termimon setup 으로 바꿔야 한다
+  // 업데이트 뒤 훅 파일이 옛 버전인지 — 내용이 번들과 다르면 pokebuddy setup 으로 바꿔야 한다
   const current = file && fs.readFileSync(hookTarget()).equals(fs.readFileSync(HOOK_SOURCE));
   const clis = TARGETS.map((t) => {
     if (!t.always && !fs.existsSync(t.dir())) return { name: t.name, used: false };

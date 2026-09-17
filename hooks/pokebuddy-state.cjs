@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 
-// 펫 상태 기록 — CLI LLM(claude·codex·gemini)의 훅 이벤트를 세션별 상태 파일로 남김 (termimon 의 펫이 읽음)
-// - 펫을 쓰지 않으면(~/.claude/termimon 폴더 없음) 즉시 종료
+// 펫 상태 기록 — CLI LLM(claude·codex·gemini)의 훅 이벤트를 세션별 상태 파일로 남김 (pokebuddy 의 펫이 읽음)
+// - 펫을 쓰지 않으면(~/.claude/pokebuddy 폴더 없음) 즉시 종료
 // - 조상 프로세스(훅 → CLI → 터미널 셸)를 함께 적어, 펫이 자기 터미널 세션만 따라가게 함
 // - stdout·stderr 출력 없음: claude 는 SessionStart·UserPromptSubmit 의 stdout 을 대화 컨텍스트로 넣고,
 //   gemini 는 stdout(비면 stderr)을 훅 결과로 읽는다
 // - codex·gemini 는 훅이 끝나길 기다린다 — 빨리 끝내야 CLI 가 느려지지 않는다
 //
-// 등록한 CLI 는 인자로 받는다 (node termimon-state.cjs --cli gemini). 없으면 claude — 예전 등록은 인자가 없다
+// 등록한 CLI 는 인자로 받는다 (node pokebuddy-state.cjs --cli gemini). 없으면 claude — 예전 등록은 인자가 없다
 
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { execFileSync } = require("child_process");
 
-const TERMIMON_DIR = path.join(os.homedir(), ".claude", "termimon");
-const STATE_DIR = path.join(TERMIMON_DIR, "state");
+const POKEBUDDY_DIR = path.join(os.homedir(), ".claude", "pokebuddy");
+const STATE_DIR = path.join(POKEBUDDY_DIR, "state");
 const STATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const cliArg = process.argv.indexOf("--cli");
@@ -137,8 +137,8 @@ process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => (input += chunk));
 process.stdin.on("end", () => {
   try {
-    // 펫을 한 번도 설정한 적 없으면(~/.claude/termimon 없음) 아무것도 하지 않음
-    if (!fs.existsSync(TERMIMON_DIR)) return process.exit(0);
+    // 펫을 한 번도 설정한 적 없으면(~/.claude/pokebuddy 없음) 아무것도 하지 않음
+    if (!fs.existsSync(POKEBUDDY_DIR)) return process.exit(0);
 
     const data = JSON.parse(input);
     const event = data.hook_event_name;

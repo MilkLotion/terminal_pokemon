@@ -1,7 +1,7 @@
 {
-  "name": "termimon-active-terminal",
-  "displayName": "termimon active terminal",
-  "description": "활성 터미널의 셸 PID를 파일로 알려 termimon 펫이 자기 터미널에서만 보이게 한다",
+  "name": "pokebuddy-active-terminal",
+  "displayName": "pokebuddy active terminal",
+  "description": "활성 터미널의 셸 PID를 파일로 알려 pokebuddy 펫이 자기 터미널에서만 보이게 한다",
   "version": "0.2.0",
   "publisher": "local",
   "license": "MIT",

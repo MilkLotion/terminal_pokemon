@@ -1,5 +1,5 @@
 ﻿# 모든 최상위 창의 고유 ID·소유 앱·위치·크기를 z-order(앞→뒤)로 출력 (Windows)
-# 사용: powershell -NoProfile -File winbounds.ps1 [앱이름]          한 번 출력하고 끝 (termimon status)
+# 사용: powershell -NoProfile -File winbounds.ps1 [앱이름]          한 번 출력하고 끝 (pokebuddy status)
 #       powershell -NoProfile -File winbounds.ps1 -Serve [앱이름]   표준입력으로 한 줄 받을 때마다 한 줄 출력 (펫)
 #   앱이름은 무시된다 — 목록은 언제나 전체다.
 #   받는 쪽이 앵커 앱만 골라 쓰고, 동시에 "내 창보다 앞에 있는 창"을 알아야 가림 판정을 할 수 있다
@@ -26,7 +26,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 
-public class TermimonWin {
+public class PokeBuddyWin {
   public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr lParam);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
@@ -131,16 +131,16 @@ public class TermimonWin {
 "@ -ErrorAction SilentlyContinue
 
 # 컴파일에 실패했으면 바로 끝낸다 — -Serve 로 떠 있으면서 답을 못 하면 받는 쪽은 타임아웃까지 기다려야 한다
-if (-not ("TermimonWin" -as [type])) { exit 1 }
+if (-not ("PokeBuddyWin" -as [type])) { exit 1 }
 
-[TermimonWin]::MakeDpiAware()
+[PokeBuddyWin]::MakeDpiAware()
 
 if ($Serve) {
   while ($null -ne [Console]::In.ReadLine()) {
-    [Console]::Out.WriteLine([TermimonWin]::Snapshot())
+    [Console]::Out.WriteLine([PokeBuddyWin]::Snapshot())
     [Console]::Out.Flush()
   }
   exit 0
 }
 
-[TermimonWin]::Snapshot()
+[PokeBuddyWin]::Snapshot()

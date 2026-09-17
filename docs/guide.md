@@ -1,4 +1,4 @@
-# termimon 설명서
+# pokebuddy 설명서
 
 설치·명령·설정부터 동작 원리와 실측 근거까지 전부 담은 문서다. 요약은 [README](../README.md).
 
@@ -6,11 +6,11 @@
 일반 터미널에서 그대로, 또는 CLI LLM(Claude Code · Codex CLI · Gemini CLI …) 안에서 `!` 로 불러낸다. macOS · Windows 에서 동작한다.
 
 ```
-termimon eevee             # 일반 터미널 — 셸이 끝나면 사라진다
-!termimon eevee            # CLI LLM 입력창에서 — 그 CLI 가 끝나면 사라진다
-!termimon pikachu          # 더 띄우기 — 이 세션에 여러 마리
-!termimon eevee dot=3      # 떠 있는 펫 이름이면 그 펫만 바뀐다 (크게)
-!termimon stop             # 내리기 — 여러 마리면 골라서
+pokebuddy eevee             # 일반 터미널 — 셸이 끝나면 사라진다
+!pokebuddy eevee            # CLI LLM 입력창에서 — 그 CLI 가 끝나면 사라진다
+!pokebuddy pikachu          # 더 띄우기 — 이 세션에 여러 마리
+!pokebuddy eevee dot=3      # 떠 있는 펫 이름이면 그 펫만 바뀐다 (크게)
+!pokebuddy stop             # 내리기 — 여러 마리면 골라서
 ```
 
 어디서 띄우든 펫은 창 안을 가끔 돌아다니고 두리번거리다가 5분 동안 아무 입력이 없으면 잠든다.
@@ -39,112 +39,114 @@ PMD 스프라이트는 **CC BY-NC 4.0** 이다 — [라이선스](#라이선스)
 ## 설치
 
 ```bash
-npm install -g termimon
-termimon setup
+npm install -g pokebuddy
+pokebuddy setup
 ```
 
-(npm 에 게시하기 전에는 [배포](#배포-관리자용) 절에서 만든 `.tgz` 파일로 `npm install -g ./termimon-<버전>.tgz`)
+(npm 에 게시하기 전에는 [배포](#배포-관리자용) 절에서 만든 `.tgz` 파일로 `npm install -g ./pokebuddy-<버전>.tgz`)
 
 - `npm install` 이 Electron(약 100MB)까지 받는다. mac 창 추적 헬퍼는 패키지에 미리 빌드돼 있다(universal).
-- `termimon setup` 은 처음 한 번만 하면 된다. 하는 일:
-  - 상태 훅 설치 — `~/.claude/scripts/hooks/termimon-state.cjs` 를 복사하고, 쓰고 있는 CLI(설정 폴더가 있는 것)마다 등록한다.
+- `pokebuddy setup` 은 처음 한 번만 하면 된다. 하는 일:
+  - 상태 훅 설치 — `~/.claude/scripts/hooks/pokebuddy-state.cjs` 를 복사하고, 쓰고 있는 CLI(설정 폴더가 있는 것)마다 등록한다.
     Claude Code `~/.claude/settings.json` · Gemini CLI `~/.gemini/settings.json` · Codex CLI `~/.codex/hooks.json`.
     **바꾸기 전에 백업을 남기고, 이미 있는 항목은 건드리지 않고, 여러 번 실행해도 결과가 같다.**
-    CLI 를 나중에 설치했으면 `termimon setup` 을 다시 실행한다
+    CLI 를 나중에 설치했으면 `pokebuddy setup` 을 다시 실행한다
   - VS Code 계열 에디터(VS Code·Cursor·Windsurf·Antigravity…)에 탭 구분 확장 설치 — CLI 를 PATH 나 앱 안에서 찾는다
-  - 펫 데이터 폴더 `~/.claude/termimon` 생성
-- 무엇을 바꿀지 먼저 보려면 `termimon setup --dry-run`. 에디터 확장을 빼려면 `--no-editor`.
+  - 펫 데이터 폴더 `~/.claude/pokebuddy` 생성
+- 무엇을 바꿀지 먼저 보려면 `pokebuddy setup --dry-run`. 에디터 확장을 빼려면 `--no-editor`.
 
 지우기:
 
 ```bash
-termimon uninstall            # 훅 등록·훅 파일·에디터 확장 제거 (설정·그림 캐시는 남김)
-termimon uninstall --purge    # ~/.claude/termimon 까지
-npm uninstall -g termimon
+pokebuddy uninstall            # 훅 등록·훅 파일·에디터 확장 제거 (설정·그림 캐시는 남김)
+pokebuddy uninstall --purge    # ~/.claude/pokebuddy 까지
+npm uninstall -g pokebuddy
 ```
 
-### pkmon 에서 옮겨 오기
+### 옛 이름에서 옮겨 오기
 
-예전 이름은 `pkmon`(패키지 `terminal-pkmon`)이다. 새로 설치하고 `termimon setup` 을 한 번 실행하면 옛 흔적을 정리한다.
+예전 이름은 `termimon`, 그 전은 `pkmon`(패키지 `terminal-pkmon`)이다. npm 에 있는 `termimon` 패키지는 이름만 같은 다른 프로젝트(터미널 몬스터 배틀 게임)라 이름을 바꿨다.
+새로 설치하고 `pokebuddy setup` 을 한 번 실행하면 두 이름의 흔적을 함께 정리한다.
 
 | 옛 흔적 | setup 이 하는 일 |
 |---|---|
-| 데이터 폴더 `~/.claude/pkmon` | 설정·위치(`config.json`)와 그림 캐시(`pmd/`·`gifs/`)를 `~/.claude/termimon` 으로 가져온 뒤 옛 폴더를 지운다. 새 폴더에 없는 것이 있으면 남긴다 |
-| 훅 등록 `pkmon-state.cjs` | CLI 마다 옛 등록을 걷고 `termimon-state.cjs` 로 다시 등록한다. 같은 묶음의 다른 훅은 남긴다 |
-| 훅 파일 `~/.claude/scripts/hooks/pkmon-state.cjs` | 옛 등록을 다 걷었을 때만 지운다 |
-| 에디터 확장 `local.pkmon-active-terminal` | 설치돼 있으면 제거한다. 열려 있는 창은 다시 불러와야 옛 확장이 멈춘다 |
+| 데이터 폴더 `~/.claude/termimon` · `~/.claude/pkmon` | 설정·위치(`config.json`)와 그림 캐시(`pmd/`·`gifs/`)를 `~/.claude/pokebuddy` 로 가져온 뒤 옛 폴더를 지운다. 둘 다 있으면 항목마다 `termimon` 쪽을 먼저 쓴다. 새 폴더에 없는 것이 있으면 남긴다 |
+| 훅 등록 `termimon-state.cjs` · `pkmon-state.cjs` | CLI 마다 옛 등록을 걷고 `pokebuddy-state.cjs` 로 다시 등록한다. 같은 묶음의 다른 훅은 남긴다 |
+| 훅 파일 `~/.claude/scripts/hooks/` 의 위 두 파일 | 옛 등록을 다 걷었을 때만 지운다 |
+| 에디터 확장 `local.termimon-active-terminal` · `local.pkmon-active-terminal` | 설치돼 있으면 제거한다. 열려 있는 창은 다시 불러와야 옛 확장이 멈춘다 |
 
-- 데이터 폴더는 `setup` 전에 아무 `termimon` 명령을 실행해도 먼저 가져온다. 옛 폴더를 지우는 것은 `setup` 만 한다
+- 데이터 폴더는 `setup` 전에 아무 `pokebuddy` 명령을 실행해도 먼저 가져온다. 옛 폴더를 지우는 것은 `setup` 만 한다
 - 떠 있는 옛 펫이 있으면 Windows 에서 옛 폴더 일부(`electron/`)가 지워지지 않는다. 옛 펫을 내린 뒤 `setup` 을 다시 실행한다
-- 환경변수는 `PKMON_*` 에서 `TERMIMON_*` 으로 바뀌었고 옛 이름은 읽지 않는다
-- 옛 `pkmon` 명령은 `npm uninstall -g terminal-pkmon` 으로 지운다 (git clone 이면 PATH 설정의 `shell/pkmon.zsh` 를 `shell/termimon.zsh` 로 고친다)
+- 환경변수는 `POKEBUDDY_*` 다. 옛 이름(`TERMIMON_*` · `PKMON_*`)은 읽지 않는다
+- 옛 명령은 따로 지운다 — `.tgz` 로 설치한 `termimon` 은 `npm uninstall -g termimon`, `pkmon` 은 `npm uninstall -g terminal-pkmon`.
+  git clone 이면 PATH 설정의 `shell/termimon.zsh` · `shell/pkmon.zsh` 를 `shell/pokebuddy.zsh` 로 고친다
 
 ### 저장소에서 바로 쓰기 (개발용)
 
 ```bash
 git clone https://github.com/MilkLotion/terminal_pokemon.git
 cd terminal_pokemon
-npm install                # mac 은 Swift 컴파일러가 있으면 헬퍼를 이 컴퓨터용으로 빌드한다
-bin/termimon setup            # 탭 구분 확장 vsix 가 없으면 먼저 묶어서 설치한다 (Windows cmd 는 bin\termimon.cmd setup)
+npm install              # mac 은 Swift 컴파일러가 있으면 헬퍼를 이 컴퓨터용으로 빌드한다
+bin/pokebuddy setup      # 탭 구분 확장 vsix 가 없으면 먼저 묶어서 설치한다 (Windows cmd 는 bin\pokebuddy.cmd setup)
 ```
 
-`termimon` 을 PATH 에 올린다. **CLI LLM 의 `!` 명령이 도는 셸에서 찾을 수 있어야 한다.**
+`pokebuddy` 를 PATH 에 올린다. **CLI LLM 의 `!` 명령이 도는 셸에서 찾을 수 있어야 한다.**
 claude 는 bash(Windows 는 Git Bash), codex · gemini 는 mac 에서 로그인 셸 · bash, Windows 에서 PowerShell 을 쓴다.
 
-- mac — `~/.zshrc` 에 `source <클론한 경로>/shell/termimon.zsh`
+- mac — `~/.zshrc` 에 `source <클론한 경로>/shell/pokebuddy.zsh`
 - Windows — Git Bash 용 `~/.bashrc` 에 `export PATH="<클론한 경로>/bin:$PATH"` (`C:\…` 대신 `/c/…` 로 적는다),
-  PowerShell 용으로는 사용자 환경 변수 `Path` 에 `<클론한 경로>\bin` 을 더한다 (`bin/termimon.ps1` · `bin/termimon.cmd` 가 받는다).
+  PowerShell 용으로는 사용자 환경 변수 `Path` 에 `<클론한 경로>\bin` 을 더한다 (`bin/pokebuddy.ps1` · `bin/pokebuddy.cmd` 가 받는다).
   gemini 는 PowerShell 을 프로필 없이(`-NoProfile`) 띄우므로 프로필에 적은 PATH 는 보이지 않는다
-- 스크립트 실행이 막힌 PowerShell 에서는 `termimon.cmd eevee` 처럼 부른다
-- PATH 없이 저장소 폴더에서 CLI 를 열었다면 `!node bin/termimon eevee` 로도 된다
+- 스크립트 실행이 막힌 PowerShell 에서는 `pokebuddy.cmd eevee` 처럼 부른다
+- PATH 없이 저장소 폴더에서 CLI 를 열었다면 `!node bin/pokebuddy eevee` 로도 된다
 
 > **`claude`·`codex` 를 셸 함수로 덮지 않는다.**
 > 남의 명령에 없는 문법을 얹는 것은 관례가 아니다 — `pyenv`·`conda` 는 기존 서브커맨드를
 > 가로챌 뿐 문법을 늘리지 않고, `direnv`·`singularity` 는 환경변수를 쓴다.
 > 덮어쓰면 프롬프트 토큰을 먹거나(`claude fix fps=30 bug` 에서 단어가 사라진다)
-> 셸 스냅샷에서 깨진다. 펫은 CLI 안에서 `!termimon` 으로 따로 불러낸다.
+> 셸 스냅샷에서 깨진다. 펫은 CLI 안에서 `!pokebuddy` 로 따로 불러낸다.
 
 ## 사용
 
 일반 터미널에서는 그대로 치고, CLI LLM 은 평소처럼 띄운 뒤 입력창에서 `!` 를 붙여 실행한다.
 
 ```
-termimon <펫> [이름=값 ...]
-termimon stop [펫 ...|all]
+pokebuddy <펫> [이름=값 ...]
+pokebuddy stop [펫 ...|all]
 ```
 
 ```
-!termimon pikachu                         # 이 세션에 펫
-!termimon eevee                           # 한 마리 더 — 옆자리에 나란히 뜬다
-!termimon zapdos+pikachu                  # 한 번에 여러 마리 (쉼표도 되지만 PowerShell 에서는 따옴표로 감싼다)
-!termimon eevee pos=free                  # 창 밖에도 둘 수 있게 (기본은 pos=fix)
-!termimon eevee dot=3                     # 크게 — PMD 는 도트가 작아 3~4 를 권한다
-!termimon eevee buddy=calm                # 덜 돌아다니게 (off 면 제자리)
-!termimon eevee art=showdown              # 원본 GIF — 화질 우선, 동작은 하나
-!termimon stop pikachu                    # 그 펫만 내리기 (여러 마리는 eevee+pikachu)
-!termimon stop all                        # 전부 내리기
-termimon stop                             # 여러 마리면 체크리스트로 고르기 (일반 터미널)
+!pokebuddy pikachu                         # 이 세션에 펫
+!pokebuddy eevee                           # 한 마리 더 — 옆자리에 나란히 뜬다
+!pokebuddy zapdos+pikachu                  # 한 번에 여러 마리 (쉼표도 되지만 PowerShell 에서는 따옴표로 감싼다)
+!pokebuddy eevee pos=free                  # 창 밖에도 둘 수 있게 (기본은 pos=fix)
+!pokebuddy eevee dot=3                     # 크게 — PMD 는 도트가 작아 3~4 를 권한다
+!pokebuddy eevee buddy=calm                # 덜 돌아다니게 (off 면 제자리)
+!pokebuddy eevee art=showdown              # 원본 GIF — 화질 우선, 동작은 하나
+!pokebuddy stop pikachu                    # 그 펫만 내리기 (여러 마리는 eevee+pikachu)
+!pokebuddy stop all                        # 전부 내리기
+pokebuddy stop                             # 여러 마리면 체크리스트로 고르기 (일반 터미널)
 ```
 
 | 상황 | 결과 |
 |---|---|
-| 일반 터미널에서 `termimon eevee` | 그 터미널 셸에 붙는다. 셸이 끝나면 사라진다. 기본 동작(산책·두리번·수면·만지기 반응)만 — 같은 터미널에서 나중에 CLI 를 켜도 그 상태는 따르지 않는다 |
-| CLI LLM 안에서 `!termimon eevee` | 그 CLI 세션에 붙는다. CLI 를 끝내면 1초 안에 사라진다. 기본 동작 + 그 CLI 의 상태에 반응 |
-| 같은 세션에서 다른 펫 `termimon pikachu` | 떠 있는 펫 옆에 더한다 |
-| 같은 세션에서 떠 있는 펫 `termimon eevee dot=3` | 그 펫만 내리고 같은 자리에 다시 띄운다 — 옵션만 바꿀 때 |
+| 일반 터미널에서 `pokebuddy eevee` | 그 터미널 셸에 붙는다. 셸이 끝나면 사라진다. 기본 동작(산책·두리번·수면·만지기 반응)만 — 같은 터미널에서 나중에 CLI 를 켜도 그 상태는 따르지 않는다 |
+| CLI LLM 안에서 `!pokebuddy eevee` | 그 CLI 세션에 붙는다. CLI 를 끝내면 1초 안에 사라진다. 기본 동작 + 그 CLI 의 상태에 반응 |
+| 같은 세션에서 다른 펫 `pokebuddy pikachu` | 떠 있는 펫 옆에 더한다 |
+| 같은 세션에서 떠 있는 펫 `pokebuddy eevee dot=3` | 그 펫만 내리고 같은 자리에 다시 띄운다 — 옵션만 바꿀 때 |
 | 다른 터미널 탭·다른 CLI | 세션마다 따로다. 한쪽의 `stop`·바꾸기가 다른 쪽 펫을 건드리지 않는다 |
 
 ### 내리기
 
 | 명령 | 결과 |
 |---|---|
-| `termimon stop eevee` · `termimon stop eevee+pikachu` | 그 펫만 |
-| `termimon stop all` | 이 세션의 펫 전부 |
-| `termimon stop` — 한 마리일 때 | 그 펫을 바로 내린다 |
-| `termimon stop` — 여러 마리일 때 | 일반 터미널이면 체크리스트가 뜬다. CLI 안의 `!` 명령이면 목록과 고르는 명령을 보여 준다 |
+| `pokebuddy stop eevee` · `pokebuddy stop eevee+pikachu` | 그 펫만 |
+| `pokebuddy stop all` | 이 세션의 펫 전부 |
+| `pokebuddy stop` — 한 마리일 때 | 그 펫을 바로 내린다 |
+| `pokebuddy stop` — 여러 마리일 때 | 일반 터미널이면 체크리스트가 뜬다. CLI 안의 `!` 명령이면 목록과 고르는 명령을 보여 준다 |
 
 ```
-termimon stop
+pokebuddy stop
 ---
 > [x] eevee
   [ ] pikachu
@@ -155,15 +157,15 @@ termimon stop
 ```
 
 `a` 는 all, `s` 는 selected 와 같다. CLI LLM 의 `!` 명령은 표준입력이 터미널이 아니라 키를 받을 수 없어서
-(claude·codex 에서 확인) 체크리스트 대신 `!termimon stop <이름>` · `!termimon stop all` 을 안내한다.
+(claude·codex 에서 확인) 체크리스트 대신 `!pokebuddy stop <이름>` · `!pokebuddy stop all` 을 안내한다.
 
 명령은 펫 창이 뜰 때까지만 기다렸다가 `펫을 띄움: eevee` 한 줄을 남기고 돌아온다(보통 1초 안팎,
 처음 받는 펫은 그림을 내려받느라 몇 초). 그림을 못 받는 등 뜨지 못하면 그 자리에서 이유를 알려 준다.
 훅이 없는 CLI(훅 이전 버전의 codex 등)나 처음 보는 CLI 에서도 펫은 뜨고 그 CLI 와 함께 사라진다 — 상태 반응만 없다.
-termimon 은 명령을 감싸 실행하지 않는다 — 왜 그런지는 [펫은 언제 끝나는가](#펫은-언제-끝나는가).
+pokebuddy 는 명령을 감싸 실행하지 않는다 — 왜 그런지는 [펫은 언제 끝나는가](#펫은-언제-끝나는가).
 
-Windows PowerShell 에서 `termimon` 이 "이 시스템에서 스크립트를 실행할 수 없으므로" 로 막히면
-npm 이 만든 `termimon.ps1` 이 실행 정책에 걸린 것이다. `termimon.cmd eevee` 처럼 부르거나,
+Windows PowerShell 에서 `pokebuddy` 가 "이 시스템에서 스크립트를 실행할 수 없으므로" 로 막히면
+npm 이 만든 `pokebuddy.ps1` 이 실행 정책에 걸린 것이다. `pokebuddy.cmd eevee` 처럼 부르거나,
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` 로 풀면 된다.
 
 ### 옵션
@@ -187,16 +189,16 @@ npm 이 만든 `termimon.ps1` 이 실행 정책에 걸린 것이다. `termimon.c
 
 | 환경변수 | 대응 옵션 |
 |---|---|
-| `TERMIMON_SLUG` | 펫 이름 |
-| `TERMIMON_POS` | `pos=` |
-| `TERMIMON_ART` | `art=` |
-| `TERMIMON_BUDDY` | `buddy=` |
-| `TERMIMON_DOT_SIZE` | `dot=` |
-| `TERMIMON_FPS` | `fps=` |
-| `TERMIMON_KEEP_VISIBLE` | `keep=` |
-| `TERMIMON_CLICK_THROUGH` | `click=` |
-| `TERMIMON_DEBUG=1` | 판정 로그를 파일로 남긴다 (경로를 알려 준다) |
-| `TERMIMON_USE_GIF` | `gif=` (예전 옵션) |
+| `POKEBUDDY_SLUG` | 펫 이름 |
+| `POKEBUDDY_POS` | `pos=` |
+| `POKEBUDDY_ART` | `art=` |
+| `POKEBUDDY_BUDDY` | `buddy=` |
+| `POKEBUDDY_DOT_SIZE` | `dot=` |
+| `POKEBUDDY_FPS` | `fps=` |
+| `POKEBUDDY_KEEP_VISIBLE` | `keep=` |
+| `POKEBUDDY_CLICK_THROUGH` | `click=` |
+| `POKEBUDDY_DEBUG=1` | 판정 로그를 파일로 남긴다 (경로를 알려 준다) |
+| `POKEBUDDY_USE_GIF` | `gif=` (예전 옵션) |
 
 - 펫을 드래그해 원하는 자리에 놓으면 위치가 기억된다. 펫마다 따로 기억한다. buddy 는 거기를 집으로 삼는다.
 - 여러 마리를 띄우면 겹치지 않게 옆으로 밀려서 배치된다. 한 마리를 내린 빈자리에는 다음에 띄운 펫이 들어간다.
@@ -227,9 +229,9 @@ PMD 는 같은 이름을 도감 번호로 바꿔 받는다(`lib/dex.json`) — `
 
 ## 설정
 
-설정은 **`~/.claude/termimon/config.json` 한 파일**이 전부다. 펫을 옮기거나 단축키로 값을 바꾸면 자동으로 생긴다.
+설정은 **`~/.claude/pokebuddy/config.json` 한 파일**이 전부다. 펫을 옮기거나 단축키로 값을 바꾸면 자동으로 생긴다.
 프로그램 폴더가 아니라 홈에 두는 건, npm 으로 업데이트해도 위치·설정이 지워지지 않게 하려는 것이다.
-(예전 버전이 프로그램 폴더에 두던 `pkmon.config.json` 은 처음 실행할 때 이리로 복사해 온다. 형식은 저장소의 `termimon.config.example.json` 참고)
+(예전 버전이 프로그램 폴더에 두던 `pkmon.config.json` 은 처음 실행할 때 이리로 복사해 온다. 형식은 저장소의 `pokebuddy.config.example.json` 참고)
 기본값과 경로는 전부 `config.js` 한 곳에 있고, 펫(`main.js`)과 명령(`cli/`)이 모두 그것을 참고한다.
 
 | 항목 | 기본 | 설명 |
@@ -246,56 +248,56 @@ PMD 는 같은 이름을 도감 번호로 바꿔 받는다(`lib/dex.json`) — `
 예전 설정의 `useGif: "off"` 는 `art: "sheet"` 로 읽는다.
 `window` 항목은 드래그할 때 자동으로 저장되는 위치라 직접 적을 일이 없다.
 그 밖의 값(따라갈 앱, 왕복 재생, 움직임 보정 등)은 손댈 일이 거의 없어 `config.js` 의 `INTERNAL` 에 두었다.
-`art=sheet` 를 쓰려면 [codex-pokepets](https://github.com/dnnyngyen/codex-pokepets) 를 클론하고 `TERMIMON_SOURCE` 에 그 경로를 준다.
+`art=sheet` 를 쓰려면 [codex-pokepets](https://github.com/dnnyngyen/codex-pokepets) 를 클론하고 `POKEBUDDY_SOURCE` 에 그 경로를 준다.
 
 한 번만 다르게 쓰려면 위의 **명령줄 옵션**을 쓴다. 환경변수로도 같은 값을 줄 수 있다 —
 둘 다 파일에는 저장되지 않는다.
 
 ```
-!termimon gengar keep=on      # 이번만 항상 보이기
-!termimon gengar art=sheet    # 이번만 스프라이트시트
-!termimon gengar dot=3        # 이번만 크게
+!pokebuddy gengar keep=on      # 이번만 항상 보이기
+!pokebuddy gengar art=sheet    # 이번만 스프라이트시트
+!pokebuddy gengar dot=3        # 이번만 크게
 ```
 
 | 환경변수 | 대응 옵션 |
 |---|---|
-| `TERMIMON_SLUG` | `termimon=` |
-| `TERMIMON_POS` | `pos=` |
-| `TERMIMON_ART` | `art=` |
-| `TERMIMON_BUDDY` | `buddy=` |
-| `TERMIMON_DOT_SIZE` | `dot=` |
-| `TERMIMON_FPS` | `fps=` |
-| `TERMIMON_KEEP_VISIBLE` | `keep=` |
-| `TERMIMON_CLICK_THROUGH` | `click=` |
-| `TERMIMON_DEBUG=1` | 판정 로그를 파일로 남긴다 (경로를 알려 준다) |
+| `POKEBUDDY_SLUG` | `pokebuddy=` |
+| `POKEBUDDY_POS` | `pos=` |
+| `POKEBUDDY_ART` | `art=` |
+| `POKEBUDDY_BUDDY` | `buddy=` |
+| `POKEBUDDY_DOT_SIZE` | `dot=` |
+| `POKEBUDDY_FPS` | `fps=` |
+| `POKEBUDDY_KEEP_VISIBLE` | `keep=` |
+| `POKEBUDDY_CLICK_THROUGH` | `click=` |
+| `POKEBUDDY_DEBUG=1` | 판정 로그를 파일로 남긴다 (경로를 알려 준다) |
 
 ## 펫은 언제 끝나는가
 
-`termimon eevee` 는 펫을 **따로 띄우고 곧바로 끝난다.** 펫을 끝내 줄 부모가 없으므로 펫이 스스로 본다.
+`pokebuddy eevee` 는 펫을 **따로 띄우고 곧바로 끝난다.** 펫을 끝내 줄 부모가 없으므로 펫이 스스로 본다.
 
 | 끝나는 때 | 확인 방법 |
 |---|---|
 | 펫을 띄운 CLI 가 끝남 (CLI 안에서 띄운 경우) | 1초마다 그 프로세스가 살아 있는지 |
 | 터미널 탭이 닫힘 · 셸이 끝남 (CLI 가 정리 못 하고 죽은 경우 포함) | 1초마다 터미널 셸이 살아 있는지 |
-| `termimon stop` · 같은 펫을 옵션만 바꿔 다시 띄움 | 자기 pid 파일이 사라졌는지 — 폴더 감시로 바로 안다 |
+| `pokebuddy stop` · 같은 펫을 옵션만 바꿔 다시 띄움 | 자기 pid 파일이 사라졌는지 — 폴더 감시로 바로 안다 |
 | `Cmd/Ctrl + Alt + Q` | 단축키 |
 
 ### 어느 프로세스가 세션인가 — 앱 목록을 두지 않는다
 
-CLI LLM 은 `!` 명령을 셸로 돌린다. 그래서 termimon 의 조상은 이렇게 생겼다.
+CLI LLM 은 `!` 명령을 셸로 돌린다. 그래서 pokebuddy 의 조상은 이렇게 생겼다.
 
 ```
-claude  termimon → bash → bash → bash → claude.exe → bash → bash → bash → Code.exe
-codex   termimon → powershell → codex.exe → node(codex.js) → powershell → Code.exe
-gemini  termimon → pwsh → node(gemini) → node(gemini) → bash → Code.exe
-터미널  termimon → bash → bash → bash → Code.exe
+claude  pokebuddy → bash → bash → bash → claude.exe → bash → bash → bash → Code.exe
+codex   pokebuddy → powershell → codex.exe → node(codex.js) → powershell → Code.exe
+gemini  pokebuddy → pwsh → node(gemini) → node(gemini) → bash → Code.exe
+터미널  pokebuddy → bash → bash → bash → Code.exe
 ```
 
 셸을 건너뛰고 **셸이 아닌 프로세스가 이어지는 구간**을 찾는다. **그 위에 다시 셸이 있으면** 그 구간이 세션이다 —
 셸에서 띄운 프로그램이 셸을 거쳐 우리를 불렀다는 뜻이다. 구간은 여러 겹일 수 있다(codex 는 `node` 가 `codex.exe` 를 띄우고,
 gemini 는 `node` 가 자기 자신을 다시 띄운다). 펫은 가장 바깥 것과 함께 산다.
 위에 셸이 없으면(`Code.exe`·mac Terminal 의 `login`·Windows Terminal) 그건 터미널 프로그램 쪽이고,
-셸에서 바로 `termimon` 을 친 것이라 그 셸에 붙는다. 네이티브든 npm(`node`)이든, 처음 보는 CLI 든 같은 규칙으로 잡힌다.
+셸에서 바로 `pokebuddy` 를 친 것이라 그 셸에 붙는다. 네이티브든 npm(`node`)이든, 처음 보는 CLI 든 같은 규칙으로 잡힌다.
 터미널 탭의 셸은 탭 구분 확장 기록으로 바로잡는다(Git Bash 는 탭 하나가 `bash.exe` 여러 개로 보인다).
 
 **Git Bash 에서는 Windows 쪽 부모 관계가 끊길 수 있다.** 셸 스크립트를 실행하면(npm 이 만든 `codex` 래퍼가 sh 스크립트다)
@@ -304,26 +306,26 @@ gemini 는 `node` 가 자기 자신을 다시 띄운다). 펫은 가장 바깥 �
 
 1. 끊긴 곳이 Git Bash(MSYS) 프로세스면 옆의 `ps.exe` 로 MSYS 가 따로 기억하는 부모를 읽어 잇는다 —
    `node → sh.exe → bash(usr\bin) → bash(터미널 탭)`. 여러 번 끊겨도 잇는다(30ms 안팎, 끊겼을 때만)
-2. 그래도 못 찾으면 명령을 친 순간 포커스된 VS Code 창의 활성 탭을 내 탭으로 잡는다 — 방금 `!termimon` 을 친 곳이 그 탭이다
+2. 그래도 못 찾으면 명령을 친 순간 포커스된 VS Code 창의 활성 탭을 내 탭으로 잡는다 — 방금 `!pokebuddy` 를 친 곳이 그 탭이다
 
-어느 쪽으로 잡았는지는 `termimon status` 의 "이 터미널 셸 번호" 줄에 나온다.
+어느 쪽으로 잡았는지는 `pokebuddy status` 의 "이 터미널 셸 번호" 줄에 나온다.
 
-펫은 부모(termimon)가 곧바로 끝나서 자기 조상을 스스로 구할 수 없다 — Windows 는 부모 관계가 끊긴 채 남고,
-mac 은 `launchd` 밑으로 옮겨진다. 그래서 termimon 이 구한 조상 체인을 환경변수로 넘겨받는다.
+펫은 부모(pokebuddy)가 곧바로 끝나서 자기 조상을 스스로 구할 수 없다 — Windows 는 부모 관계가 끊긴 채 남고,
+mac 은 `launchd` 밑으로 옮겨진다. 그래서 pokebuddy 가 구한 조상 체인을 환경변수로 넘겨받는다.
 
-- **죽이지 않고 pid 파일을 지운다.** `termimon stop` 이 프로세스를 직접 죽이면 Windows 에서는 정리 없이 끊기고,
-  이미 끝난 펫의 번호가 다른 프로세스에 재사용됐을 수도 있다. 파일은 `<임시 폴더>/termimon-pets/<세션>-<pid>-<순번>-<펫 이름>.pid` — 이름은 `stop <이름>` 이, 순번은 옆자리 배치가 쓴다
+- **죽이지 않고 pid 파일을 지운다.** `pokebuddy stop` 이 프로세스를 직접 죽이면 Windows 에서는 정리 없이 끊기고,
+  이미 끝난 펫의 번호가 다른 프로세스에 재사용됐을 수도 있다. 파일은 `<임시 폴더>/pokebuddy-pets/<세션>-<pid>-<순번>-<펫 이름>.pid` — 이름은 `stop <이름>` 이, 순번은 옆자리 배치가 쓴다
 - **같은 펫을 바꿀 때 옛 펫이 끝나길 기다린다.** 전역 단축키는 먼저 잡은 펫만 쓸 수 있어서, 옛 펫이 남아 있으면 새 펫이 단축키를 못 받는다.
   못 잡은 펫은 3초마다 다시 잡아 본다 — 쥐고 있던 펫이 내려가도 단축키가 사라지지 않는다
 - **출력을 물려주지 않는다.** CLI 는 `!` 명령의 출력이 닫힐 때까지 기다리므로 펫이 출력을 잡고 있으면 입력창이 돌아오지 않는다.
   mac 은 새 세션(detached)으로 띄운다 — 같은 프로세스 그룹이면 CLI 쪽 신호에 같이 죽는다
 - **Windows 는 PowerShell `Start-Process` 로 띄운다.** node 가 직접 띄우면(CreateProcess) 상속 가능한 핸들이 전부 넘어가서,
-  termimon 이 받은 출력 파이프까지 펫이 쥔다. codex 처럼 `!` 명령을 PowerShell 로 돌려 출력을 파이프로 받는 CLI 는
+  pokebuddy 가 받은 출력 파이프까지 펫이 쥔다. codex 처럼 `!` 명령을 PowerShell 로 돌려 출력을 파이프로 받는 CLI 는
   펫이 끝날 때까지 명령이 안 끝난다(6초 사는 자식에 6.2초 실측). `Start-Process` 는 핸들을 넘기지 않는다(0.37초).
-  디버그 로그도 그래서 펫이 직접 파일에 쓴다(`TERMIMON_LOG`)
+  디버그 로그도 그래서 펫이 직접 파일에 쓴다(`POKEBUDDY_LOG`)
 
-> **명령을 감싸 띄우지 않는 이유.** 예전에는 `termimon eevee` 가 claude 를 자식으로 띄웠다.
-> 그러면 claude 의 부모가 터미널 셸이 아니라 termimon(node)이 되는데, 그렇게 뜬 claude 는 화면이 달랐다 —
+> **명령을 감싸 띄우지 않는 이유.** 예전에는 `pokebuddy eevee` 가 claude 를 자식으로 띄웠다.
+> 그러면 claude 의 부모가 터미널 셸이 아니라 pokebuddy(node)가 되는데, 그렇게 뜬 claude 는 화면이 달랐다 —
 > 상태줄의 컬러 이모지가 `♦` 로 나오고 터미널 탭 제목이 바뀌지 않았다(Windows · VS Code 실측).
 > claude 는 평소처럼 띄우고 펫만 옆에서 불러내면 claude 쪽은 아무것도 달라지지 않는다.
 
@@ -415,16 +417,16 @@ Windows 는 조상을 **셸(`explorer`)에서 끊는다.** 시작 메뉴로 띄�
 ## 터미널 탭별로 보이기 (VS Code 계열)
 
 터미널 탭마다 다른 펫을 띄우고, 그 탭을 보고 있을 때만 그 펫이 나타나게 할 수 있다.
-`termimon setup` 이 확장을 설치한다. 에디터 CLI 를 못 찾았다면 에디터의 확장 보기 → … → "VSIX 에서 설치" 로
-패키지 안의 `vscode-extension/termimon-active-terminal-*.vsix` 를 고른다. 설치 뒤 열려 있던 창은 다시 불러와야 한다.
+`pokebuddy setup` 이 확장을 설치한다. 에디터 CLI 를 못 찾았다면 에디터의 확장 보기 → … → "VSIX 에서 설치" 로
+패키지 안의 `vscode-extension/pokebuddy-active-terminal-*.vsix` 를 고른다. 설치 뒤 열려 있던 창은 다시 불러와야 한다.
 
 ```
 # 1번 탭의 claude
-!termimon pikachu
+!pokebuddy pikachu
 # 2번 탭의 gemini
-!termimon zapdos
+!pokebuddy zapdos
 # 3번 탭 (일반 터미널)
-termimon eevee
+pokebuddy eevee
 ```
 
 확장은 **선택**이다. 없으면 탭 축이 꺼지고 창 단위로만 동작한다 — 그 창의 펫이 함께 보인다.
@@ -434,9 +436,9 @@ VS Code 가 아닌 프로그램에서는 애초에 탭을 구분할 방법이 �
 
 ## CLI LLM 상태 연동
 
-CLI LLM 안에서 `!termimon` 으로 띄우면, 그 CLI 의 훅이 알려 주는 상태에 따라 동작이 바뀐다.
-`termimon setup` 이 쓰고 있는 CLI 마다 훅을 등록한다. 훅이 없는 CLI 나 일반 터미널에서는 상태별 동작 없이 기본 동작(buddy)만 돈다.
-훅 스크립트는 `hooks/termimon-state.cjs` 하나이고, CLI 마다 이벤트 이름만 다르다.
+CLI LLM 안에서 `!pokebuddy` 로 띄우면, 그 CLI 의 훅이 알려 주는 상태에 따라 동작이 바뀐다.
+`pokebuddy setup` 이 쓰고 있는 CLI 마다 훅을 등록한다. 훅이 없는 CLI 나 일반 터미널에서는 상태별 동작 없이 기본 동작(buddy)만 돈다.
+훅 스크립트는 `hooks/pokebuddy-state.cjs` 하나이고, CLI 마다 이벤트 이름만 다르다.
 
 | 펫 상태 | Claude Code | Codex CLI (0.124+) | Gemini CLI (0.26+) | PMD 동작 (앞에서부터 가진 것) |
 |---|---|---|---|---|
@@ -467,15 +469,15 @@ CLI 마다 다른 점:
 
 codex 의 API 오류로 끝난 턴, gemini 의 API 오류는 따로 알리는 이벤트가 없어 `failed` 로 보이지 않는다.
 
-훅은 세션마다 `~/.claude/termimon/state/<세션>.json` 에 상태를 남기고, 자기를 띄운 프로세스 조상
+훅은 세션마다 `~/.claude/pokebuddy/state/<세션>.json` 에 상태를 남기고, 자기를 띄운 프로세스 조상
 (훅 → CLI → 터미널 셸)도 함께 적는다. 펫은 **자기를 부른 CLI 가 조상에 있는 기록**만 따라가므로,
 같은 프로젝트를 여러 터미널·여러 CLI 에서 열어도 섞이지 않는다.
-셸에서 바로 띄운 펫은 상태 기록을 읽지 않는다 — 상태 반응은 CLI 안에서 `!termimon` 으로 띄운 펫만 한다.
+셸에서 바로 띄운 펫은 상태 기록을 읽지 않는다 — 상태 반응은 CLI 안에서 `!pokebuddy` 로 띄운 펫만 한다.
 Windows 는 조상을 구하는 데 PowerShell 을 띄워야 해서(수백 ms) 세션 시작 때 한 번 구하고 이후 이벤트는 이어 쓴다.
 훅은 아무것도 출력하지 않는다 — claude 는 일부 훅의 출력을 대화에 넣고, gemini 는 출력을 훅 결과로 읽는다.
 
 훅은 마지막 프롬프트 시각(`promptAt`)도 이어서 적는다. buddy 가 "사용자가 마지막으로 뭔가 한 때"를
-알아야 잠들 수 있어서다. 업데이트한 뒤에는 `termimon setup` 을 다시 실행하면 훅 파일이 새 버전으로 바뀐다.
+알아야 잠들 수 있어서다. 업데이트한 뒤에는 `pokebuddy setup` 을 다시 실행하면 훅 파일이 새 버전으로 바뀐다.
 
 `art=showdown` 은 그림이 하나뿐이라 상태별 동작 구분이 없다.
 
@@ -555,7 +557,7 @@ PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이라 �
   켜 두면 숨은 동안만 타이머가 초당 1회로 느려지고, 다시 보이면 곧바로 제 속도로 돈다
 
 판단은 `buddy/brain.js`(창·Electron 을 모르는 순수 로직), 메인에 붙이는 층은 `buddy/body.js` 에 있다.
-시험할 때는 `TERMIMON_BUDDY_TIMESCALE=0.05` 로 시간을 20배 빠르게 돌릴 수 있다(15초 만에 잠든다).
+시험할 때는 `POKEBUDDY_BUDDY_TIMESCALE=0.05` 로 시간을 20배 빠르게 돌릴 수 있다(15초 만에 잠든다).
 
 ## 그림에 대한 메모
 
@@ -566,10 +568,10 @@ PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이라 �
 GIF 는 애니메이션이 하나라 상태를 그림으로 나눌 수 없다. CSS 로 누르거나 흔들어 흉내 내 봤지만 어색해서 뺐다.
 PMDCollab 은 종마다 동작이 따로 있는 거의 유일한 오픈 스프라이트 모음이다(1025종 중 979종, 이브이 34종).
 
-- `https://spriteserver.pmdcollab.org/assets/<도감4자리>/sprites.zip` 을 받아 `~/.claude/termimon/pmd/` 에 캐시한다.
+- `https://spriteserver.pmdcollab.org/assets/<도감4자리>/sprites.zip` 을 받아 `~/.claude/pokebuddy/pmd/` 에 캐시한다.
   풀지 않고 메모리에서 읽는다
 - 스프라이트가 없는 종은 404 가 아니라 **200 + 빈 ZIP** 을 준다. 크기·내용을 검사해 캐시에 눌러앉지 않게 한다
-- 저작자 목록(`credits.txt`)은 ZIP 에 없어 GitHub 에서 따로 받는다 — `termimon status <펫>` 이 보여 준다
+- 저작자 목록(`credits.txt`)은 ZIP 에 없어 GitHub 에서 따로 받는다 — `pokebuddy status <펫>` 이 보여 준다
 - 칸 크기가 동작마다 달라도 기준점이 `(칸너비/2, 칸높이/2+4)` 로 같아서, 고정 캔버스 가운데에 놓으면 발 위치가 맞는다
 
 ### 원본 GIF (art=showdown)
@@ -583,7 +585,7 @@ PMDCollab 은 종마다 동작이 따로 있는 거의 유일한 오픈 스프�
 | 로토무-워시 2D | 88장 | 6장 |
 
 주소는 3D 가 `sprites/ani/<이름>.gif`, 2D 가 `sprites/gen5ani/<슬러그>.gif` 다. 폼도 이름으로 구분된다.
-처음 띄울 때 그 펫 GIF 하나만 받아 `~/.claude/termimon/gifs/` 에 캐시하고, 이후에는 네트워크를 쓰지 않는다.
+처음 띄울 때 그 펫 GIF 하나만 받아 `~/.claude/pokebuddy/gifs/` 에 캐시하고, 이후에는 네트워크를 쓰지 않는다.
 못 받으면(오프라인·404) 스프라이트시트로 넘어간다. 화질은 가장 좋지만 상태별 동작·buddy 는 없다.
 
 ### 도트 굵기 통일 (dotSize) — sheet
@@ -611,20 +613,20 @@ PMDCollab 은 종마다 동작이 따로 있는 거의 유일한 오픈 스프�
 ## 문제 확인
 
 ```
-!termimon status
+!pokebuddy status
 ```
 
 펫을 띄운 곳(CLI 안이면 `!` 로, 일반 터미널이면 그대로)에서 실행해야 그 세션이 잡힌다. 설정 값, CLI 별 훅 등록 상태,
 이 터미널의 프로세스 체인과 펫이 따라 사는 세션, 살아 있는 IDE 창 기록 전부, 탭 축 판정, 세션별 상태(어느 CLI 기록인지)와
 마지막 프롬프트, "이 세션 펫이 보여야 할 동작", PMD 캐시·저작자, 떠 있는 펫 수를 한 번에 보여 준다.
-`termimon status eevee` 처럼 펫 이름을 주면 그 펫의 PMD 저작자를 보여 준다.
+`pokebuddy status eevee` 처럼 펫 이름을 주면 그 펫의 PMD 저작자를 보여 준다.
 판정 로직은 펫과 **같은 코드**(`lib/state.js`)를 쓰므로 실제 동작과 어긋나지 않는다.
 
 펫이 어느 창에 붙었는지까지 보려면 디버그 모드로 띄운다.
 
 ```
-!TERMIMON_DEBUG=1 termimon eevee               # bash · zsh (claude, mac 의 codex·gemini)
-!$env:TERMIMON_DEBUG=1; termimon eevee         # PowerShell (Windows 의 codex·gemini)
+!POKEBUDDY_DEBUG=1 pokebuddy eevee               # bash · zsh (claude, mac 의 codex·gemini)
+!$env:POKEBUDDY_DEBUG=1; pokebuddy eevee         # PowerShell (Windows 의 codex·gemini)
 ```
 
 로그 파일 경로를 알려 준다.
@@ -639,16 +641,16 @@ buddy 가 켜져 있으면 `{buddy: 단계, rhythm: idle|work, act: 동작/방�
 
 ```bash
 npm pack          # mac 에서 — universal 헬퍼와 확장 vsix 를 빌드해 넣는다 (prepack)
-npm install -g ./termimon-<버전>.tgz   # 올리기 전에 이 파일로 설치해 확인
+npm install -g ./pokebuddy-<버전>.tgz   # 올리기 전에 이 파일로 설치해 확인
 ```
 
 - **mac 에서 만든다.** 헬퍼는 Swift·lipo·codesign 이 필요해서 다른 OS 에서는 `npm pack` 이 멈춘다
-- `.ps1` 파일(`helpers/winbounds.ps1` · `bin/termimon.ps1`)은 **UTF-8 BOM 을 유지한다.** Windows PowerShell 5.1 은
+- `.ps1` 파일(`helpers/winbounds.ps1` · `bin/pokebuddy.ps1`)은 **UTF-8 BOM 을 유지한다.** Windows PowerShell 5.1 은
   BOM 없는 스크립트를 시스템 코드 페이지(한국어 Windows 는 CP949)로 읽어, 한국어 주석이 줄바꿈을 삼키고
   다음 코드 줄이 주석이 된다. 헬퍼는 C# 컴파일이 실패해 창 목록이 비고 펫이 뜨지 않는다
 - 게시 전 할 일: `package.json` 의 `"private": true` 제거(실수로 게시하지 않게 막아 둔 줄), 버전 올리기,
-  Windows 실기에서 `termimon setup` · 일반 터미널의 `termimon eevee` · claude·codex·gemini 안의 `!termimon eevee` · `!termimon stop` · 일반 터미널의 `termimon stop` 체크리스트 확인
-- 확장을 고쳤으면 `vscode-extension/package.json` 의 버전도 올린다 — `termimon setup` 은 같은 버전도 덮어 설치하지만, 버전이 같으면 사용자가 어느 쪽인지 구분할 수 없다
+  Windows 실기에서 `pokebuddy setup` · 일반 터미널의 `pokebuddy eevee` · claude·codex·gemini 안의 `!pokebuddy eevee` · `!pokebuddy stop` · 일반 터미널의 `pokebuddy stop` 체크리스트 확인
+- 확장을 고쳤으면 `vscode-extension/package.json` 의 버전도 올린다 — `pokebuddy setup` 은 같은 버전도 덮어 설치하지만, 버전이 같으면 사용자가 어느 쪽인지 구분할 수 없다
 - Electron 은 시험한 버전으로 고정해 두었다(`dependencies.electron`). 올릴 때는 펫 실행·드래그·산책을 다시 확인한다
 - PMD 그림은 패키지에 들어가지 않는다(CC BY-NC). 받는 사람 컴퓨터에서 실행할 때 내려받는다
 
@@ -658,5 +660,5 @@ npm install -g ./termimon-<버전>.tgz   # 올리기 전에 이 파일로 설치
 
 PMD 스프라이트는 [PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab) 기여자들의 작품이며
 **CC BY-NC 4.0**(저작자 표시·비상업) 이다. MIT 와 섞일 수 없어 저장소에 넣지 않고, 실행할 때 사용자 컴퓨터로
-받아 캐시만 한다. 펫별 저작자는 `termimon status <펫>` 으로 확인한다. 이 도구로 만든 화면을 공유할 때는
+받아 캐시만 한다. 펫별 저작자는 `pokebuddy status <펫>` 으로 확인한다. 이 도구로 만든 화면을 공유할 때는
 저작자와 출처를 함께 밝힌다.

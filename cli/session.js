@@ -1,4 +1,4 @@
-// 이 명령을 실행한 세션과 그 세션의 펫 — termimon 실행·내리기·진단(status)이 같은 규칙을 쓴다.
+// 이 명령을 실행한 세션과 그 세션의 펫 — pokebuddy 실행·내리기·진단(status)이 같은 규칙을 쓴다.
 // 판정 자체는 lib/state.js 에 있다 (펫 main.js 와 같은 코드)
 const fs = require("fs");
 const settings = require("../config.js");
@@ -8,10 +8,10 @@ const { PATHS } = settings;
 
 // 반환: { chain, host, term, guess, termFrom, key, records }
 //   chain     이 명령부터 가까운 순서의 조상 pid
-//   host      펫이 따라 살고 죽을 세션 프로세스 (CLI LLM 안의 !termimon 이면 그 CLI). 셸에서 바로 쳤으면 null
+//   host      펫이 따라 살고 죽을 세션 프로세스 (CLI LLM 안의 !pokebuddy 면 그 CLI). 셸에서 바로 쳤으면 null
 //   term      터미널 탭의 셸. guess 는 조상으로 한 첫 추정
 //   termFrom  term 을 어디서 알았나 — "ancestors"(확장 기록의 탭이 조상에 있음) · "focus"(포커스된 창의 활성 탭) ·
-//             "given"(TERMIMON_TERM_PID) · "guess"(확장 기록 없음 — 탭 구분이 꺼진다)
+//             "given"(POKEBUDDY_TERM_PID) · "guess"(확장 기록 없음 — 탭 구분이 꺼진다)
 //   key       pid 파일 이름에 쓰는 세션 번호 — 펫 목록·내리기가 이 번호로 이 세션의 펫을 고른다
 // Windows 는 프로세스 표를 PowerShell 로 읽어 1초쯤 걸린다 — 한 번만 읽는다
 function currentSession() {
@@ -26,7 +26,7 @@ function currentSession() {
   const found = resolveTerminal(chain, parent && parent.names, records);
   let { term, termFrom } = found;
   // 직접 줄 수도 있다 — 조상 체인이 끊기는 환경(tmux 등)에서 탭을 맞출 때
-  const given = Number(process.env.TERMIMON_TERM_PID);
+  const given = Number(process.env.POKEBUDDY_TERM_PID);
   if (given > 0) {
     term = given;
     termFrom = "given";

@@ -1,26 +1,26 @@
-// termimon 인자 해석 — 파일·프로세스를 건드리지 않는 순수 함수라 따로 시험할 수 있다.
+// pokebuddy 인자 해석 — 파일·프로세스를 건드리지 않는 순수 함수라 따로 시험할 수 있다.
 //
-//   termimon <펫> [이름=값 ...]
-//   termimon [--pet <펫>] [--dot 3] ...
-//   termimon stop [펫 ...|all] | setup | uninstall | status | help
+//   pokebuddy <펫> [이름=값 ...]
+//   pokebuddy [--pet <펫>] [--dot 3] ...
+//   pokebuddy stop [펫 ...|all] | setup | uninstall | status | help
 //
-// termimon 은 명령을 실행하지 않는다 — 터미널에서 termimon eevee, CLI LLM 안에서 !termimon eevee 로 그 세션에 펫을 붙인다 (cli/run.js).
-// 옵션 뒤에 남는 단어는 예전 문법(termimon eevee codex)이거나 따옴표 없는 쉼표가 쪼갠 펫 이름이라 멈추고 알린다.
+// pokebuddy 는 명령을 실행하지 않는다 — 터미널에서 pokebuddy eevee, CLI LLM 안에서 !pokebuddy eevee 로 그 세션에 펫을 붙인다 (cli/run.js).
+// 옵션 뒤에 남는 단어는 예전 문법(pokebuddy eevee codex)이거나 따옴표 없는 쉼표가 쪼갠 펫 이름이라 멈추고 알린다.
 
 const USAGE = `사용 — 터미널에서 그대로, CLI LLM(claude·codex·gemini) 안에서는 앞에 ! 를 붙인다:
-  termimon <펫> [이름=값 ...]                              이 세션에 펫 더하기 — 떠 있는 펫 이름이면 그 펫을 바꾼다
-  termimon stop [펫 ...|all]                               이 세션의 펫 내리기 — 여러 마리면 체크리스트로 고른다
-  termimon setup [--dry-run] [--no-editor]                 CLI LLM 상태 훅·에디터 확장 설치
-  termimon uninstall [--dry-run] [--purge] [--no-editor]   설치한 것 되돌리기 (--purge 면 설정·캐시까지)
-  termimon status [펫]                                     지금 판정 상태와 PMD 저작자 보기
+  pokebuddy <펫> [이름=값 ...]                              이 세션에 펫 더하기 — 떠 있는 펫 이름이면 그 펫을 바꾼다
+  pokebuddy stop [펫 ...|all]                               이 세션의 펫 내리기 — 여러 마리면 체크리스트로 고른다
+  pokebuddy setup [--dry-run] [--no-editor]                 CLI LLM 상태 훅·에디터 확장 설치
+  pokebuddy uninstall [--dry-run] [--purge] [--no-editor]   설치한 것 되돌리기 (--purge 면 설정·캐시까지)
+  pokebuddy status [펫]                                     지금 판정 상태와 PMD 저작자 보기
 
 예:
-  termimon eevee                     터미널 — 셸이 끝나면 펫도 사라진다
-  !termimon eevee                    CLI LLM 안 — 그 CLI 가 끝나면 사라지고, 일하는 상태에 따라 동작이 바뀐다
-  !termimon eevee dot=3 buddy=calm   크게, 덜 돌아다니게 (떠 있던 펫이 이걸로 바뀐다)
-  !termimon eevee art=showdown       원본 GIF (동작은 하나뿐)
-  !termimon zapdos+pikachu           여러 마리 (+ 또는 쉼표 — PowerShell 에서 쉼표는 따옴표로 감싼다)
-  !termimon stop pikachu             한 마리 내리기 (!termimon stop all 은 전부)
+  pokebuddy eevee                     터미널 — 셸이 끝나면 펫도 사라진다
+  !pokebuddy eevee                    CLI LLM 안 — 그 CLI 가 끝나면 사라지고, 일하는 상태에 따라 동작이 바뀐다
+  !pokebuddy eevee dot=3 buddy=calm   크게, 덜 돌아다니게 (떠 있던 펫이 이걸로 바뀐다)
+  !pokebuddy eevee art=showdown       원본 GIF (동작은 하나뿐)
+  !pokebuddy zapdos+pikachu           여러 마리 (+ 또는 쉼표 — PowerShell 에서 쉼표는 따옴표로 감싼다)
+  !pokebuddy stop pikachu             한 마리 내리기 (!pokebuddy stop all 은 전부)
 
 옵션 (이름=값 · --이름 값):
   pos=fix|free   art=pmd|showdown|sheet   buddy=on|calm|off
@@ -30,17 +30,17 @@ const USAGE = `사용 — 터미널에서 그대로, CLI LLM(claude·codex·gemi
 // 옵션 이름 → 펫 환경변수. 값이 비면 넘기지 않는다
 const OPTIONS = {
   pet: null, // 펫 이름은 환경변수가 아니라 마리마다 따로 넘긴다
-  scale: "TERMIMON_SCALE",
-  pos: "TERMIMON_POS",
-  gif: "TERMIMON_USE_GIF",
-  art: "TERMIMON_ART",
-  buddy: "TERMIMON_BUDDY",
-  dot: "TERMIMON_DOT_SIZE",
-  fps: "TERMIMON_FPS",
-  keep: "TERMIMON_KEEP_VISIBLE",
-  click: "TERMIMON_CLICK_THROUGH",
+  scale: "POKEBUDDY_SCALE",
+  pos: "POKEBUDDY_POS",
+  gif: "POKEBUDDY_USE_GIF",
+  art: "POKEBUDDY_ART",
+  buddy: "POKEBUDDY_BUDDY",
+  dot: "POKEBUDDY_DOT_SIZE",
+  fps: "POKEBUDDY_FPS",
+  keep: "POKEBUDDY_KEEP_VISIBLE",
+  click: "POKEBUDDY_CLICK_THROUGH",
 };
-const ALIASES = { termimon: "pet", pokemon: "pet" };
+const ALIASES = { pokebuddy: "pet", pokemon: "pet" };
 // 옵션 이름은 대소문자를 가리지 않는다 (예전 PowerShell 판이 그랬다). 프로토타입 이름(constructor 등)은 거른다
 const optionName = (raw) => {
   const name = raw.toLowerCase();
@@ -67,13 +67,13 @@ function parseArgs(argv) {
     const kind = args.shift();
     const flags = new Set(args.filter((a) => a.startsWith("-")));
     const unknown = [...flags].filter((f) => !SUBCOMMANDS[kind].includes(f));
-    if (unknown.length) return { kind: "run", error: `termimon ${kind} 에 없는 옵션: ${unknown.join(" ")}` };
+    if (unknown.length) return { kind: "run", error: `pokebuddy ${kind} 에 없는 옵션: ${unknown.join(" ")}` };
     const rest = args.filter((a) => !a.startsWith("-"));
     return { kind, flags, rest };
   }
 
   const opts = {};
-  // 첫 인자가 옵션도 이름=값 도 아니면 펫 이름으로 받는다 (termimon eevee dot=3)
+  // 첫 인자가 옵션도 이름=값 도 아니면 펫 이름으로 받는다 (pokebuddy eevee dot=3)
   if (args.length && !args[0].startsWith("-") && !args[0].includes("=")) opts.pet = args.shift();
 
   while (args.length) {
@@ -99,19 +99,19 @@ function parseArgs(argv) {
       continue;
     }
     if (a.startsWith("-") && a !== "--") return { kind: "run", error: `알 수 없는 옵션: ${a}` };
-    // 옵션 모양이 아닌 단어 — 예전 문법(termimon eevee codex · termimon eevee -- claude)이거나,
+    // 옵션 모양이 아닌 단어 — 예전 문법(pokebuddy eevee codex · pokebuddy eevee -- claude)이거나,
     // PowerShell 이 따옴표 없는 zapdos,pikachu 를 쪼갠 것
     const word = a === "--" ? args[1] || a : a;
     const pet = opts.pet || "eevee";
     return {
       kind: "run",
       error:
-        `알 수 없는 인자: ${word} — termimon 은 명령을 실행하지 않는다. 명령(CLI)을 먼저 켜고 그 안에서 !termimon ${pet} 로 띄운다\n` +
+        `알 수 없는 인자: ${word} — pokebuddy 는 명령을 실행하지 않는다. 명령(CLI)을 먼저 켜고 그 안에서 !pokebuddy ${pet} 로 띄운다\n` +
         `  ${word} 가 펫 이름이었다면 ${pet}+${word} 처럼 + 로 잇는다`,
     };
   }
 
-  if (!opts.pet) return { kind: "run", error: "펫 이름이 없음 — 사용: termimon eevee (CLI LLM 안에서는 !termimon eevee)" };
+  if (!opts.pet) return { kind: "run", error: "펫 이름이 없음 — 사용: pokebuddy eevee (CLI LLM 안에서는 !pokebuddy eevee)" };
   return { kind: "run", opts };
 }
 

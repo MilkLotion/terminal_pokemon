@@ -1,6 +1,6 @@
-// 터미널 체크리스트 — 항목을 골라 all · selected · close 중 하나로 끝낸다 (termimon stop)
+// 터미널 체크리스트 — 항목을 골라 all · selected · close 중 하나로 끝낸다 (pokebuddy stop)
 //
-//   termimon stop
+//   pokebuddy stop
 //   ---
 //   > [x] eevee
 //     [ ] pikachu

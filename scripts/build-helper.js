@@ -20,7 +20,7 @@ function build({ native = false } = {}) {
     execFileSync("swiftc", ["-O", "-o", OUT, SOURCE], { stdio: "inherit" });
     return OUT;
   }
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "termimon-helper-"));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pokebuddy-helper-"));
   try {
     const slices = TARGETS.map((target) => {
       const out = path.join(tmp, target);

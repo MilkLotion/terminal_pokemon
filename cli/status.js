@@ -1,4 +1,4 @@
-// termimon status — 펫이 이상하게 보일 때 지금 판정 상태를 한 번에 보여 준다.
+// pokebuddy status — 펫이 이상하게 보일 때 지금 판정 상태를 한 번에 보여 준다.
 // 경로·설정·판정은 전부 공통 모듈에서 온다 — 펫과 같은 코드를 쓴다 (두 벌이면 진단이 거짓말을 한다)
 const { execFileSync } = require("child_process");
 const fs = require("fs");
@@ -17,7 +17,7 @@ const say = (line = "") => process.stdout.write(`${line}\n`);
 const age = (at) => (Date.now() / 1000 - (at || 0)).toFixed(1);
 
 function status(petArg) {
-  // 펫을 띄울 때와 같은 규칙으로 세션·터미널을 잡는다 — CLI LLM 안에서 !termimon status 로 봐야 그 세션이 잡힌다
+  // 펫을 띄울 때와 같은 규칙으로 세션·터미널을 잡는다 — CLI LLM 안에서 !pokebuddy status 로 봐야 그 세션이 잡힌다
   const session = currentSession();
   const config = settings.load();
 
@@ -26,12 +26,12 @@ function status(petArg) {
 
   // 설치 상태 — 훅이 없는 CLI 에서는 상태별 동작 없이 기본 동작(산책·수면)만 돈다
   const hooks = hookInstalled();
-  say(`상태 훅 파일: ${!hooks.file ? "없음 — termimon setup" : hooks.current ? "최신" : "옛 버전 — termimon setup 으로 바꾼다"}`);
+  say(`상태 훅 파일: ${!hooks.file ? "없음 — pokebuddy setup" : hooks.current ? "최신" : "옛 버전 — pokebuddy setup 으로 바꾼다"}`);
   for (const cli of hooks.clis) {
     const head = `  ${cli.name.padEnd(12)}`;
     if (!cli.used) say(`${head}안 씀 (설정 폴더 없음)`);
     else if (cli.error) say(`${head}${cli.error}`);
-    else if (cli.registered < cli.total) say(`${head}덜 등록됨 (${cli.registered}/${cli.total}) — termimon setup`);
+    else if (cli.registered < cli.total) say(`${head}덜 등록됨 (${cli.registered}/${cli.total}) — pokebuddy setup`);
     else say(`${head}등록됨 (${cli.registered}/${cli.total})`);
   }
 
@@ -47,7 +47,7 @@ function status(petArg) {
   const how = {
     ancestors: guess != null && guess !== term ? `확장 기록으로 바로잡음 (추정 ${guess})` : "확장 기록과 조상이 맞음",
     focus: "조상에서 못 찾아 포커스된 창의 활성 탭으로 잡음 — 부모 관계가 끊긴 체인",
-    given: "TERMIMON_TERM_PID",
+    given: "POKEBUDDY_TERM_PID",
     guess: records.length
       ? "추정 — 조상에서 탭을 못 찾았고 포커스된 VS Code 창도 없어 탭 구분이 꺼진다"
       : "추정 — 확장 기록이 없어 탭 구분이 꺼진다",
@@ -56,7 +56,7 @@ function status(petArg) {
   say(
     session.host
       ? `이 세션: pid ${session.host} — 끝나면 이 세션의 펫도 끝난다`
-      : "이 세션: 셸에서 바로 실행 (CLI LLM 안이면 !termimon status) — 터미널 셸이 끝나면 펫도 끝난다",
+      : "이 세션: 셸에서 바로 실행 (CLI LLM 안이면 !pokebuddy status) — 터미널 셸이 끝나면 펫도 끝난다",
   );
   const myPids = state.pidsUpTo(chain, term);
   say(`내 프로세스 체인: ${[...myPids].join(" ")}`);
@@ -144,7 +144,7 @@ function status(petArg) {
     say("  출처: PMDCollab/SpriteCollab (https://sprites.pmdcollab.org) · CC BY-NC 4.0");
   }
 
-  // 떠 있는 펫 — termimon 이 남긴 pid 파일로 센다 (Windows 에는 ps 가 없다)
+  // 떠 있는 펫 — pokebuddy 가 남긴 pid 파일로 센다 (Windows 에는 ps 가 없다)
   const pets = livePets();
   const here = pets.filter((pet) => pet.key === session.key);
   say(`\n떠 있는 펫: ${pets.length}마리 (이 세션 ${here.length}마리) — ${PATHS.pets}`);
