@@ -9,6 +9,7 @@ Keep project knowledge in `docs/`.
 - `docs/plan-<stage>.md`: stage plan and design.
 - `docs/review-<stage>.md`: findings, feedback, and fixes.
 - `docs/history.md`: dated record of completed work cycles.
+- `docs/terms.md`: canonical name and meaning for each user-facing term.
 
 Keep one section per feature. Link source files, data, commands, and review evidence. Resolve conflicts with `design.md` for decisions and `progress.md` for status.
 
@@ -28,7 +29,7 @@ Do not commit or push with open findings. For design-only work, stop after Desig
 
 ## ASD-STE100 Writing
 
-Use short, direct sentences and active voice. Use one term per concept. Define abbreviations first. Keep headings and status labels consistent. Write dates as `YYYY-MM-DD`. Keep Korean text clear; do not claim formal Korean ASD-STE100 compliance.
+[`docs/README.md`](docs/README.md) is the source of truth for the writing policy, the evidence priority when documents disagree, and the document map. Follow it for every file listed there. In short: one fact per sentence, exact identifiers, one term per concept, condition before action, no vague or marketing language, dates as `YYYY-MM-DD`. Korean text follows these principles for clarity; it does not claim formal Korean ASD-STE100 compliance.
 
 ## Project Structure
 
