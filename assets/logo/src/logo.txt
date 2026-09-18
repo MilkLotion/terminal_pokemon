@@ -1,4 +1,4 @@
-// pokebuddy 로고 — 확정 시안: A 구도 + 민트 여우, 2026-09-17 (32×32)
+// pokebuddy 로고 — 터미널 창 + 몬스터볼, 2026-09-18 (32×32)
 // 팔레트: <기호> = #RRGGBB. `.` 은 투명. // 줄은 주석. 격자는 팔레트 뒤에 W×H 줄
 
 # = #182130 // 잉크 — 둥근 사각 배경
@@ -8,38 +8,39 @@ R = #D9463B // 강조 — 창 신호등 점
 Y = #F2C53D // 노랑 — 창 신호등 점
 G = #2F9E62 // 초록 커서
 W = #FFFFFF // 흰 — 눈 하이라이트
-M = #5CC8B0 // 민트 — 버디(여우) 몸
-T = #2F8F7A // 진한 민트 — 접힌 귓속·코·꼬리 끝
+M = #D9463B // 빨강 — 몬스터볼 상단
+T = #B8322B // 진한 빨강 — 몬스터볼 음영
+S = #657080 // 회색 — 중앙 버튼
 
 ................................
 ................................
 ......####################......
 ....########################....
 ...##########################...
-...###LLLLLLLLLLLLLLLLLL#####...
-..###LLRLYLGLLLLLLLLLLLLL#####..
-..###LLLLLLLLLLLLLLLLLLLL#####..
-..###PPPPPPPPPPPPPPPPPPPP#####..
-..###PPPPPPPPPPPPPPPPPPPP#####..
-..###PP##PPPPPPPPPPPPPPPP#####..
-..###PPP##PPGGPPPPPPPPPPP#####..
-..###PPPP##PGGPPPPPPPPPPP#####..
-..###PPP##PPGGPPPMPPPPPPP#####..
-..###PP##PPPGGPPMMMPPPPPP#####..
-..###PPPPPPPPPPPMMMMPPPMM#####..
-..###PPPPPPPPPPPMMMMMMMMMMM###..
-..###PPPPPPPPPPMMMMMMMMMMMMM##..
-..###PPPPPPPPPPMMW#MMMW#MMTT##..
-..###PPPPPPPPPPMM##MMM##MM#T##..
-..####PPPPPPPPPMM##MMM##MM####..
-..##############MMMMTMMMM#####..
-..###############MMMMMMM######..
-..###############MMMMMMM#TT###..
-..##############MMMMMMMMMMMM##..
-..###############MM##MM##MM###..
-...##########################...
-...##########################...
-....########################....
-......####################......
+..###LLLLLLLLLLLLLLLL#########..
+..###LLRLYLGLLLLLLLLL#########..
+..############################..
+..###PPPPPPPPPPPPPPPP#########..
+..###PPPPPPPPPPPPPPPP#########..
+..###PP##PPPPPPPPPPPP#########..
+..###PPP#PPPGGPPPPPPP#########..
+..###PPPP#PPGGPPPPPPP#########..
+..###PPP#PPPGGPP#MMMMMMMM#####..
+..###PP#PPPPPP#MMMMMMMMMMMM###..
+..###PPPPPPPP#MMMMMMMMMMMMMM##..
+..###PPPPPPP#MMMMMMMMMMMMMMMM#..
+..###PPPPPP#MMMMMMMMMMMMMMMMMM#.
+..###PPPPPP#MMMMMMMMMMMMMMMMMM#.
+..###PPPPPP#MMMMMMMMMMMMMMMMMM#.
+..###PPPPPP#TMMMMMMMMMMMMMMMMT#.
+..###PPPPPP########SS##########.
+..###PPPPPP#######WSSW#########.
+..###PPPPPP#WWWWWWWWWWWWWWWWWW#.
+..###PPPPPP#WWWWWWWWWWWWWWWWWW#.
+..###PPPPPP#WWWWWWWWWWWWWWWWWW#.
+..###PPPPPPP#WWWWWWWWWWWWWWWW#..
+..###PPPPPPPP#WWWWWWWWWWWWWW##..
+..###PPPPPPPPP#WWWWWWWWWWWW###..
+..###PPPPPPPPPPP#WWWWWWWW#####..
 ................................
 ................................

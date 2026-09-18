@@ -255,11 +255,11 @@ function showPetMenu(id: string): void {
   stageWin.popup(items);
 }
 
-// 파티 목록 → 무대. 그림을 받는 동안 기다린다. 트레이 아이콘·이름도 첫 마리에 맞춘다
+// 파티 목록 → 무대. 그림을 받는 동안 기다린다. 트레이는 공식 앱 로고를 유지한다
 async function refreshParty(): Promise<void> {
   if (!party || !stage) return;
   await stage.setParty(party.pets());
-  tray?.setIcon(stage.firstIdleSheet());
+  tray?.setIcon(logoFile(256));
   tray?.refresh();
 }
 
@@ -453,7 +453,7 @@ async function main(): Promise<void> {
   }
 
   if (mode === "companion") {
-    tray = createTray({ icon: stage.firstIdleSheet(), tooltip: t("tray.title", { name: displayName() }), template: trayTemplate });
+    tray = createTray({ icon: logoFile(256), tooltip: t("tray.title", { name: displayName() }), template: trayTemplate });
   } else {
     // 전역 단축키 — 동반자는 잡지 않는다 (shortcuts.ts 머리 주석)
     shortcuts = createShortcuts(

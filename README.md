@@ -49,7 +49,7 @@ pokebuddy eevee               # 일반 터미널 — 셸이 끝나면 사라진�
 !pokebuddy eevee dot=3        # 떠 있는 펫이면 옵션만 바꿔 같은 자리에 다시 띄운다
 !pokebuddy stop               # 내리기 — 여러 마리면 골라서
 pokebuddy companion           # 동반자 — 어느 터미널을 보든 그 창의 에이전트를 따른다. 항상 위. 첫 실행이면 포켓몬 선택 창
-pokebuddy companion eevee     # 첫 실행에 선택 창 없이 이브이로 시작 (저장이 있으면 저장된 포켓몬이 먼저)
+pokebuddy companion           # 첫 실행이면 포켓몬 선택 창을 열고, 이후에는 저장된 파티를 복원
 pokebuddy companion stop      # 동반자 내리기
 ```
 
@@ -58,7 +58,7 @@ pokebuddy companion stop      # 동반자 내리기
 | `pokebuddy <펫> [이름=값 ...]` | 이 세션에 펫을 더한다. 떠 있는 펫 이름이면 그 펫을 바꾼다 |
 | `pokebuddy stop [펫 ...\|all]` | 이 세션의 펫을 내린다. 일반 터미널에서 여러 마리면 체크리스트로 고른다 |
 | `pokebuddy status [펫]` | 훅 등록, 세션 판정, 떠 있는 펫, PMD 저작자를 한 번에 보여 준다 |
-| `pokebuddy companion [<펫>] [이름=값 ...]` | 동반자를 띄운다. 기기당 하나, 항상 위, 맨 앞 터미널 창의 활성 터미널 상태를 따른다 |
+| `pokebuddy companion [buddy=값 click=값]` | 동반자를 띄운다. 포켓몬은 첫 실행 선택창에서 고르고, 이후 저장된 파티를 복원한다 |
 | `pokebuddy companion stop` | 동반자를 내린다 |
 | `pokebuddy setup` · `pokebuddy uninstall` | 설치 · 되돌리기 |
 

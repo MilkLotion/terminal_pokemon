@@ -2,7 +2,7 @@
 //
 //   pokebuddy <펫> [이름=값 ...]
 //   pokebuddy [--pet <펫>] [--dot 3] ...
-//   pokebuddy companion [<펫>] [이름=값 ...] | companion stop
+//   pokebuddy companion [buddy=값] [click=값] | companion stop
 //   pokebuddy stop [펫 ...|all] | setup | uninstall | status | help
 //
 // pokebuddy 는 명령을 실행하지 않는다 — 터미널에서 pokebuddy eevee, CLI LLM 안에서 !pokebuddy eevee 로 그 세션에 펫을 붙인다 (cli/run.js).
@@ -11,7 +11,7 @@
 const USAGE = `사용 — 터미널에서 그대로, CLI LLM(claude·codex·gemini) 안에서는 앞에 ! 를 붙인다:
   pokebuddy <펫> [이름=값 ...]                              이 세션에 펫 더하기 — 떠 있는 펫 이름이면 그 펫을 바꾼다
   pokebuddy stop [펫 ...|all]                               이 세션의 펫 내리기 — 여러 마리면 체크리스트로 고른다
-  pokebuddy companion [<펫>] [buddy=값] [click=값]          동반자 띄우기 — 기기당 하나, 항상 위, 맨 앞 터미널 창을 따른다
+  pokebuddy companion [buddy=값] [click=값]                 동반자 띄우기 — 기기당 하나, 항상 위, 맨 앞 터미널 창을 따른다
   pokebuddy companion stop                                  동반자 내리기
   pokebuddy setup [--dry-run] [--no-editor]                 CLI LLM 상태 훅·에디터 확장 설치
   pokebuddy uninstall [--dry-run] [--purge] [--no-editor]   설치한 것 되돌리기 (--purge 면 설정·캐시까지)
@@ -24,7 +24,7 @@ const USAGE = `사용 — 터미널에서 그대로, CLI LLM(claude·codex·gemi
   !pokebuddy eevee dot=3 buddy=calm   크게, 덜 돌아다니게 (떠 있던 펫이 이걸로 바뀐다)
   !pokebuddy zapdos+pikachu           여러 마리 (+ 또는 쉼표 — PowerShell 에서 쉼표는 따옴표로 감싼다)
   !pokebuddy stop pikachu             한 마리 내리기 (!pokebuddy stop all 은 전부)
-  pokebuddy companion eevee           동반자 — 어느 터미널을 보든 그 창의 에이전트 상태를 따른다. 트레이로 끝낸다
+  pokebuddy companion                 동반자 — 어느 터미널을 보든 그 창의 에이전트 상태를 따른다. 트레이로 끝낸다
 
 옵션 (이름=값 · --이름 값):
   dot=<숫자>   buddy=on|calm|off   keep=on|off   click=on|off
@@ -63,11 +63,11 @@ function parseArgs(argv) {
 
   if (args[0] === "-h" || args[0] === "--help") return { kind: "help" };
   if (args[0] === "-v" || args[0] === "--version") return { kind: "version" };
-  // companion [stop] [<펫>] [이름=값 ...] — 동반자. 옵션 문법은 펫 띄우기와 같고 펫 이름은 없어도 된다(설정의 slug)
+  // companion [stop] [buddy=값] [click=값] — 동반자. 포켓몬 이름은 첫 실행 선택창에서 고른다
   if (args[0] === "companion") {
     args.shift();
     if (args[0] === "stop") return { kind: "companion", stop: true };
-    const parsed = parseOptions(args);
+    const parsed = parseOptions(args, { allowPet: false });
     if (parsed.kind === "help") return parsed;
     if (parsed.error) return { kind: "companion", error: parsed.error };
     return { kind: "companion", opts: parsed.opts };
@@ -91,10 +91,10 @@ function parseArgs(argv) {
 
 // 펫 이름과 이름=값 · --이름 값 옵션을 읽는다 — 펫 띄우기와 동반자가 같은 문법을 쓴다
 // 반환: { opts } | { error } | { kind: "help" }
-function parseOptions(args) {
+function parseOptions(args, { allowPet = true } = {}) {
   const opts = {};
   // 첫 인자가 옵션도 이름=값 도 아니면 펫 이름으로 받는다 (pokebuddy eevee dot=3)
-  if (args.length && !args[0].startsWith("-") && !args[0].includes("=")) opts.pet = args.shift();
+  if (allowPet && args.length && !args[0].startsWith("-") && !args[0].includes("=")) opts.pet = args.shift();
 
   while (args.length) {
     const a = args[0];
@@ -104,6 +104,7 @@ function parseOptions(args) {
     if (long) {
       const key = optionName(long[1]);
       if (!key) return { error: unknownOption(a, long[1]) };
+      if (!allowPet && key === "pet") return { error: "동반자는 포켓몬 이름을 받지 않는다 — 첫 실행 때 선택창에서 고른다. 실행: pokebuddy companion" };
       if (args.length < 2) return { error: `${a} 에 값이 없음` };
       opts[key] = args[1];
       args.splice(0, 2);
@@ -122,6 +123,7 @@ function parseOptions(args) {
     // 옵션 모양이 아닌 단어 — 예전 문법(pokebuddy eevee codex · pokebuddy eevee -- claude)이거나,
     // PowerShell 이 따옴표 없는 zapdos,pikachu 를 쪼갠 것
     const word = a === "--" ? args[1] || a : a;
+    if (!allowPet) return { error: "동반자는 포켓몬 이름을 받지 않는다 — 첫 실행 때 선택창에서 고른다. 실행: pokebuddy companion" };
     const pet = opts.pet || "eevee";
     return {
       error:

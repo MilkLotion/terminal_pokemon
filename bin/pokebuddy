@@ -2,7 +2,7 @@
 // pokebuddy — 이 명령을 실행한 세션에 펫을 붙인다. claude 안에서 !pokebuddy eevee 로 띄우면 claude 가 끝날 때 함께 끝난다.
 //
 //   pokebuddy <펫> [이름=값 ...]
-//   pokebuddy companion [<펫>] [이름=값 ...] | companion stop
+//   pokebuddy companion [buddy=값] [click=값] | companion stop
 //   pokebuddy stop [펫 ...|all] | setup | uninstall | status
 //
 // mac·Windows·npm 전역 설치·git clone 모두 이 파일 하나로 돈다.

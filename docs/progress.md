@@ -1,11 +1,43 @@
 # pokebuddy 진행 현황과 다음 작업
 
 기준: `85daaa7` (S4 구현 커밋) 이후 S5 설계.
-갱신: 2026-09-18. S5 설계 문서는 미커밋이다. S5 기능 구현은 시작하지 않았다.
+갱신: 2026-09-18. `app-window-ball-empty.svg`를 정식 로고로 채택하고 앱·Windows·macOS·VS Code 산출물을 갱신했다. PNG 캔버스 크기 오류도 수정했다. S5 설계 문서는 미커밋이다. S5 기능 구현은 시작하지 않았다.
 
 새 세션은 이 문서, [설계](design.md), [작업 기록](history.md), [역할 안내](roles/design.md), [S4 검수](review-s4.md), [설명서](guide.md) 순서로 읽는다.
 
 ## 현재 상태
+
+## 로고 개선 — 몬스터볼
+
+- 상태: 구현 및 자동 검수 완료.
+- 원본: `assets/logo/src/logo.txt`, `assets/logo/src/logo.small.txt`.
+- 결과: 터미널 창 구도는 유지하고 민트 캐릭터를 빨강·흰색 몬스터볼로 교체했다.
+- 생성: `npm run logo:build` 통과. PNG, SVG, ICO, ICNS를 갱신했다.
+- 상세 계획: `docs/plan-logo.md`. 검수: `docs/review-logo.md`.
+
+## 앱 아이콘 SVG 시안
+
+- 상태: 시안 제작·자동 검수 완료.
+- 결과: `assets/icon-concepts/`에 기존 네 개와 새 앱 타일 시안 세 개를 추가했다.
+- 피드백 반영: 기존 시안은 모니터 일러스트 느낌이 강했다. 새 시안은 둥근 사각형 앱 타일과 프로그램 창을 중심으로 한다.
+- 새 추천: `app-window-ball.svg`는 프로그램 창과 몬스터볼의 균형이 좋다.
+- 상세 계획: [아이콘 시안 계획](plan-icon-concepts.md). 검수: [아이콘 시안 검수](review-icon-concepts.md).
+- 피드백: [아이콘 시안 피드백](feedback-icon-concepts.md).
+
+## 정식 로고 채택
+
+- 상태: 구현 및 자동 검수 완료.
+- 원본: `assets/logo/src/logo.svg`.
+- 산출물: `assets/logo/out/logo.svg`, PNG 8종, `logo.ico`, `logo.icns`, `vscode-extension/logo.png`.
+- 생성: `npm run logo:build` 통과.
+- 검수: [로고 검수](review-logo.md).
+
+## 동반자 실행 명령
+
+- 상태: 구현 및 문서 검수 완료.
+- 정식 명령: `pokebuddy companion`.
+- 포켓몬 이름은 받지 않는다. 첫 실행 선택창에서 고르고, 다음 실행부터 저장된 파티를 복원한다.
+- 중단: `pokebuddy companion stop`.
 
 | 단계 | 상태 | 내용 |
 |---|---|---|

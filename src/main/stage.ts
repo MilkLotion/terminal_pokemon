@@ -65,7 +65,6 @@ export interface Stage {
   petIds(): string[];
   petOf(id: string): PartyPet | null;
   heldId(): string | null;
-  firstIdleSheet(): SpriteSheet | null; // 트레이 아이콘 — 첫 shown 마리의 Idle 시트
   lastFrame(): StageFrame | null;
 }
 
@@ -358,10 +357,6 @@ export function createStage(opts: StageOptions): Stage {
     petIds: () => order.filter((id) => pets.has(id)),
     petOf: (id) => pets.get(id)?.pet ?? null,
     heldId: () => held,
-    firstIdleSheet() {
-      const first = order.find((id) => pets.has(id));
-      return first ? (pets.get(first)?.look.sheets.anims.Idle ?? null) : null;
-    },
     lastFrame: () => last,
   };
 }

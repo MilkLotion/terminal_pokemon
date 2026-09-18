@@ -293,7 +293,7 @@ async function run(opts) {
   else if (all.length === 1) say(`내리기: ${commandFor(session, "stop")}`);
 }
 
-// pokebuddy companion [<펫>] [이름=값 ...] — 동반자 하나를 띄운다.
+// pokebuddy companion [buddy=값] [click=값] — 동반자 하나를 띄운다. 포켓몬은 첫 실행 선택창에서 고른다.
 // 세션에 묶이지 않고 기기당 하나. 항상 위에 떠서 맨 앞 터미널 창을 따르고, 트레이나 companion stop 으로 내린다 (src/main/app.ts companion 모드).
 // VS Code 확장이 창마다 띄운 창 펫은 내린다 — 동반자 하나가 모든 창을 따르므로 겹치면 두 마리가 보인다.
 // 확장은 동반자가 살아 있는 동안 창 펫을 다시 띄우지 않고, 동반자가 내려가면 10초 안에 되살린다
@@ -315,16 +315,6 @@ async function companion(opts = {}) {
 
   const config = settings.load();
   let slug = config.slug;
-  if (opts.pet) {
-    const got = resolveSlug(petList(opts.pet)[0] || "");
-    if (got.error) {
-      process.stderr.write(`펫 이름을 찾을 수 없음: ${opts.pet}\n`);
-      if (got.hints.length) process.stderr.write(`  비슷한 이름:\n${got.hints.map((h) => `    ${h}\n`).join("")}`);
-      process.exitCode = 1;
-      return;
-    }
-    slug = got.slug;
-  }
 
   const windowPets = liveWindowPets();
   if (windowPets.length) {
@@ -335,11 +325,8 @@ async function companion(opts = {}) {
   fs.mkdirSync(PATHS.home, { recursive: true });
   fs.mkdirSync(PATHS.pets, { recursive: true });
   const env = { ...process.env, ...optionEnv(opts), POKEBUDDY_MODE: "companion" };
-  // 이름은 직접 줬을 때만 넘긴다 — 첫 실행이면 그 종으로 바로 시작하고, 저장이 있으면 저장된 종이 먼저다.
-  // 안 줬는데 설정의 기본 이름을 넘기면 첫 실행 선택 창이 뜨지 않고 그 종으로 시작해 버린다
-  if (opts.pet) env.POKEBUDDY_SLUG = slug;
   const firstRun = !fs.existsSync(PATHS.save);
-  if (firstRun && !opts.pet) say("첫 실행 — 포켓몬 선택 창에서 고르면 뜬다 (닫으면 시작하지 않는다)");
+  if (firstRun) say("첫 실행 — 포켓몬 선택 창에서 고르면 뜬다 (닫으면 시작하지 않는다)");
   if (debug) {
     env.POKEBUDDY_LOG = path.join(PATHS.pets, "debug-companion.log");
     process.stderr.write(`펫 로그: ${env.POKEBUDDY_LOG}\n`);
@@ -356,7 +343,7 @@ async function companion(opts = {}) {
   }
   fs.writeFileSync(pet.file, `${pet.pid}\n`);
   // 선택 창을 고르는 동안은 오래 기다린다 — 고르지 않고 닫으면 펫이 끝나 exited 로 돌아온다
-  await waitReady([pet], { timeoutMs: firstRun && !opts.pet ? PICK_TIMEOUT_MS : READY_TIMEOUT_MS });
+  await waitReady([pet], { timeoutMs: firstRun ? PICK_TIMEOUT_MS : READY_TIMEOUT_MS });
 
   const shown = displayName(savedSpecies() || slug, config);
   if (pet.ready) say(`동반자를 띄움: ${shown} — 맨 앞 터미널 창을 따른다. 내리기: 트레이 메뉴 또는 pokebuddy companion stop`);
