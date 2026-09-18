@@ -1,7 +1,7 @@
 # pokebuddy 진행 현황과 다음 작업
 
 기준: `85daaa7` (S4 구현 커밋) 이후 S5 설계.
-갱신: 2026-09-18. S5에서 박스를 제거했다. 등록된 도감에서 파티에 소환하도록 수정했다. 에버스톤을 제거했다. 진화의돌을 추가했다. 작업 부화를 반영했다. 기능 구현은 미시작이다.
+갱신: 2026-09-18. S5에서 박스를 제거했다. 등록된 도감에서 파티에 소환하도록 수정했다. 에버스톤을 제거했다. 진화의돌을 추가했다. 작업 부화를 반영했다. Figma 상세 화면을 설계했다. 기능 구현은 미시작이다.
 
 새 세션은 이 문서, [설계](design.md), [작업 기록](history.md), [역할 안내](roles/design.md), [S4 검수](review-s4.md), [설명서](guide.md) 순서로 읽는다.
 
@@ -59,12 +59,20 @@
 시안은 예시 자료만 사용한다. 기능 코드는 변경하지 않았다.
 Figma UI를 사용자 시안 `19:1024` 기준으로 갱신했다.
 [Foundations](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=30-121), [Components](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=7-2), [Party screen](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=34-219)을 확인한다.
-최종 변수는 39개다. 글꼴 스타일은 14개다. 버튼은 16개 상태다. 메뉴는 4개 상태다.
+최종 공통 변수는 39개다. 상세 상태 변수 8개를 추가하여 변수는 47개다. 글꼴 스타일은 14개다. 버튼은 16개 상태다. 메뉴는 4개 상태다.
 표시·숨김 카드와 빈칸·잠긴 칸을 구성했다. 파티 화면은 720×780이다.
 사용자 요청으로 세 S5 페이지의 이전 시안과 미사용 자산을 제거했다. Page 1의 사용자 원본은 보존했다.
 네 페이지의 누락 변수·컴포넌트 참조는 0개다.
-[UI 작업 계획](plan-s5-figma-ui.md)과 [자산 목록](figma-s5-inventory.json)을 확인한다.
+[UI 작업 계획](plan-s5-figma-ui.md), [상세 화면 계획](plan-s5-figma-detail.md), [공통 자산 목록](figma-s5-inventory.json), [상세 자산 목록](figma-s5-detail-inventory.json)을 확인한다.
 검증 범위와 미정 사항은 [S5 검토 기록](review-s5.md)에 남긴다.
+
+## S5 Figma 상세 화면
+
+[상세 화면 계획](plan-s5-figma-detail.md)을 기준으로 `Components` 페이지에 상세용 컴포넌트를 추가했다.
+상태 안내, 프로필, 돌봄, 크기 선택, 설정 행, 소환 해제 확인창을 만들었다.
+밥 주기는 강조 버튼이다. 놀아주기는 보조 버튼으로 같은 돌봄 컴포넌트를 재사용한다.
+처리 중과 사용 불가 상태를 분리했다. 오류 안내는 기존 파티를 유지한다는 문구를 포함한다.
+상세 화면 조립은 다음 작업이다. 현재는 컴포넌트와 토큰 검증 단계다.
 
 ## S4 구현 기록
 

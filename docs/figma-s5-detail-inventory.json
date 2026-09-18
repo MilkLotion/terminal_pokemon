@@ -1,0 +1,46 @@
+{
+  "fileKey": "MA3K41Y6omAi5mRu6YDFly",
+  "updated": "2026-09-18",
+  "pages": {
+    "foundations": "5:2",
+    "components": "7:2",
+    "screens": "12:2"
+  },
+  "foundations": {
+    "detailTokensBoard": "47:129",
+    "variablesAdded": [
+      { "id": "VariableID:47:121", "name": "primitive/amber-50" },
+      { "id": "VariableID:47:122", "name": "primitive/amber-800" },
+      { "id": "VariableID:47:123", "name": "primitive/red-50" },
+      { "id": "VariableID:47:124", "name": "color/status-warning-bg" },
+      { "id": "VariableID:47:125", "name": "color/status-warning-text" },
+      { "id": "VariableID:47:126", "name": "color/status-error-bg" },
+      { "id": "VariableID:47:127", "name": "stroke/thin" },
+      { "id": "VariableID:47:128", "name": "stroke/focus" }
+    ],
+    "totalVariables": 47,
+    "textStyles": 14
+  },
+  "components": {
+    "notice": "48:177",
+    "profile": "49:177",
+    "careAction": "49:372",
+    "sizeStep": "50:347",
+    "sizeSelector": "50:439",
+    "settingRow": "51:224",
+    "confirmDialog": "52:225"
+  },
+  "decisions": {
+    "detailReference": "34:219",
+    "fontFamilies": ["Outfit", "Inter"],
+    "hiddenMarker": { "size": "16.032×16px", "x": 60, "y": 4, "shadow": false },
+    "careStates": ["Ready", "Processing", "Disabled"],
+    "sizeValues": [1, 2, 3, 4, 5, 6],
+    "unsubscribeBehavior": "confirmation keeps dex registration and growth history"
+  },
+  "scope": {
+    "runtimeImplementation": false,
+    "codeConnect": false,
+    "prototypeInteractions": true
+  }
+}
