@@ -17,7 +17,36 @@
 
 ## 현재 시안 검사
 
-### Figma 네비게이션 레이어 검사
+### Figma UI 공통화 — 2026-09-18
+
+- 대상: [Foundations](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=30-121), [Components](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=7-2), [파티 화면](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=34-219).
+- `get_screenshot`: 색상표, 버튼, 메뉴, 카드, 컴포넌트 페이지, 최종 화면 시각 확인.
+- `get_metadata`와 읽기 전용 `use_figma`: 720×780 화면, 여섯 칸, 공통 컴포넌트 연결, Outfit·Inter 글꼴 확인.
+- 변수 43개. WEB 코드 표기 누락 0개. ALL_SCOPES 0개.
+- 버튼: Primary·Secondary × Small·Medium × Default·Hover·Focus·Disabled = 16개.
+- 메뉴: Default·Selected·Hover·Focus = 4개. Label·Icon 속성 제공.
+- 카드: Visibility=Visible·Hidden. Show Debuff와 Debuff 텍스트는 독립 속성이다.
+- 숨김 마커: 원본과 같은 16.032×16px, 이미지 내부 x=60·y=4, Absolute, 그림자 없음.
+- 발견·수정: 기존 변수 재바인딩 시 일부 버튼이 검게 렌더링됐다. 실제 색 값과 바인딩을 함께 보존하여 수정했다.
+- 발견·수정: 인스턴스 하위 막대의 직접 크기 변경이 반영되지 않았다. 71·85 친밀도 막대를 공통 컴포넌트로 분리하고 숫자와 비율을 맞췄다.
+- 유지: 사용자 시안의 작은 상태 글씨와 타입 배지 색. 전체 접근성 적합성을 주장하지 않는다.
+- 범위 밖: 실제 클릭 동작, 전체 도감·상점·가방·설정 화면 조립, 실시간 친밀도 값 연결, Code Connect와 런타임 검사.
+
+### Figma 이전 자산 정리 — 2026-09-18
+
+- 앞선 43개 변수와 Archive 보관 기록을 대체한다.
+- 제거한 상위 노드: `12:3`, `9:2`, `7:30`, `7:25`, `35:170`, `37:382`, `5:29`.
+- 제거한 변수: `VariableID:29:125`, `VariableID:29:126`, `VariableID:29:127`, `VariableID:36:161`.
+- Disabled 색상 참조를 기존 Track·Subtle 색상으로 통합한 뒤 중복 변수를 제거했다.
+- 미사용 `S5/Effect/Flat` 스타일을 제거했다.
+- 최종 변수 39개. 글꼴 스타일 14개. 남은 변수·글꼴 스타일은 참조가 있다.
+- 네 페이지의 변수·컴포넌트 참조를 다시 확인했다. 누락 참조는 0개다.
+- 정리 후 Foundations·Components·파티 화면 캡처를 확인했다.
+- `git diff --check`와 `figma-s5-inventory.json` 파싱을 통과했다.
+- 이번 Figma 정리의 미해결 검수 항목은 없다. 아래 기능 설계 결정은 런타임 구현 전 별도로 확정한다.
+- 앱 코드는 변경하지 않았다. 런타임 검사는 실행하지 않았다.
+
+### 이전 Figma 네비게이션 레이어 검사
 
 - 대상: [Primary navigation](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=12-11).
 - 확인: `Navigation / Primary > Navigation Items > Tab Item / ...` 계층.
@@ -72,4 +101,4 @@
 - [스펙 미확정] 실행 환경 명칭, 최초 등장 지방 분류.
 - [확인 필요] 전체 도감·폼, 800×620 앱 창, 운영체제 배율, IPC·저장·경합·중복 부화, 실제 연결. 구현 후 확인한다.
 
-이번 작업은 설계 단계에서 끝난다. 실제 기능 구현은 미시작이다. 커밋과 푸시는 하지 않았다.
+실제 기능 구현은 미시작이다. 2026-09-18 Figma 자산 정리 후에는 사용자 요청에 따라 문서와 자산 목록을 커밋·푸시한다.

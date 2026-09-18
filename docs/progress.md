@@ -57,7 +57,13 @@
 랜덤알은 작업하면서 부화한다. 진화 전후 종 모두 등록을 유지한다. 도감에서 소환한다.
 종별 육성 기록과 재소환, 진화 승계 설계가 필요하다. 저장 버전과 기존 데이터 이식은 미정이다.
 시안은 예시 자료만 사용한다. 기능 코드는 변경하지 않았다.
-Figma 작업을 시작했다. 파일은 [S5 Design System](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=5-2), [Components](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=7-2), [Party screen](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=12-3)이다. 토큰, 공통 컴포넌트, 파티 화면 1차 조립을 완료했다. 기본 네비게이션은 `Navigation / Primary > Navigation Items > Tab Item / ...` 계층으로 정리했다.
+Figma UI를 사용자 시안 `19:1024` 기준으로 갱신했다.
+[Foundations](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=30-121), [Components](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=7-2), [Party screen](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=34-219)을 확인한다.
+최종 변수는 39개다. 글꼴 스타일은 14개다. 버튼은 16개 상태다. 메뉴는 4개 상태다.
+표시·숨김 카드와 빈칸·잠긴 칸을 구성했다. 파티 화면은 720×780이다.
+사용자 요청으로 세 S5 페이지의 이전 시안과 미사용 자산을 제거했다. Page 1의 사용자 원본은 보존했다.
+네 페이지의 누락 변수·컴포넌트 참조는 0개다.
+[UI 작업 계획](plan-s5-figma-ui.md)과 [자산 목록](figma-s5-inventory.json)을 확인한다.
 검증 범위와 미정 사항은 [S5 검토 기록](review-s5.md)에 남긴다.
 
 ## S4 구현 기록
