@@ -1,5 +1,11 @@
 # S5 포켓몬 상세 Figma 설계
 
+> 2026-09-21 정정: 에버스톤은 사용자 구상이 아니다. 상품·부화 관련 사용자 결정 표기는 직접 근거가 확인되지 않았다. [명칭 출처 정정](../../work/s5-terminology/review.md)을 먼저 확인한다.
+
+> 2026-09-21 보관 기록. 현재 기준은 [설계](../../design.md)와 [v2 검수](../../work/s5-design-system-v2/review.md)를 따른다. 아래 결정·수치·상태는 당시 기록이다.
+
+> 2026-09-21 추가: 이 문서는 Legacy S5 상세 작업 기록이다. 현재 v2의 글꼴·컴포넌트와 전체 높이 1030px Template은 [v2 검수](../../work/s5-design-system-v2/review.md)를 따른다. 아래 커밋·푸시 문구는 당시 작업 범위다.
+
 날짜: 2026-09-18. 갱신: 2026-09-19. 상태: 상세 컴포넌트와 대표 화면 조립·검수 완료. 앱 기능 구현 미시작.
 
 ## 목표와 범위
@@ -14,7 +20,7 @@
 
 ## 근거와 충돌 해결
 
-- 결정: [design.md](design.md). 상태: [progress.md](progress.md). 기능 계약: [plan-s5.md](plan-s5.md).
+- 결정: [design.md](../../design.md). 상태: [progress.md](../../progress.md). 기능 계약: [plan-s5.md](../../specs/s5.md).
 - 시각 기준: [S5 UI 계획](plan-s5-figma-ui.md). 자산 기준: [figma-s5-inventory.json](figma-s5-inventory.json).
 - Code Connect 파일은 없다. 런타임 컴포넌트와 대응하지 않으므로 Code Connect는 만들지 않는다.
 - Outfit·Inter를 유지한다. 이전 HTML 색상보다 확정 Figma 색상을 우선한다.

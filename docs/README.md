@@ -1,50 +1,45 @@
-# docs/ entry point
+# 문서 안내
 
-This directory holds the project knowledge base for pokebuddy. This file is the map. Read it before you write or change any file in `docs/`.
+이 폴더는 현재 기준과 작업 기록을 보관한다. 새 작업을 시작하면 이 문서와 [현재 현황](progress.md)을 읽는다.
 
-## Document map
+## 현재 기준
 
-| File | Holds |
-| --- | --- |
-| [`design.md`](design.md) | Accepted architecture and design decisions. One row per decision. |
-| [`progress.md`](progress.md) | Current stage, next action, and validation status. |
-| [`plan-<stage>.md`](plan-s5.md) | Plan and design for one stage or one focused task. |
-| [`review-<stage>.md`](review-s5.md) | Review findings, evidence, and fixes for one stage or task. |
-| [`feedback-<stage>.md`](feedback-s5.md) | Feedback items, their state, and the next action for one stage or task. |
-| [`history.md`](history.md) | Dated record of completed work cycles. |
-| [`terms.md`](terms.md) | Canonical name and meaning for each user-facing term. |
-| [`guide.md`](guide.md) | Install steps, commands, settings, and how the app works. |
-| [`roles/`](roles/design.md) | Instructions for each step of the work cycle: design, work, review, feedback, revision. |
+| 문서 | 기록할 내용 |
+|---|---|
+| [design.md](design.md) | 현재 구조와 채택한 결정 |
+| [progress.md](progress.md) | 현재 상태, 열린 문제, 다음 행동 |
+| [terms.md](terms.md) | 화면 용어와 채택 여부 |
+| [guide.md](guide.md) | 현재 앱의 사용 방법 |
+| [specs/s5.md](specs/s5.md) | S5 기능 계약과 미확정 제안 |
 
-Root [`README.md`](../README.md) and [`vscode-extension/README.md`](../vscode-extension/README.md) are user-facing product pages. They keep their own voice. The rules on this page apply to the files listed in the table above.
+완료한 작업의 설명을 이 문서들에 반복해서 넣지 않는다. 상세 근거는 작업 기록으로 연결한다.
 
-## Evidence priority
+## 기록 위치
 
-When two documents disagree, trust them in this order:
+| 위치 | 용도 |
+|---|---|
+| [work/](work/README.md) | 기능별 설계·작업·검수·피드백·수정 기록 |
+| [history/](history/README.md) | 월별 완료 이력 |
+| [contributing/workflow.md](contributing/workflow.md) | 파일 생성·갱신·보관 절차 |
+| [contributing/writing.md](contributing/writing.md) | ASD-STE100에서 가져온 한국어 작성 원칙과 검수 항목 |
+| [archive/](archive/s5-legacy/README.md) | 대체된 설계·시안. 현재 지시로 사용하지 않는다. |
 
-1. Source code and configuration in `src/`, `data/`, `lib/`.
-2. Data files and generated schemas (for example `data/natures.json`, `data/species.defaults.json`).
-3. Self-tests and check scripts (`npm run check`, `npm run selftest`).
-4. Reviewed documents (`review-<stage>.md`).
-5. Unreviewed notes and plans.
+`docs/` 바로 아래에는 위의 현재 기준 문서와 이 안내만 둔다. 기능 계획은 `specs/`에 둔다. 관측 JSON과 캡처는 해당 작업의 `evidence/`에 둔다.
 
-Update the losing document instead of deleting the disagreement. See "Keep corrections as new records" below.
+## 근거 판단
 
-## Marking unconfirmed or planned items
+- 사용자 의도는 직접 발언으로 확인한다. 구현이나 과거 문서만으로 사용자 승인을 추정하지 않는다.
+- 실제 동작은 코드·설정·관련 검사 결과로 확인한다.
+- Figma 관측은 화면 속성의 근거다. 앱 구현이나 게임 규칙의 승인 근거가 아니다.
+- 결정은 `design.md`에서 관리한다. 진행 상태는 `progress.md`에서 관리한다.
+- 서로 다른 기록이 충돌하면 날짜와 적용 범위를 먼저 확인한다.
+- 과거 기록이 틀리면 정정 날짜와 근거를 추가한다. 과거 검수 결과를 새 결과로 덮어쓰지 않는다.
 
-Do not add a new label set for this. Use the bracket tags from the user's global writing rules, for example `[스펙 미확정]`, `[임시]`, `[백엔드 API 연동 대기]`, `[권한 기반 작업 예정]`, `[성능 개선 여지]`, `[리팩토링 대상]`. Put the tag next to the sentence it qualifies. A decision without a tag is treated as final.
+## 완료 전 확인
 
-## ASD-STE100 writing rules
+1. [작성 검사표](contributing/writing.md#완료-전-의미-검수)를 적용한다.
+2. `node scripts/check-docs.cjs`를 실행한다.
+3. `git diff --check`를 실행한다.
+4. 해당 작업 기록에 검사 범위와 남은 문제를 적는다.
 
-These rules apply to the sentences and table cells inside the documents in the map above. They do not require English text — write Korean content in Korean. They do not forbid tables; a table is often clearer than prose for this kind of record, so keep the table and apply the rules inside each cell.
-
-- Write one fact or one instruction per sentence. Split a cell into a short list when it holds more than one fact.
-- Use the exact name for a path, command, API, table, or field. Do not paraphrase an identifier.
-- Use the same term for the same concept everywhere. `terms.md` is the source for user-facing terms; internal identifiers keep their code name.
-- State the condition before the action when the condition changes the result (for example: "칸이 비어 있으면 해금한 종을 얻는다").
-- Avoid vague words, idioms, and marketing language in these documents (root and extension README pages are exempt; see above).
-- Keep fact, decision, assumption, and open question separate. Do not fold an assumption into a statement of fact.
-- Keep corrections as new, dated records. Do not erase or silently rewrite past history entries.
-- Write dates as `YYYY-MM-DD`.
-
-Korean prose cannot claim full formal ASD-STE100 compliance, because the standard defines an approved English vocabulary. Apply the principles above to Korean text for clarity, not as a compliance claim.
+자동 검사는 구조와 파일 참조를 확인한다. 문장의 의미나 ASD-STE100 준수 여부를 판정하지 않는다.

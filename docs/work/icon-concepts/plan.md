@@ -16,7 +16,7 @@
 - 방향: `docs/design.md`
 - 진행 상태: `docs/progress.md`
 - 시안 파일: `assets/icon-concepts/*.svg`
-- 검수: `docs/review-icon-concepts.md`
+- 검수: `docs/work/icon-concepts/review.md`
 
 ## 방향
 

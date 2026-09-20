@@ -6,30 +6,35 @@ Keep project knowledge in `docs/`.
 
 - `docs/progress.md`: current stage, next action, and validation status.
 - `docs/design.md`: architecture and accepted decisions.
-- `docs/plan-<stage>.md`: stage plan and design.
-- `docs/review-<stage>.md`: findings, feedback, and fixes.
-- `docs/history.md`: dated record of completed work cycles.
+- `docs/specs/<feature>.md`: current feature contracts.
+- `docs/work/<task>/record.md`: design, work, review, feedback, and revision in one record.
+- `docs/work/<task>/evidence/`: observations, JSON, and screenshots for that task.
+- `docs/history/YYYY-MM.md`: concise dated record of completed work cycles.
 - `docs/terms.md`: canonical name and meaning for each user-facing term.
 
-Keep one section per feature. Link source files, data, commands, and review evidence. Resolve conflicts with `design.md` for decisions and `progress.md` for status.
+Keep only README, design, progress, terms, and guide at the docs root. Reuse an existing task record for follow-up work. Do not create separate plan/review/feedback files for each small edit. Keep existing split records in their task folder. Follow [the workflow](docs/contributing/workflow.md).
+
+Link source files, data, commands, and review evidence. Resolve conflicts with `design.md` for decisions and `progress.md` for status. Code proves current behavior, not user approval. Preserve reasons, corrections, constraints, and context beside the relevant task. Link them from the affected specification. Record the source and whether a claim is confirmed or proposed. Never infer missing intent.
 
 ## Required Work Cycle
 
 Use this order for every feature or bug fix:
 
-Role instructions: [design](docs/roles/design.md), [work](docs/roles/work.md), [review](docs/roles/review.md), [feedback](docs/roles/feedback.md), and [revision](docs/roles/revision.md).
+Role instructions: [design](docs/contributing/roles/design.md), [work](docs/contributing/roles/work.md), [review](docs/contributing/roles/review.md), [feedback](docs/contributing/roles/feedback.md), and [revision](docs/contributing/roles/revision.md).
 
 1. **Design:** record goal, scope, SSOT files, risks, and acceptance checks.
-2. **Work:** make a focused change. Update feature docs and `docs/history.md`.
+2. **Work:** make a focused change. Update the existing task record and affected specification.
 3. **Review:** run relevant checks. Record commands and results.
 4. **Feedback:** list failures, ambiguity, and review comments.
-5. **Revision:** fix findings, rerun checks, and update all records.
+5. **Revision:** fix findings, rerun affected checks, and update changed facts only. Add one concise entry to the current monthly history when the work cycle ends.
 
 Do not commit or push with open findings. For design-only work, stop after Design and mark implementation as not started.
 
 ## ASD-STE100 Writing
 
-[`docs/README.md`](docs/README.md) is the source of truth for the writing policy, the evidence priority when documents disagree, and the document map. Follow it for every file listed there. In short: one fact per sentence, exact identifiers, one term per concept, condition before action, no vague or marketing language, dates as `YYYY-MM-DD`. Korean text follows these principles for clarity; it does not claim formal Korean ASD-STE100 compliance.
+Read [`docs/README.md`](docs/README.md) for the document map and evidence priority. Apply [`docs/contributing/writing.md`](docs/contributing/writing.md) to every changed technical passage. Use one fact or instruction per sentence, exact identifiers, one term per concept, and conditions before actions. Separate user decisions, observations, proposals, and historical results. Korean text applies these principles; it does not claim formal ASD-STE100 compliance.
+
+Before completion, manually review changed prose with the writing checklist. Record the scope and result in the task record. Run `node scripts/check-docs.cjs` and `git diff --check` for document changes. The script checks structure and references, not semantic correctness or STE compliance. Do not run builds or lint automatically for document-only work.
 
 ## Project Structure
 

@@ -1,5 +1,9 @@
 # S5 Figma 원자 조합 재구성
 
+> 2026-09-21 보관 기록. 현재 기준은 [설계](../../design.md)와 [v2 검수](../../work/s5-design-system-v2/review.md)를 따른다. 아래 결정·수치·상태는 당시 기록이다.
+
+> 2026-09-21 추가: 이 문서는 Legacy S5 계층과 API 기록이다. 현재 v2는 별도 00~04 페이지와 PB 자산을 사용한다. [v2 검수](../../work/s5-design-system-v2/review.md)를 따른다.
+
 날짜: 2026-09-19. 상태: Figma 원자·조합·상위 자산 이행과 화면 검증 완료. 앱 기능 구현 미시작.
 
 ## 목표
@@ -10,7 +14,7 @@
 
 ## 범위와 SSOT
 
-- 결정: [design.md](design.md). 현재 상태: [progress.md](progress.md). 상세 계약: [plan-s5-figma-detail.md](plan-s5-figma-detail.md).
+- 결정: [design.md](../../design.md). 현재 상태: [progress.md](../../progress.md). 상세 계약: [plan-s5-figma-detail.md](plan-s5-figma-detail.md).
 - 시각 기준: 원본 컨테이너 `19:1024`. 기존 파티 화면 `34:219`. 상세 프로필 `49:177`.
 - 자산 기준: [공통 자산 목록](figma-s5-inventory.json). 상세 자산 목록: [figma-s5-detail-inventory.json](figma-s5-detail-inventory.json).
 - Components 페이지 `7:2`의 기존 구조를 유지한다. 새 Figma 페이지는 만들지 않는다.
