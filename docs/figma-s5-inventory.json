@@ -1143,6 +1143,42 @@
       "properties": {}
     },
     {
+      "id": "82:233",
+      "name": "Pokemon / Type Badge",
+      "type": "COMPONENT_SET",
+      "properties": {
+        "Type": {
+          "type": "VARIANT",
+          "defaultValue": "Electric",
+          "variantOptions": ["Electric", "Fire", "Flying"]
+        }
+      },
+      "variants": [
+        { "id": "82:227", "name": "Type=Electric" },
+        { "id": "82:229", "name": "Type=Fire" },
+        { "id": "82:231", "name": "Type=Flying" }
+      ]
+    },
+    {
+      "id": "85:227",
+      "name": "Pokemon / Type Tags",
+      "type": "COMPONENT",
+      "properties": {
+        "Primary Type#85:0": { "type": "INSTANCE_SWAP", "defaultValue": "82:229", "preferredValues": [] },
+        "Secondary Type#85:1": { "type": "INSTANCE_SWAP", "defaultValue": "82:231", "preferredValues": [] },
+        "Show Secondary#85:2": { "type": "BOOLEAN", "defaultValue": true }
+      }
+    },
+    {
+      "id": "87:245",
+      "name": "Pokemon / Traits",
+      "type": "COMPONENT",
+      "properties": {
+        "Type Tags#87:2": { "type": "INSTANCE_SWAP", "defaultValue": "85:227", "preferredValues": [] },
+        "Nature#87:3": { "type": "TEXT", "defaultValue": "성격: 느긋" }
+      }
+    },
+    {
       "id": "32:137",
       "name": "Pokemon Card",
       "type": "COMPONENT_SET",
@@ -1170,6 +1206,11 @@
         "Friendship Bar#36:0": {
           "type": "INSTANCE_SWAP",
           "defaultValue": "36:383",
+          "preferredValues": []
+        },
+        "Type Tags#88:0": {
+          "type": "INSTANCE_SWAP",
+          "defaultValue": "85:227",
           "preferredValues": []
         },
         "Visibility": {

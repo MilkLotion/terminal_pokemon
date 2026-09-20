@@ -21,7 +21,21 @@
 - 아이보리 헤더, 회녹색 본문, 흰 카드, 왼쪽 정렬 메뉴를 사용한다. 기본 화면은 720×780이다.
 - 숨김 카드는 이미지 우측 위에 약 16px 몬스터볼을 표시한다. 위·오른쪽 여백은 약 4px이다. 그림자는 없다.
 - 카드 우측 위의 배고픔·피로는 친밀도 상승 디버프다. 숨김과 독립된 상태다. 감소율은 이 작업에서 정하지 않았다.
+- 상세 화면은 파티 카드에서 진입한다. 본문은 세로 스크롤을 사용한다. 반복 구역 제목은 `Detail / Section Header`를 재사용한다. 도감·상점·가방·설정용 Figma 화면은 상세 설계 범위에 포함하지 않는다.
 - [UI 작업 계획](plan-s5-figma-ui.md)에 컴포넌트와 검수 범위를 기록한다. 앱 기능 구현은 미시작이다.
+
+### S5 Figma 원자 조합 — 2026-09-19
+
+- Page 1의 사용자 원본 `19:1024`은 시각 기준으로 보존한다. S5 Components 페이지 `7:2`는 화면 조립에 사용하는 컴포넌트 원본이다.
+- `Pokemon / Type Badge` `82:233`은 타입 표시 원자다. `Type` VARIANT는 Electric, Fire, Flying을 제공한다.
+- `Pokemon / Type Badge`는 `color/type-electric`, `color/type-fire`, `color/type-flying`, `color/paper`, `S5/Type/Type Badge`를 사용한다.
+- `Pokemon / Type Tags` `85:227`은 Type Badge 인스턴스 두 개를 조합한다. `Primary Type`, `Secondary Type`, `Show Secondary` API를 제공한다.
+- `Pokemon / Traits` `87:245`은 `Pokemon / Type Tags`와 성격 TEXT를 조합한다. 이 컴포넌트는 상세 프로필에 사용한다.
+- `Pokemon Card` `32:137`은 `Pokemon / Type Tags`를 사용한다. `Nature#32:6` TEXT 속성과 카드 이름 행의 배치 위치를 유지한다.
+- `Detail / Profile` `49:177`은 `Pokemon / Traits`를 사용한다. 기존 `Traits#49:3` TEXT 속성은 제거했다.
+- 화면은 원자와 조합의 인스턴스만 사용한다. 화면에서 타입 배지 프레임을 새로 그리지 않는다.
+- 포켓몬 그림 입력 API가 확정되지 않았으므로 Portrait 범용 컴포넌트는 만들지 않는다. [스펙 미확정]
+- 카드별 슬롯 계약이 확정되지 않았으므로 범용 Surface Card는 만들지 않는다. [스펙 미확정]
 
 ### 기존 제품 결정
 

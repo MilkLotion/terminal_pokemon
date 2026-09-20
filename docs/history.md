@@ -1,5 +1,23 @@
 # 작업 기록
 
+## 2026-09-19 — S5 Figma 타입 원자 조합
+
+- 범위: 사용자 원본 `19:1024`의 타입 표시를 원자·조합·상위 컴포넌트 계층으로 다시 설계했다.
+- 결과: `Pokemon / Type Badge` `82:233`, `Pokemon / Type Tags` `85:227`, `Pokemon / Traits` `87:245`을 만들었다.
+- 이행: `Pokemon Card` `32:137`은 Type Tags를 사용한다. `Detail / Profile` `49:177`은 Traits를 사용한다.
+- 보존: Card의 `Nature#32:6` TEXT 속성과 카드 이름 행의 배치 위치를 유지했다.
+- 검수: 새 컴포넌트, Card, Profile, Party `34:219`, Detail `64:320`의 구조와 캡처를 확인했다. 원시 `TypeBadge` FRAME과 평면 Traits TEXT는 0개다.
+- 기록: [원자 조합 계획](plan-s5-figma-composition.md), [공통 자산 목록](figma-s5-inventory.json), [상세 자산 목록](figma-s5-detail-inventory.json), [S5 검토](review-s5.md), [피드백](feedback-s5.md).
+- 커밋: 미커밋.
+
+## 2026-09-19 — S5 Figma 포켓몬 상세 화면 조립
+
+- 범위: 기존 S5 파티 화면에서 이어지는 포켓몬 상세 화면과 대표 프로토타입 상태를 조립했다.
+- 결과: 기본·숨김·돌봄 완료·소환 해제 확인·저장 실패 화면을 만들었다. 반복 구역 제목 컴포넌트 `62:227`를 추가했다. 도감·상점·가방·설정용 화면은 만들지 않았다.
+- 검수: Figma 구조, 변수 참조, 화면 캡처, 스크롤, 프로토타입 연결을 확인했다. 다이얼로그 자동 레이아웃과 스크림 불투명도 문제를 수정하고 다시 확인했다. 런타임 코드가 없어 앱 검사는 실행하지 않았다.
+- 기록: [상세 계획](plan-s5-figma-detail.md), [자산 목록](figma-s5-detail-inventory.json), [S5 검토](review-s5.md), [피드백](feedback-s5.md).
+- 커밋: 미커밋.
+
 ## 2026-09-18 — S5 Figma 포켓몬 상세 컴포넌트
 
 - 기존 파티 화면 `34:219`를 기준으로 상세 화면의 정보 구조를 설계했다.

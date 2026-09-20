@@ -30,6 +30,40 @@
 - 제한: 크기 선택의 Figma 화면 이동 연결은 세트 내부 목적지 제약으로 연결하지 않았다. 런타임 동작은 구현하지 않았다.
 - 상세 화면 전체 조립, 도감·가방·진화 화면, Code Connect는 미착수다.
 
+### Figma 포켓몬 상세 화면 조립 — 2026-09-19
+
+- 대상: [파티 화면](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=34-219), [Components](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=7-2), Screens 페이지 `12:2`.
+- 추가 컴포넌트: `Detail / Section Header` `62:227`. `Label` TEXT 속성, `S5/Type/Heading`, `color/ink` 참조를 확인했다.
+- 화면: 기본 `64:320`, 숨김 `69:435`, 돌봄 완료 `69:577`, 소환 해제 확인 `70:639`, 저장 실패 `70:692`.
+- 구조 검사: 모든 화면은 720×780px다. 확인·실패 화면의 본문은 720×638.01px다. Footer는 y=742.00px다. 오버레이는 절대 위치다.
+- 스크롤 검사: 기본 화면의 `Detail Sections` `66:359`는 795.98px다. 본문 overflow는 `VERTICAL`이다.
+- 프로토타입 검사: 파티 피카츄 → 기본 상세, 파티로 → 파티, 밥 주기 → 돌봄 완료, 표시 설정 → 숨김, 소환 해제 → 확인, 확인 취소 → 기본 상세, 확인 실행 → 저장 실패, 실패 취소 → 기본 상세을 확인했다.
+- 캡처 검사: 기본·숨김·돌봄 완료·확인·실패 화면에서 텍스트 잘림, 카드 겹침, 상태 안내와 다이얼로그 가림을 확인했다.
+- 발견 F-01: 다이얼로그와 스크림이 루트 자동 레이아웃 흐름에 들어가 본문이 약 1px로 축소됐다. 두 노드를 절대 위치로 바꿨다. 본문과 Footer 위치를 재검사했다. 해결됨.
+- 발견 F-02: 스크림의 fill 불투명도가 1이었다. `color/ink` 바인딩을 유지하고 노드 불투명도를 0.16으로 수정했다. 캡처를 다시 확인했다. 해결됨.
+- 범위 밖: 크기 1~6의 화면 이동, 전체 도감·상점·가방·설정 화면, Code Connect, 런타임 동작.
+- 런타임 코드와 데이터는 변경하지 않았다. 이 작업에는 `npm run check`와 자체 검사를 실행하지 않았다.
+
+### Figma 타입 원자 조합 — 2026-09-19
+
+- 대상: 사용자 원본 `19:1024`, Components 페이지 `7:2`, 파티 화면 `34:219`, 기본 상세 화면 `64:320`.
+- 원자 검사: `Pokemon / Type Badge` `82:233`은 Electric `82:227`, Fire `82:229`, Flying `82:231` VARIANT를 제공한다.
+- 원자 검사: 세 VARIANT의 배경은 각각 `color/type-electric`, `color/type-fire`, `color/type-flying`을 참조한다.
+- 원자 검사: 세 라벨은 `color/paper`와 `S5/Type/Type Badge`를 참조한다.
+- 조합 검사: `Pokemon / Type Tags` `85:227`은 Type Badge 인스턴스 두 개를 사용한다. 간격은 `space/xs` 4px을 참조한다.
+- 조합 검사: Type Tags는 `Primary Type`, `Secondary Type` INSTANCE_SWAP과 `Show Secondary` BOOLEAN을 제공한다.
+- 조합 검사: `Pokemon / Traits` `87:245`은 Type Tags 인스턴스 하나와 `Nature` TEXT 하나를 사용한다. 간격은 `space/sm` 8px을 참조한다.
+- 조합 검사: Traits의 Nature는 `S5/Type/Body`와 `color/text-secondary`를 참조한다.
+- 이행 검사: `Pokemon Card` `32:137`의 Visible·Hidden 변형은 Type Tags 인스턴스 `88:232`, `88:237`을 사용한다. 원시 `TypeBadge` FRAME은 0개다.
+- 이행 검사: Card의 `Nature#32:6` TEXT 속성은 유지했다. `Type Tags#88:0` INSTANCE_SWAP을 추가했다.
+- 이행 검사: `Detail / Profile` `49:177`은 Traits 인스턴스 `89:240`을 사용한다. 기존 `Traits#49:3` TEXT 속성과 TEXT 노드는 없다.
+- 화면 검사: 파티 피카츄 `34:277`의 중첩 Type Tags는 Electric `82:227`과 `Show Secondary=false`를 사용한다.
+- 화면 검사: 상세 프로필 다섯 개는 Traits `87:245`, Electric `82:227`, `Show Secondary=false`, `성격: 느긋`을 사용한다.
+- 캡처 검사: Type Badge `82:233`, Type Tags `85:227`, Traits `87:245`, Card `32:137`, Profile `49:177`, Party `34:219`, Detail `64:320`에서 텍스트 잘림과 겹침이 없다.
+- 프로토타입 근거: 파티 카드 `34:277`와 기존 프로토타입 목적지 노드는 유지했다. 타입 조합 이행은 해당 노드의 하위 원본만 변경했다.
+- 발견 F-03: 상세 프로필의 타입이 평면 TEXT였다. Type Badge, Type Tags, Traits 계층으로 교체했다. 해결됨.
+- 런타임 코드와 데이터는 변경하지 않았다. 이 작업에는 `npm run check`와 자체 검사를 실행하지 않았다.
+
 ## 현재 시안 검사
 
 ### Figma UI 공통화 — 2026-09-18

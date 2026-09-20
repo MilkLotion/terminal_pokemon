@@ -1,6 +1,6 @@
 {
   "fileKey": "MA3K41Y6omAi5mRu6YDFly",
-  "updated": "2026-09-18",
+  "updated": "2026-09-19",
   "pages": {
     "foundations": "5:2",
     "components": "7:2",
@@ -22,13 +22,43 @@
     "textStyles": 14
   },
   "components": {
+    "typeBadge": "82:233",
+    "typeTags": "85:227",
+    "traits": "87:245",
     "notice": "48:177",
     "profile": "49:177",
     "careAction": "49:372",
     "sizeStep": "50:347",
     "sizeSelector": "50:439",
     "settingRow": "51:224",
-    "confirmDialog": "52:225"
+    "confirmDialog": "52:225",
+    "sectionHeader": "62:227"
+  },
+  "screens": {
+    "party": "34:219",
+    "detailBase": "64:320",
+    "detailHidden": "69:435",
+    "detailCareSuccess": "69:577",
+    "detailDismissConfirm": "70:639",
+    "detailDismissSaveError": "70:692",
+    "detailBody": {
+      "node": "66:359",
+      "viewport": "720×638px",
+      "contentHeight": "795.98px",
+      "overflow": "VERTICAL"
+    }
+  },
+  "prototype": {
+    "links": [
+      { "source": "34:277", "destination": "64:320", "label": "party Pikachu to detail" },
+      { "source": "65:358", "destination": "34:219", "label": "detail to party" },
+      { "source": "66:398", "destination": "69:577", "label": "feed to success" },
+      { "source": "67:400", "destination": "69:435", "label": "visibility to hidden" },
+      { "source": "68:443", "destination": "70:639", "label": "dismiss to confirmation" },
+      { "source": "I70:677;52:232", "destination": "64:320", "label": "confirmation cancel" },
+      { "source": "I70:677;52:234", "destination": "70:692", "label": "confirmation failure" },
+      { "source": "I70:730;52:232", "destination": "64:320", "label": "failure cancel" }
+    ]
   },
   "decisions": {
     "detailReference": "34:219",
@@ -36,7 +66,13 @@
     "hiddenMarker": { "size": "16.032×16px", "x": 60, "y": 4, "shadow": false },
     "careStates": ["Ready", "Processing", "Disabled"],
     "sizeValues": [1, 2, 3, 4, 5, 6],
-    "unsubscribeBehavior": "confirmation keeps dex registration and growth history"
+    "unsubscribeBehavior": "confirmation keeps dex registration and growth history",
+    "composition": {
+      "atom": "Pokemon / Type Badge 82:233",
+      "molecules": ["Pokemon / Type Tags 85:227", "Pokemon / Traits 87:245"],
+      "cardUses": "Pokemon / Type Tags",
+      "profileUses": "Pokemon / Traits"
+    }
   },
   "scope": {
     "runtimeImplementation": false,

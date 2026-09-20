@@ -10,6 +10,7 @@ This directory holds the project knowledge base for pokebuddy. This file is the 
 | [`progress.md`](progress.md) | Current stage, next action, and validation status. |
 | [`plan-<stage>.md`](plan-s5.md) | Plan and design for one stage or one focused task. |
 | [`review-<stage>.md`](review-s5.md) | Review findings, evidence, and fixes for one stage or task. |
+| [`feedback-<stage>.md`](feedback-s5.md) | Feedback items, their state, and the next action for one stage or task. |
 | [`history.md`](history.md) | Dated record of completed work cycles. |
 | [`terms.md`](terms.md) | Canonical name and meaning for each user-facing term. |
 | [`guide.md`](guide.md) | Install steps, commands, settings, and how the app works. |
