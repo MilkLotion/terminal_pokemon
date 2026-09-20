@@ -53,7 +53,8 @@
     "prepare": "npm run build",
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "selftest": "npm run build && node dist/tools/selftest-save.js && node dist/tools/selftest-dex.js && node dist/tools/selftest-agents.js && node dist/tools/selftest-follow.js && node dist/tools/selftest-motion.js && node dist/tools/selftest-stage.js && node dist/tools/selftest-state.js && node dist/tools/selftest-shop.js",
+    "selftest": "npm run build && node scripts/selftest-cli.cjs && node dist/tools/selftest-save.js && node dist/tools/selftest-dex.js && node dist/tools/selftest-agents.js && node dist/tools/selftest-follow.js && node dist/tools/selftest-motion.js && node dist/tools/selftest-stage.js && node dist/tools/selftest-state.js && node dist/tools/selftest-shop.js",
+    "test:e2e": "npm run build && node scripts/e2e-companion.cjs",
     "data:build": "npm run build && node dist/tools/build-names.js && node dist/tools/build-species.js && node dist/tools/build-evo.js && node dist/tools/build-unlocks.js",
     "logo:build": "npm run build && node scripts/sync-official-logo.js"
   },

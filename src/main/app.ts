@@ -88,6 +88,7 @@ const SELF: SelfMark = { pid: process.pid, appNames: new Set(["electron", String
 let quitting = false;
 let picking = false; // 첫 실행 선택 창이 열려 있다 — 그 창이 닫혀도 앱을 끝내지 않는다 (window-all-closed)
 let staged = false; // 무대 창을 만들었다 — 그 전에 닫힌 창(선택 창)으로는 끝내지 않는다
+let bootReady = false; // 그림·명령·수명 잠금 준비 후에만 CLI에 성공 통지
 let userHidden = false; // Cmd+Alt+H · 우클릭 · 트레이로 직접 숨김
 const intervals: NodeJS.Timeout[] = [];
 
@@ -312,7 +313,7 @@ async function main(): Promise<void> {
     hostPid: runtime.hostPid,
     termPid: () => anchor?.termPid() ?? runtime.termPid,
     pidAlive,
-    hasWindow: () => !!stageWin?.alive(),
+    hasWindow: () => bootReady && !!stageWin?.alive(),
     quit: () => app.quit(),
   });
   lifetime.start();
@@ -331,9 +332,13 @@ async function main(): Promise<void> {
         },
       });
     }
-    if (quitting) return;
-    if (!species || !party.begin(species)) {
-      reportFailure(PATHS, config.slug, t("starter.skipped"));
+    if (quitting || !species) {
+      reportFailure(PATHS, config.slug, t("starter.skipped"), "starter-cancelled");
+      if (!quitting) app.quit();
+      return;
+    }
+    if (!party.begin(species)) {
+      reportFailure(PATHS, config.slug, t("game.reason.save-failed"), "save-failed");
       app.quit();
       return;
     }
@@ -372,7 +377,13 @@ async function main(): Promise<void> {
       const x = p.x - rect.x, y = p.y - rect.y;
       return x >= 0 && y >= 0 && x <= rect.w && y <= rect.h ? { x, y } : null;
     },
-    onDrop: (id, home) => party?.setHome(id, home),
+    onDrop: (id, home) => {
+      void commands?.dispatcher.dispatch({ cmd: "pet.set", target: id, args: { home }, from: "pet" }).then(async (result) => {
+        if (result.ok) return;
+        log?.({ drop: "failed", id, reason: result.reason });
+        await refreshParty();
+      });
+    },
     onClick: (id) => void commands?.dispatcher.dispatch({ cmd: "poke", target: id, from: "pet" }),
     onMenu: showPetMenu,
     onArtMissing: (pet) => {
@@ -469,6 +480,7 @@ async function main(): Promise<void> {
   }
 
   applyClickThrough(!!config.clickThrough, false);
+  bootReady = true;
   lifetime.check(); // 창이 생겼으니 pid 파일에 ready 를 적는다 — pokebuddy 명령이 이걸 보고 기다림을 끝낸다
 
   intervals.push(setInterval(stateTick, STAGE_RULES.statePollMs));

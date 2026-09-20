@@ -143,10 +143,10 @@ export function createLifetime(opts: LifetimeOptions): Lifetime {
 }
 
 // 펫이 못 뜬 이유를 남긴다 — 펫의 출력은 평소 버려지므로 pokebuddy 명령과 pokebuddy status 가 읽을 수 있게. 실패해도 조용히
-export function reportFailure(paths: Pick<Paths, "home" | "lastError">, slug: string, message: string): void {
+export function reportFailure(paths: Pick<Paths, "home" | "lastError">, slug: string, message: string, reason?: string): void {
   try {
     fs.mkdirSync(paths.home, { recursive: true });
-    fs.writeFileSync(paths.lastError, JSON.stringify({ at: Date.now() / 1000, slug, message }));
+    fs.writeFileSync(paths.lastError, JSON.stringify({ at: Date.now() / 1000, slug, message, reason }));
   } catch {
     // 기록 실패는 무시
   }

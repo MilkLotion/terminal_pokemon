@@ -390,6 +390,9 @@ async function stageRuntimeTests(): Promise<void> {
     eq(failed.reason, "save-failed", "저장 실패를 성공으로 응답하지 않음");
     eq(source.save(), old, "저장 실패 시 돌봄·보상 롤백");
     eq(animations, 1, "저장 실패 시 연출하지 않음");
+    const moved = await commands.dispatcher.dispatch({ cmd: "pet.set", target: "p1", args: { home: { dx: -123, dy: -45 } }, from: "cli" });
+    eq(moved.reason, "save-failed", "위치 저장 실패를 성공으로 응답하지 않음");
+    eq(source.save(), old, "위치 저장 실패 시 메모리 위치 복원");
   } finally { commands.stop(); source.stop(); }
 }
 

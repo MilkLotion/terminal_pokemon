@@ -97,7 +97,7 @@ function launchPet(electron, env) {
   }
   // 경로는 환경변수로 넘긴다 — 명령줄에 끼워 넣으면 사용자 이름의 공백·따옴표가 PowerShell 문법이 된다
   const script =
-    "(Start-Process -PassThru -FilePath $env:POKEBUDDY_LAUNCH_EXE -WorkingDirectory $env:POKEBUDDY_LAUNCH_APP" +
+    "(Start-Process -WindowStyle Hidden -PassThru -FilePath $env:POKEBUDDY_LAUNCH_EXE -WorkingDirectory $env:POKEBUDDY_LAUNCH_APP" +
     " -ArgumentList ('\"' + $env:POKEBUDDY_LAUNCH_APP + '\"')).Id";
   return new Promise((resolve) => {
     execFile(
@@ -325,7 +325,12 @@ async function companion(opts = {}) {
   fs.mkdirSync(PATHS.home, { recursive: true });
   fs.mkdirSync(PATHS.pets, { recursive: true });
   const env = { ...process.env, ...optionEnv(opts), POKEBUDDY_MODE: "companion" };
-  const firstRun = !fs.existsSync(PATHS.save);
+  // 세션 펫의 환경변수가 첫 선택과 저장된 크기를 덮어쓰지 않게 분리.
+  delete env.POKEBUDDY_SLUG;
+  delete env.POKEBUDDY_DOT_SIZE;
+  delete env.POKEBUDDY_KEEP_VISIBLE;
+  const { state: saved } = require("../dist/save/store.js").read(PATHS.save, { repair: false });
+  const firstRun = !saved || saved.party.length === 0;
   if (firstRun) say("첫 실행 — 포켓몬 선택 창에서 고르면 뜬다 (닫으면 시작하지 않는다)");
   if (debug) {
     env.POKEBUDDY_LOG = path.join(PATHS.pets, "debug-companion.log");
@@ -350,6 +355,10 @@ async function companion(opts = {}) {
   else if (!pet.exited) say(`아직 뜨는 중: ${shown} — 한참 안 보이면 pokebuddy status`);
   else {
     const why = lastError(startedAt);
+    if (why?.reason === "starter-cancelled") {
+      say(why.message);
+      return;
+    }
     process.stderr.write(`동반자가 뜨지 못함${why ? ` — ${why.message}` : ""} (자세히: pokebuddy status)\n`);
     fs.rmSync(pet.file, { force: true });
     process.exitCode = 1;

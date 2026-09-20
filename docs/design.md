@@ -90,6 +90,11 @@ S5는 구매와 사용을 분리한다. 구매한 도구와 알은 가방에 보
 `feed`, `play`, `poke`, `evolve`, `party.show`, `party.hide`, `party.remove`, `pet.set`, `pet.look`, `shop.buy`, `agent.connect`, `agent.disconnect`, `settings.set`, `snapshot`, `quit`은 현재 계약이다.
 S5의 `party.summon`, `party.dismiss`, `bag.use`, `egg.*`, `settings.open` 등은 제안이다. 현재 구현된 명령으로 안내하지 않는다.
 
+`companion`은 포켓몬 인자를 받지 않는다. 빈 파티이면 선택창을 연다. 선택 취소와 저장 실패를 구분한다.
+`pet.set`의 위치 변경은 저장에 성공한 뒤 성공으로 응답한다. 마우스 위치 변경도 같은 명령을 사용한다.
+2026-09-21 확인: `pet.set size=3`은 `not-yet`으로 응답한다. 크기 필드의 저장과 크기 변경 명령의 구현은 다르다.
+명령과 실제 앱을 연결한 검사 범위는 [실행 흐름 검수](work/runtime-e2e/record.md)를 따른다.
+
 ## 저장 v2와 S5 전환
 
 현재 저장 계약은 [SaveV2와 Pet](../src/shared/types.ts)에 있다. `SaveV2.party`는 `Pet[]`다. `slots`는 1~6이다. 저장·복원 규칙은 [저장 모듈](../src/save/store.ts)과 [저장 규칙](../src/save/rules.ts)을 따른다.

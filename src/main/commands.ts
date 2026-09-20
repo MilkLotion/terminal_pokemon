@@ -108,6 +108,12 @@ export function createCommands(ctx: CommandContext): Commands {
     if (!isObj(home)) return { ok: false, reason: "not-yet", id };
     const { dx, dy } = home;
     if (typeof dx !== "number" || typeof dy !== "number" || !Number.isFinite(dx) || !Number.isFinite(dy)) return { ok: false, reason: "bad-value", id };
+    if (ctx.party.kind === "save") return transact(c, (save) => {
+      const pet = save.party.find((p) => p.id === id);
+      if (!pet) return { ok: false, reason: "no-pet", id };
+      pet.home = { dx, dy };
+      return { ok: true, reason: "ok", id, home: { dx, dy } };
+    });
     ctx.party.setHome(id, { dx, dy });
     return { ok: true, reason: "ok", id, home: { dx, dy } };
   });

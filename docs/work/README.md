@@ -4,6 +4,7 @@
 
 | 작업 | 기록 |
 |---|---|
+| 기존 실행 흐름 재검수 | [기록](runtime-e2e/record.md) |
 | S3 육성 | [검수](s3/review.md) |
 | S4 상점·진화 | [계획](s4/plan.md), [검수](s4/review.md) |
 | 정식 로고 | [계획](logo/plan.md), [검수](logo/review.md) |

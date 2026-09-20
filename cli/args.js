@@ -66,7 +66,11 @@ function parseArgs(argv) {
   // companion [stop] [buddy=값] [click=값] — 동반자. 포켓몬 이름은 첫 실행 선택창에서 고른다
   if (args[0] === "companion") {
     args.shift();
-    if (args[0] === "stop") return { kind: "companion", stop: true };
+    if (args[0] === "stop") {
+      if (args.length === 2 && ["-h", "--help"].includes(args[1])) return { kind: "help" };
+      if (args.length !== 1) return { kind: "companion", error: "종료 명령은 추가 인자를 받지 않는다 — 사용: pokebuddy companion stop" };
+      return { kind: "companion", stop: true };
+    }
     const parsed = parseOptions(args, { allowPet: false });
     if (parsed.kind === "help") return parsed;
     if (parsed.error) return { kind: "companion", error: parsed.error };
@@ -93,6 +97,12 @@ function parseArgs(argv) {
 // 반환: { opts } | { error } | { kind: "help" }
 function parseOptions(args, { allowPet = true } = {}) {
   const opts = {};
+  const companionError = (key) => {
+    if (allowPet) return null;
+    if (key === "pet") return "동반자는 포켓몬 이름을 받지 않는다 — 첫 실행 때 선택창에서 고른다. 실행: pokebuddy companion";
+    if (!["buddy", "click"].includes(key)) return `동반자에서 지원하지 않는 옵션: ${key} — buddy · click만 사용한다`;
+    return null;
+  };
   // 첫 인자가 옵션도 이름=값 도 아니면 펫 이름으로 받는다 (pokebuddy eevee dot=3)
   if (allowPet && args.length && !args[0].startsWith("-") && !args[0].includes("=")) opts.pet = args.shift();
 
@@ -104,8 +114,9 @@ function parseOptions(args, { allowPet = true } = {}) {
     if (long) {
       const key = optionName(long[1]);
       if (!key) return { error: unknownOption(a, long[1]) };
-      if (!allowPet && key === "pet") return { error: "동반자는 포켓몬 이름을 받지 않는다 — 첫 실행 때 선택창에서 고른다. 실행: pokebuddy companion" };
-      if (args.length < 2) return { error: `${a} 에 값이 없음` };
+      const error = companionError(key);
+      if (error) return { error };
+      if (args.length < 2 || args[1].startsWith("--") || ["-h", "-v"].includes(args[1])) return { error: `${a} 에 값이 없음` };
       opts[key] = args[1];
       args.splice(0, 2);
       continue;
@@ -115,6 +126,8 @@ function parseOptions(args, { allowPet = true } = {}) {
     if (kv) {
       const key = optionName(kv[1]);
       if (!key) return { error: unknownOption(a, kv[1]) };
+      const error = companionError(key);
+      if (error) return { error };
       opts[key] = kv[2];
       args.shift();
       continue;

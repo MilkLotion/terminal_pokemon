@@ -40,7 +40,7 @@ function status(petArg) {
   // 펫이 스스로 끝난 이유 — 펫의 출력은 평소 버려지므로 여기서만 보인다
   try {
     const e = JSON.parse(fs.readFileSync(PATHS.lastError, "utf8"));
-    say(`마지막 펫 실패: ${e.slug} — ${e.message} (${Math.round(Number(age(e.at)) / 60)}분 전)`);
+    if (e.reason !== "starter-cancelled") say(`마지막 펫 실패: ${e.slug} — ${e.message} (${Math.round(Number(age(e.at)) / 60)}분 전)`);
   } catch {
     // 실패 기록 없음
   }
