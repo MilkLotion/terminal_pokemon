@@ -12,6 +12,7 @@
 | [terms.md](terms.md) | 화면 용어와 채택 여부 |
 | [guide.md](guide.md) | 현재 앱의 사용 방법 |
 | [specs/s5.md](specs/s5.md) | S5 기능 계약과 미확정 제안 |
+| [specs/s5-scenarios.md](specs/s5-scenarios.md) | S5 사용자 흐름, 예외, 수용 조건과 열린 결정 |
 
 완료한 작업의 설명을 이 문서들에 반복해서 넣지 않는다. 상세 근거는 작업 기록으로 연결한다.
 
