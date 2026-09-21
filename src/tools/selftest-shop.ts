@@ -60,9 +60,6 @@ async function main(): Promise<void> {
     pet.affinity = 500;
     assert.equal(evolutionOptions(save, "p1", T).find((o) => o.species === "umbreon")!.reason, "time");
     unchanged(save, () => evolve(save, "p1", undefined, T), "choose-evolution");
-    pet.everstone = true;
-    unchanged(save, () => evolve(save, "p1", "vaporeon", T), "everstone");
-    pet.everstone = false;
     assert.ok(evolve(save, "p1", "umbreon", new Date(2026, 8, 18, 22).getTime()).ok);
     assert.equal(pet.species, "umbreon");
     assert.equal(pet.affinity, 500);
@@ -146,11 +143,6 @@ async function main(): Promise<void> {
     const beforeExpired = structuredClone(party.save());
     assert.equal((await commands.dispatcher.dispatch({ cmd: "shop.buy", args: { item: "berry" }, from: "cli", at: Date.now() - 41_000 })).reason, "expired");
     assert.deepEqual(party.save(), beforeExpired, "오래된 요청은 포인트를 차감하지 않음");
-    assert.ok((await commands.dispatcher.dispatch({ cmd: "shop.buy", target: "p1", args: { item: "everstone" }, from: "menu" })).ok);
-    assert.ok((await commands.dispatcher.dispatch({ cmd: "pet.set", target: "p1", args: { everstone: false }, from: "menu" })).ok);
-    const stonePoints = party.save()!.points;
-    assert.ok((await commands.dispatcher.dispatch({ cmd: "pet.set", target: "p1", args: { everstone: true }, from: "menu" })).ok);
-    assert.equal(party.save()!.points, stonePoints, "에버스톤 재장착은 무료");
     const beforeFailureChanges = changes;
     const diskBefore = fs.readFileSync(paths.save, "utf8");
     const stateBefore = structuredClone(party.save());

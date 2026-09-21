@@ -2,7 +2,7 @@
 //
 // 조건 종류마다 함수 하나. 규칙에 적힌 조건은 전부 만족해야 한다. 판정은 순수 — 저장을 바꾸지 않는다
 //   starter  표시다 — 항상 참 (첫 실행 선택 화면에 나온다)
-//   evolve   `from` 종을 가진 마리 중 친밀도가 임계 이상이고 에버스톤이 없는 마리가 있다. `when` 은 지금 시간대
+//   evolve   `from` 종을 가진 마리 중 친밀도가 임계 이상인 마리가 있다. `when` 은 지금 시간대
 //   shop     가격이다, 문턱이 아니다 — 항상 참. 해금된 뒤 상점에 이 값으로 나온다 (priceOf). 포인트 검사는 상점 모듈이
 //   party    파티 마리 수 ≥ count
 //   work     에이전트와 함께 일한 누적 시간 totals.workMs ≥ hours
@@ -35,7 +35,7 @@ export const checkStarter = (_flag: true, _world: World): boolean => true;
 
 export function checkEvolve(cond: NonNullable<UnlockRule["evolve"]>, world: World): boolean {
   if (cond.when && dayPartOf(world.hour) !== cond.when) return false;
-  return petsOf(cond.from, world.save.party).some((p) => !p.everstone && p.affinity >= cond.affinity);
+  return petsOf(cond.from, world.save.party).some((p) => p.affinity >= cond.affinity);
 }
 
 export const checkShop = (_price: number, _world: World): boolean => true;
@@ -97,7 +97,7 @@ export const priceOf = (rule: UnlockRule): number | null => (typeof rule.shop ==
 export function evolvers(rule: UnlockRule, world: World): Pet[] {
   const cond = rule.evolve;
   if (!cond || !check(rule, world)) return [];
-  return petsOf(cond.from, world.save.party).filter((p) => !p.everstone && p.affinity >= cond.affinity);
+  return petsOf(cond.from, world.save.party).filter((p) => p.affinity >= cond.affinity);
 }
 
 // data/unlocks.json 전부

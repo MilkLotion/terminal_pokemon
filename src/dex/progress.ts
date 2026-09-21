@@ -47,7 +47,7 @@ export function evolutionOptions(save: SaveV2, id: string, now: number): { speci
     const affinity = cond?.affinity ?? SHOP.evolutionAffinity[Math.min(stageOf(pet.species), SHOP.evolutionAffinity.length - 1)]!;
     const when = cond?.when ?? step.when;
     const hour = new Date(now).getHours();
-    const reason = pet.everstone ? "everstone" : pet.affinity < affinity ? "affinity" : when && when !== dayPartOf(hour) ? "time" :
+    const reason = pet.affinity < affinity ? "affinity" : when && when !== dayPartOf(hour) ? "time" :
       rule && !check(rule, { now, hour, save }) ? "conditions" : "ok";
     return { species: step.to, affinity, reason, ready: reason === "ok" };
   });

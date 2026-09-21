@@ -9,16 +9,16 @@
 
 1. 상점에서 파티 칸을 구매한다. 파티 칸은 최대 6칸이다.
 2. 빈 칸이 있으면 해금한 포켓몬을 얻는다. 포켓몬 가격은 종마다 다르다.
-3. 파티에서 마리를 선택하면 성격, 모습, 색, 에버스톤, 표시 여부를 바꿀 수 있다.
+3. 파티에서 마리를 선택하면 성격, 모습, 색, 표시 여부를 바꿀 수 있다.
 4. 진화 조건을 채우면 `진화하기`가 나타난다. 진화 갈림길에서는 원하는 종을 선택한다.
 
 민트를 사용하면 성격이 바로 바뀐다. 먹이를 구매하면 재고에 추가된다.
 다음 밥을 줄 때 먹이를 하나 쓰면 효과가 두 배가 된다. 먹이가 없어도 기본 밥을 줄 수 있다.
 밥 주기의 대기 시간과 하루 친밀도 상한은 그대로 유지한다.
-에버스톤을 해제했다가 다시 장착해도 추가 비용은 없다. 색을 되돌려도 추가 비용은 없다.
+색을 되돌려도 추가 비용은 없다.
 그림을 받을 수 없으면 거래를 취소한다. 저장에 실패하면 거래를 취소한다.
 
-칸 가격은 80, 160, 240, 320, 400 포인트다. 민트는 40포인트, 먹이는 10포인트, 에버스톤은 30포인트, 색은 200포인트다.
+칸 가격은 80, 160, 240, 320, 400 포인트다. 민트는 40포인트, 먹이는 10포인트, 색은 200포인트다.
 이 가격은 조정 가능한 초기값이다. 보상 규칙은 [계획과 규칙](work/s4/plan.md)에 있다.
 
 CLI에서도 같은 기능을 사용한다. 아래 명령은 PowerShell과 일반 셸에서 사용할 수 있다.
@@ -30,8 +30,6 @@ pokebuddy game shop.buy - item=slot
 pokebuddy game shop.buy - item=species species=pikachu
 pokebuddy game shop.buy p1 item=mint nature=jolly
 pokebuddy game shop.buy - item=berry
-pokebuddy game shop.buy p1 item=everstone
-pokebuddy game pet.set p1 everstone=false
 pokebuddy game evolve p1 species=umbreon
 pokebuddy game pet.look p1 look=eevee
 pokebuddy game shop.buy p1 item=shiny

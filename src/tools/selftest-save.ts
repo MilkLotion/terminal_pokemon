@@ -82,7 +82,6 @@ interface V1Pet {
   stage: number;
   mood: number;
   shiny: boolean;
-  everstone: boolean;
   since: number;
   fedAt: number | null;
   playedAt: number | null;
@@ -118,7 +117,6 @@ const v1Pet = (species: string, since: number): V1Pet => ({
   stage: 0,
   mood: 60,
   shiny: false,
-  everstone: false,
   since,
   fedAt: null,
   playedAt: null,
@@ -255,7 +253,7 @@ function makeV1(): SaveV1 {
   assert.strictEqual(v1.v, 1);
   assert.strictEqual(v1.active, "eevee#1");
   const first = some(v1.party["eevee#1"]);
-  Object.assign(first, { nick: "이브", affinity: 120, mood: 80, shiny: true, everstone: true, fedAt: T0, stage: 1, evolved: ["eevee"], species: "umbreon" });
+  Object.assign(first, { nick: "이브", affinity: 120, mood: 80, shiny: true, fedAt: T0, stage: 1, evolved: ["eevee"], species: "umbreon" });
   v1.party["pikachu#1"] = v1Pet("pikachu", T0 + 1000);
   Object.assign(v1.daily, { streak: 4, gained: 30, feeds: 1, pokes: 2 });
   v1.points = 77;
@@ -283,7 +281,6 @@ function testMigrateV1(): void {
   assert.strictEqual(a.mood, 80);
   assert.strictEqual(a.stage, 1);
   assert.strictEqual(a.shiny, true);
-  assert.strictEqual(a.everstone, true);
   assert.strictEqual(a.fedAt, T0);
   assert.strictEqual(a.playedAt, null);
   assert.strictEqual(a.since, T0);

@@ -46,6 +46,6 @@ export function stateLine(pet: Pet): string {
   if (pet.hunger >= STATE_RULES.hungryAt) return t("state.hungry");
   if (pet.mood < 40) return t("state.mood", { mood: moodWord(pet.mood) });
   const thresholds = Object.values(unlockRules()).flatMap((r) => r.evolve?.from === pet.species ? [r.evolve.affinity] : []);
-  if (thresholds.length && !pet.everstone) return t("state.evolution", { n: Math.max(0, Math.ceil(Math.min(...thresholds) - pet.affinity)) });
+  if (thresholds.length) return t("state.evolution", { n: Math.max(0, Math.ceil(Math.min(...thresholds) - pet.affinity)) });
   return t("state.mood", { mood: moodWord(pet.mood) });
 }

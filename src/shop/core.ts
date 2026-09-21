@@ -40,16 +40,14 @@ export function buy(save: SaveV2, id: string | undefined, args: Record<string, u
   } else if (item === "berry") {
     price = SHOP.berry;
     apply = () => { save.inventory.berry = (save.inventory.berry ?? 0) + 1; };
-  } else if (item === "mint" || item === "everstone" || item === "shiny") {
+  } else if (item === "mint" || item === "shiny") {
     if (!pet) return { ok: false, reason: "no-pet" };
     if (item === "mint" && !isNatureId(args.nature)) return { ok: false, reason: "bad-nature" };
     if ((item === "mint" && pet.nature === args.nature) ||
-        (item === "everstone" && (pet.everstone || save.inventory[`everstone:${pet.id}`])) ||
         (item === "shiny" && (pet.shiny || save.inventory[`shiny:${pet.id}`]))) return { ok: false, reason: "already-owned" };
     price = SHOP[item];
     apply = () => {
       if (item === "mint" && isNatureId(args.nature)) pet.nature = args.nature;
-      if (item === "everstone") { pet.everstone = true; save.inventory[`everstone:${pet.id}`] = 1; }
       if (item === "shiny") { pet.shiny = true; save.inventory[`shiny:${pet.id}`] = 1; }
     };
   } else return { ok: false, reason: "unknown-item" };

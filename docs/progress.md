@@ -30,7 +30,8 @@ S5 기능 구현: 미시작
 | S4 상점·진화 | 구현과 당시 자동 검사를 완료했다. 기준 커밋은 `85daaa7`이다. | [S4 검수](work/s4/review.md) |
 | 기존 실행 흐름 | Windows에서 동반자 실행 흐름을 재검수했다. CLI와 저장 실패 처리를 수정했다. | [범위와 결과](work/runtime-e2e/record.md) |
 | S5 화면 | Figma 관측을 완료했다. 디자인 문제 12개가 열려 있다. | [v2 검수](work/s5-design-system-v2/review.md), [열린 항목](work/s5-design-system-v2/feedback.md) |
-| S5 명칭 | 에버스톤을 요구사항에서 제외했다. 다른 상품 후보의 채택은 미정이다. | [사용자 정정](work/s5-terminology/review.md) |
+| S5 명칭 | 용어사전을 개념별로 정리했다. 기존 설계와 미확정 명칭을 구분했다. 상품 후보의 채택은 미정이다. | [용어사전](terms.md), [정정과 검수](work/s5-terminology/review.md) |
+| 요청 #119 | 지정한 상품의 코드와 문서 참조를 제거했다. 빌드와 관련 검사 4종을 통과했다. | [삭제와 검수](work/s5-terminology/review.md#2026-09-21--요청-119-삭제) |
 | 문서 운영 | 현재 기준과 작업 기록을 분리했다. 작성 검수를 작업 절차에 추가했다. | [구조 정리](work/docs-organization/record.md) |
 | S6 배포 | 대기 중이다. | 아래 플랫폼 확인 목록 |
 

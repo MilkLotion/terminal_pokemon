@@ -5,7 +5,6 @@ export interface ShopRules {
   slots: number[];
   mint: number;
   berry: number;
-  everstone: number;
   shiny: number;
   rewards: { unlock: number; evolve: number; milestone: number };
   milestones: number[];

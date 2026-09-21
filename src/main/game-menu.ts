@@ -34,14 +34,10 @@ export function petGameMenu(save: SaveV2, pet: Pet, run: Run): Item[] {
   const ready = evolutionOptions(save, pet.id, Date.now()).filter((o) => o.ready);
   const mint: Item[] = natures().map((n) => ({ label: natureName(n.id), enabled: pet.nature !== n.id && save.points >= SHOP.mint, click: () => command("shop.buy", { item: "mint", nature: n.id }) }));
   const ownsColor = pet.shiny || !!save.inventory[`shiny:${pet.id}`];
-  const ownsStone = pet.everstone || !!save.inventory[`everstone:${pet.id}`];
   return [
     ...(ready.length ? [{ label: t("game.evolve"), submenu: ready.map((o) => ({ label: petName(o.species), click: () => command("evolve", { species: o.species }) })) }] : []),
     { label: t("game.look"), submenu: looksFor(save, pet).map((look) => ({ label: petName(look), type: "radio", checked: (pet.look ?? pet.species) === look, click: () => command("pet.look", { look }) })) },
     { label: priced(t("game.mint"), SHOP.mint), submenu: mint },
-    { label: ownsStone ? t("game.everstone") : priced(t("game.everstone"), SHOP.everstone), type: "checkbox", checked: pet.everstone,
-      enabled: ownsStone || save.points >= SHOP.everstone,
-      click: () => ownsStone ? command("pet.set", { everstone: !pet.everstone }) : command("shop.buy", { item: "everstone" }) },
     { label: ownsColor ? t("game.shiny") : priced(t("game.shiny"), SHOP.shiny), type: "checkbox", checked: pet.shiny,
       enabled: ownsColor || save.points >= SHOP.shiny,
       click: () => ownsColor ? command("pet.look", { shiny: !pet.shiny }) : command("shop.buy", { item: "shiny" }) },

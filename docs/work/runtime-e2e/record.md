@@ -94,7 +94,7 @@ E2E가 출력한 임시 경로에는 `cli.jsonl`, `events.jsonl`, `result.json`�
 | 순서 | 자료 | 이어서 할 일 |
 |---|---|---|
 | 1 | [현재 설계](../../design.md), [S5 계약](../../specs/s5.md) | 확정 기능과 제안을 구분한다. |
-| 2 | [명칭 사전](../../terms.md), [명칭 정정](../s5-terminology/review.md) | 에버스톤을 S5 요구사항으로 복원하지 않는다. 다른 미확인 상품도 자동 채택하지 않는다. |
+| 2 | [명칭 사전](../../terms.md), [명칭 정정](../s5-terminology/review.md) | 미확인 상품을 자동 채택하지 않는다. |
 | 3 | [Figma 검수](../s5-design-system-v2/review.md), [열린 항목](../s5-design-system-v2/feedback.md) | 최신 Figma를 다시 관측한다. 열린 항목의 현재 상태를 확인한다. |
 | 4 | [실제 앱 E2E](../../../scripts/e2e-companion.cjs), [명령 처리](../../../src/main/commands.ts) | 기존 실행 검사를 유지한다. 새 S5 흐름의 수용 조건을 추가할 위치를 정한다. |
 

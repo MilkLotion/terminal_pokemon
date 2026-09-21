@@ -3,7 +3,6 @@
   "slots": [80, 160, 240, 320, 400],
   "mint": 40,
   "berry": 10,
-  "everstone": 30,
   "shiny": 200,
   "rewards": { "unlock": 10, "evolve": 50, "milestone": 30 },
   "milestones": [500, 1500],

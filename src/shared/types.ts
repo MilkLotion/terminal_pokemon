@@ -101,7 +101,6 @@ export interface Pet {
   mood: number; // 0~100
   affinity: number; // 누적, 감소 없음
   stage: number; // 진화 단계 (0 부터)
-  everstone: boolean;
   since: number;
   fedAt: number | null;
   playedAt: number | null;

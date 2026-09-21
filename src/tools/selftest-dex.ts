@@ -46,7 +46,6 @@ function pet(species: string, affinity: number, extra: Partial<Pet> = {}): Pet {
     mood: 60,
     affinity,
     stage: 0,
-    everstone: false,
     since: T0,
     fedAt: null,
     playedAt: null,
@@ -232,12 +231,11 @@ function world(over: Partial<Pick<World, "now" | "hour">> = {}, save: Partial<Sa
   // starter — 표시, 항상 참
   assert.strictEqual(dex.check({ starter: true }, world()), true);
 
-  // evolve — 종·친밀도·시간대·에버스톤
+  // evolve — 종·친밀도·시간대
   const umbreon = { evolve: { from: "eevee", affinity: 500, when: "night" as const } };
   assert.strictEqual(dex.check(umbreon, world({ hour: 22 }, { party: [pet("eevee", 500)] })), true, "밤 + 500");
   assert.strictEqual(dex.check(umbreon, world({ hour: 10 }, { party: [pet("eevee", 500)] })), false, "낮이면 거짓");
   assert.strictEqual(dex.check(umbreon, world({ hour: 22 }, { party: [pet("eevee", 499)] })), false, "499 는 거짓");
-  assert.strictEqual(dex.check(umbreon, world({ hour: 22 }, { party: [pet("eevee", 900, { everstone: true })] })), false, "에버스톤은 거짓");
   assert.strictEqual(dex.check(umbreon, world({ hour: 22 }, { party: [pet("pikachu", 900)] })), false, "다른 종은 거짓");
   assert.strictEqual(dex.check(umbreon, world({ hour: 22 }, { party: [pet("eevee-3d", 500)] })), true, "-3d 도 같은 종");
   assert.strictEqual(dex.check(umbreon, world({ hour: 22 }, { party: [pet("eevee", 100), pet("eevee", 600)] })), true, "여러 마리 중 하나면 참");
@@ -245,7 +243,7 @@ function world(over: Partial<Pick<World, "now" | "hour">> = {}, save: Partial<Sa
   assert.strictEqual(dex.check(raichu, world({ hour: 3 }, { party: [pet("pikachu", 500)] })), true, "when 없으면 시간대 무관");
   assert.strictEqual(dex.check(raichu, world({ hour: 14 }, { party: [pet("pikachu", 500)] })), true);
   assert.strictEqual(dex.check(raichu, world({}, { party: [] })), false, "빈 파티");
-  assert.deepStrictEqual(dex.evolvers(umbreon, world({ hour: 22 }, { party: [pet("eevee", 100), pet("eevee", 600), pet("eevee", 700, { everstone: true })] })).map((p) => p.affinity), [600], "진화할 마리 — 임계 이상·에버스톤 없는 것만");
+  assert.deepStrictEqual(dex.evolvers(umbreon, world({ hour: 22 }, { party: [pet("eevee", 100), pet("eevee", 600), pet("eevee", 700)] })).map((p) => p.affinity), [600, 700], "진화할 마리 — 임계 이상인 마리 모두");
   assert.deepStrictEqual(dex.evolvers(umbreon, world({ hour: 10 }, { party: [pet("eevee", 600)] })), [], "조건이 거짓이면 아무도");
 
   // shop — 가격, 문턱 아님
@@ -266,9 +264,9 @@ function world(over: Partial<Pick<World, "now" | "hour">> = {}, save: Partial<Sa
   assert.strictEqual(dex.check({ streak: { days: 14 } }, world({}, { daily: { date: "2026-09-17", streak: 14, interacted: true } })), true);
   assert.strictEqual(dex.check({ streak: { days: 14 } }, world({}, { daily: { date: "2026-09-17", streak: 13, interacted: true } })), false);
 
-  // bond — 에버스톤과 무관
+  // bond — 종과 친밀도
   const bond = { bond: { of: "pikachu", affinity: 1500 } };
-  assert.strictEqual(dex.check(bond, world({}, { party: [pet("pikachu", 1500, { everstone: true })] })), true);
+  assert.strictEqual(dex.check(bond, world({}, { party: [pet("pikachu", 1500)] })), true);
   assert.strictEqual(dex.check(bond, world({}, { party: [pet("pikachu", 1499)] })), false);
   assert.strictEqual(dex.check(bond, world({}, { party: [pet("raichu", 9999)] })), false, "진화한 뒤엔 그 종이 아니다");
 

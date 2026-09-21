@@ -92,19 +92,11 @@ export function createCommands(ctx: CommandContext): Commands {
   dispatcher.register("party.show", showHide(true));
   dispatcher.register("party.hide", showHide(false));
 
-  // pet.set — 집과 에버스톤. 모습은 pet.look 사용
+  // pet.set — 위치. 모습은 pet.look 사용
   dispatcher.register("pet.set", async (c) => {
     const id = target(c);
     if (!id || !ctx.party.all().some((p) => p.id === id)) return { ok: false, reason: "no-pet", id: String(id) };
     const home = isObj(c.args) ? c.args.home : undefined;
-    if (c.args && typeof c.args.everstone === "boolean") return transact(c, (save) => {
-      const pet = save.party.find((p) => p.id === id);
-      if (!pet) return { ok: false, reason: "no-pet" };
-      if (c.args!.everstone === true && !pet.everstone && !save.inventory[`everstone:${id}`]) return { ok: false, reason: "not-owned" };
-      if (pet.everstone) save.inventory[`everstone:${id}`] = 1;
-      pet.everstone = c.args!.everstone as boolean;
-      return { ok: true, reason: "ok" };
-    });
     if (!isObj(home)) return { ok: false, reason: "not-yet", id };
     const { dx, dy } = home;
     if (typeof dx !== "number" || typeof dy !== "number" || !Number.isFinite(dx) || !Number.isFinite(dy)) return { ok: false, reason: "bad-value", id };
