@@ -16,6 +16,47 @@
 
 완료한 작업의 설명을 이 문서들에 반복해서 넣지 않는다. 상세 근거는 작업 기록으로 연결한다.
 
+## 문서 트리
+
+2026-09-22 기준 전체 문서 구조다. Figma 사본은 [06 · 전체 설계·문서 트리](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=236-121) 페이지에 있다. 사본과 이 그림이 다르면 이 그림을 따른다. 실선은 폴더 구성이다. 점선은 결정이 기록되는 순서다. 사용자 발언을 작업 기록에 남긴다. 채택한 결정을 설계에 옮긴다. 세부 계약과 흐름을 기능 문서에 적는다. 현재 상태를 진행 현황에 적는다.
+설계 영역별 확정·미정 상태는 [전체 설계 트리](progress.md#전체-설계-트리)를 따른다. `s5` 이름의 파일과 폴더는 S5 설정창 설계에서 시작했다. 현재는 프로젝트 전체의 재설계 결정도 담는다.
+
+```mermaid
+flowchart TD
+  D["docs/"]
+  D --> R["README.md<br/>문서 안내"]
+  D --> CUR["현재 기준<br/>docs 바로 아래"]
+  CUR --> DES["design.md<br/>채택한 결정"]
+  CUR --> PRO["progress.md<br/>현재 상태·전체 설계 트리"]
+  CUR --> TER["terms.md<br/>화면 용어"]
+  CUR --> GUI["guide.md<br/>현재 앱 사용법"]
+  CUR --> SPE["specs/<br/>기능 계약"]
+  SPE --> S5["s5.md<br/>기능 계약"]
+  SPE --> SCN["s5-scenarios.md<br/>사용자 흐름 SC-01~11"]
+  D --> WOR["work/<br/>작업별 기록"]
+  WOR --> WI["구현"]
+  WI --> W1["s3/ 육성"]
+  WI --> W2["s4/ 상점·진화"]
+  WI --> W3["runtime-e2e/ 실행 흐름 재검수"]
+  WOR --> WD["설계"]
+  WD --> W4["s5-design-system-v2/<br/>전체 설계 결정 기록·Figma 검수"]
+  WD --> W5["s5-terminology/ 명칭 출처 정정"]
+  WD --> W6["s5-record-cleanup/ 이전 기록 정리"]
+  WOR --> WA["자산"]
+  WA --> W7["logo/ 정식 로고"]
+  WA --> W8["icon-concepts/ 아이콘 시안"]
+  WOR --> WX["문서"]
+  WX --> W9["docs-organization/ 문서 구조·작성 절차"]
+  D --> HIS["history/<br/>월별 완료 이력"]
+  D --> CON["contributing/<br/>작업 절차·작성 원칙·역할"]
+  D --> ARC["archive/<br/>대체된 설계 s5-legacy"]
+
+  W4 -. 채택 .-> DES
+  DES -. 세부 계약 .-> S5
+  S5 -. 사용 순서 .-> SCN
+  SCN -. 상태 반영 .-> PRO
+```
+
 ## 기록 위치
 
 | 위치 | 용도 |
