@@ -13,6 +13,7 @@
 | [guide.md](guide.md) | 현재 앱의 사용 방법 |
 | [specs/s5.md](specs/s5.md) | S5 기능 계약과 미확정 제안 |
 | [specs/s5-scenarios.md](specs/s5-scenarios.md) | S5 사용자 흐름, 예외, 수용 조건과 열린 결정 |
+| [specs/ui-components.md](specs/ui-components.md) | 화면에서 반복되는 UI 컴포넌트 계약과 Figma 자산 판정 |
 
 완료한 작업의 설명을 이 문서들에 반복해서 넣지 않는다. 상세 근거는 작업 기록으로 연결한다.
 
@@ -33,6 +34,7 @@ flowchart TD
   CUR --> SPE["specs/<br/>기능 계약"]
   SPE --> S5["s5.md<br/>기능 계약"]
   SPE --> SCN["s5-scenarios.md<br/>사용자 흐름 SC-01~11"]
+  SPE --> UIC["ui-components.md<br/>UI 컴포넌트 계약"]
   D --> WOR["work/<br/>작업별 기록"]
   WOR --> WI["구현"]
   WI --> W1["s3/ 육성"]
