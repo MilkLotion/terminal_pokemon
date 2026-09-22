@@ -1,6 +1,6 @@
 # UI 컴포넌트 계약
 
-날짜: 2026-09-23. 상태: 계약 초안. 사용자 검토 전. Figma 수정과 기능 구현 미시작.
+날짜: 2026-09-23. 상태: 계약 초안. 수정 6개와 C-02는 Figma에 반영했다. 사용자 검토 전. 나머지 신규 컴포넌트의 Figma 작업과 기능 구현 미시작.
 근거: [07 · 와이어프레임](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=252-121)의 WF-01~WF-09와 상태 예시, Figma `00`~`04` 자산의 읽기 전용 확인, [작업 기록](../work/s5-design-system-v2/plan.md#ui-컴포넌트-계약-추출-설계).
 
 ## 읽는 기준
@@ -50,6 +50,7 @@
 
 그대로 재사용하는 기초 자산: `Button`, `Type Badge`, `Status Dot`, `Divider`, `Visibility Marker`, `Portrait`, 텍스트 컴포넌트, 아이콘. `Portrait`와 `Visibility Marker`는 작은 크기 변형이 필요하다.
 상세 화면에서 계속 쓰는 자산: `Pokemon Profile`, `Page Header`, `Care Section`, `Care Action`, `Settings Section`, `Growth & Tools Section`, `Party Management Section`, `Traits`, `Debuff Badge`, `Notice`, `Status Banner`, `Action Group`, `Size Step`, `Size Selector`. 이번 와이어프레임에는 쓰이지 않았다. 삭제 대상으로 판정하지 않는다.
+Figma 반영: 2026-09-23 C-01·C-02·C-03·C-04·C-05·C-13·C-18을 반영했다. 노드와 결정은 각 계약의 `Figma` 줄과 [작업 기록](../work/s5-design-system-v2/plan.md#ui-컴포넌트-수정-6개-figma-반영)을 따른다.
 템플릿: `App Shell`은 C-01·C-03 수정을 반영한다. `Party Layout`은 파티 칸만 담도록 수정한다. 박스 탭 레이아웃은 신규다. `Pokemon Detail Layout`에는 박스 개체용 `파티에 배치`·`교체` 버튼이 필요하다.
 
 ## 계약
@@ -61,18 +62,21 @@
 상태: 업적 미수령 있음·없음. 업적 모달 열림. 설정 모달 열림.
 사용 화면: 관리 창 모든 탭, WF-01~WF-05, WF-01b.
 판정: `App Header`에 업적·설정 아이콘 자리를 더한다. 기존 설정 탭 진입은 아이콘으로 옮긴다.
+Figma: `App Header` `154:1017`의 오른쪽에 `header-actions`를 두었다. 순서는 보유 포인트, 업적 버튼, 설정 버튼이다. 두 버튼은 노출한 인스턴스다. 헤더 인스턴스에서 dot와 열림 상태를 바꾼다. 상태 예시는 `295:3297`이다.
 
 ### C-02 헤더 아이콘 버튼
 
 역할: 업적창과 설정 모달을 연다.
 상태: 기본, 모달 열림(진한 배경). 업적 아이콘은 미수령 보상이 있으면 우측 위에 dot를 표시한다.
 규칙: 미수령 dot는 업적 아이콘에만 쓴다. 부화·진화에는 쓰지 않는다.
+Figma: `Header Icon Button` `295:3083`. 상태는 `Default`·`Hover`·`Open`·`Focus`다. 속성은 `Icon` 교체와 `Show Dot`이다. dot는 `Status Dot`의 `Danger`다. 아이콘은 새 `Icon / Achievement` `295:123`과 기존 `Icon / Options`다. `Open`은 아이콘 선을 흰색으로 덮어쓴다. 교체 아이콘의 벡터가 2개보다 많으면 흰색이 일부에만 적용된다. 대화상자의 닫기 버튼도 이 컴포넌트를 쓴다.
 
 ### C-03 메인 탭
 
 역할: 파티 / 박스 / 도감 / 상점 / 가방 사이를 이동한다.
 상태: 탭별 선택(옅은 배경과 밑줄), 기본. 업적·설정 모달이 열려도 탭 선택은 그대로다.
 판정: `Primary Navigation`의 `Active` 변형을 `Party|Box|Pokédex|Shop|Bag`로 바꾼다. `Settings`를 뺀다. 박스 아이콘이 새로 필요하다. 선택 밑줄은 사용자 수정 내비게이션 `114:967`의 규칙을 유지한다.
+Figma: `Primary Navigation` `208:542`의 항목을 `파티·박스·도감·상점·가방` 순서로 바꿨다. `Active=Settings`는 인스턴스가 없어서 `Active=Box`로 바꿨다. `Icon / Box` `294:353`을 새로 만들었다.
 
 ### C-04 파티 칸 카드
 
@@ -82,6 +86,7 @@
 내용(빈 칸·잠긴 칸): 가운데 아이콘, 제목, 설명 한 줄. 빈 칸 설명은 `박스에서 배치`다.
 규칙: 같은 줄 카드 높이를 맞춘다. 와이어프레임 크기는 330×160이다. 빈 칸을 누르면 박스 개체 고르기(C-13)로 이어진다.
 판정: `Pokemon Card`와 `Party Slot Card`를 하나의 상태 세트로 묶는다. 만복도를 더한다. 승인 UI의 `빈 슬롯`·`잠긴 파티칸`·`도감에서 소환` 문구를 용어사전 기준으로 바꾼다.
+Figma: `Pokemon Card`를 `Party Slot Card` `194:317`의 `State=Pokemon`으로 옮겼다. 기존 인스턴스 6곳과 켜기·끄기 값은 유지됐다. 숨김은 별도 변형 대신 `Show Visibility Marker`로 켠다. 친밀도·만복도는 `Stat Meter` Narrow 두 개다. 빈 칸·잠긴 칸 문구는 `Party Slot` `151:158`에서 바꿨다. 업적으로 여는 칸은 노출한 `hint`를 `업적 보상으로 열기`로 바꾼다. 카드 폭은 기존 320을 유지했다. 상태 예시는 `298:3408`이다.
 
 ### C-05 수치 막대
 
@@ -89,6 +94,7 @@
 변형: 넓게(한 줄에 하나), 좁게(한 줄에 둘). 좁게는 수치를 `85/100`으로 붙여 쓴다.
 규칙: 채움 길이는 수치 비율이다. 예상 경험치처럼 현재와 다른 값은 시각 디자인 단계에서 구분 표현을 정한다.
 판정: `Friendship`을 이름·수치를 바꿀 수 있는 공통 막대로 수정한다.
+Figma: `Friendship`을 `Stat Meter` `296:190`의 `Size=Wide`로 바꾸고 `Size=Narrow`를 더했다. 이름·수치는 노출한 `label`·`value`로 바꾼다. Figma는 인스턴스 안 레이어의 크기를 바꿀 수 없다. 그래서 채움 길이는 `Stat Meter Bar` `298:155`의 `Fill` 변형에서 10% 단위로 고른다.
 
 ### C-06 박스 칸
 
@@ -147,6 +153,7 @@
 변형: 폭 440(구매 창), 폭 600(업적창·설정·개체 선택). 본문 스크롤 여부.
 사용: 업적창, 설정, 박스 개체 고르기, 파티 칸 고르기, 구매 창, 기존 확인 창.
 판정: `Confirm Dialog`를 공통 틀로 수정한다. 배경은 `Modal Scrim`을 재사용한다.
+Figma: `Confirm Dialog`를 `Dialog` `299:3575`의 `Size=Compact`로 바꾸고 `Size=Wide`를 더했다. 구성은 `head`, 본문 slot `Body`, `error-notice`, `footer`다. slot 안의 레이어는 컴포넌트 속성과 연결할 수 없다. 그래서 실패 알림 `error-notice`는 본문 밖에 두고 `Show Error`로 켠다. Compact는 높이가 내용에 맞춰진다. Wide는 600×620이며 본문만 세로로 스크롤한다. 닫기는 `Header Icon Button`과 `Icon / Close` `299:166`이다.
 `[스펙 미확정]` Esc와 바깥 클릭으로 닫기.
 
 ### C-14 수량 조절
@@ -180,6 +187,7 @@
 역할: 설정 항목 하나와 그 조작을 보여준다.
 조작: 토글, 선택, 두 칸 전환(C-15), 버튼.
 판정: `Setting Row`의 `Control` 교체 속성을 재사용한다. 토글은 새로 만든다.
+Figma: `Toggle` `299:3593`을 새로 만들었다. 변형은 `Value=On|Off`와 `State=Default|Focus`다. 꺼짐 막대는 새 변수 `bg/control-off`(`neutral/500`)다. `Setting Row` `134:1023`의 배경을 `bg/surface`에 연결했다. `Control`의 기본값은 토글이다. 추천값은 `Toggle`과 `Button`이다. 기존 인스턴스 9곳은 버튼 값을 유지했다.
 
 ### C-19 업적 배너
 
@@ -207,6 +215,7 @@
 
 ## 남은 일
 
-1. 사용자와 이 계약 초안을 검토한다.
-2. 확정한 계약부터 Figma `01`~`04`에 수정·신규 컴포넌트를 만든다. 기존 V2-01~V2-12 문제와 함께 처리한다.
+1. 사용자와 이 계약 초안을 검토한다. 사용자 지시에 따라 Figma 반영 결과를 보며 함께 검토한다.
+2. 수정 6개와 C-02는 Figma에 반영했다. 반영 결과를 검토한 뒤 나머지 신규 컴포넌트를 만든다. 기존 V2-01~V2-12 문제와 함께 처리한다.
 3. 모듈 책임과 구현 컴포넌트 구조는 별도로 정한다.
+4. 2026-09-23 시나리오 빈 화면 와이어프레임에서 반복 후보가 생겼다. 코치마크 말풍선, 돌봄 타일(밥 주기·놀아주기·쓰다듬기·노래 들려주기), 미리보기 상자, 진화 전후 비교다. 계약에 더할지는 새 화면 검토 뒤 정한다. 근거는 [작업 기록](../work/s5-design-system-v2/plan.md#시나리오-빈-화면-와이어프레임)을 따른다.
