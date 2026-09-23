@@ -39,3 +39,26 @@ export const isNatureId = (v: unknown): v is NatureId => typeof v === "string" &
 export const isAgentName = (v: unknown): v is AgentName => typeof v === "string" && (AGENT_NAMES as readonly string[]).includes(v);
 export const isCommandSource = (v: unknown): v is CommandSource =>
   typeof v === "string" && (COMMAND_SOURCES as readonly string[]).includes(v);
+
+// 저장 v3 의 기본값 — 계약은 docs/specs/modules.md "저장 구조". 게임 숫자는 docs/specs/balance.md 를 따른다
+export const SAVE_V3_RULES = {
+  version: 3 as const,
+  party: {
+    total: 6, // 파티 칸은 항상 여섯이다. 열림·빈 칸·잠김으로 상태를 나눈다
+    openAtStart: 2, // 첫 선택을 마치면 두 칸으로 시작한다
+    shopUnlock: 2, // 상점에서 살 수 있는 칸 수
+  },
+  box: { size: 30, firstName: "박스 1" },
+  pet: {
+    level: 1,
+    exp: 0,
+    affinity: 0,
+    fullness: 100, // 새 개체는 배부른 상태로 시작한다
+    mood: 60,
+  },
+  feedCooldownMs: 10 * 60_000, // 밥 주기 쿨타임 10분. 기본먹이와 프리미엄먹이가 함께 쓴다
+  eggCareCooldownMs: 60_000, // 알 돌봄 인정 간격 1분
+  tx: { keep: 200, ttlMs: 24 * 60 * 60_000 }, // 최근 200건 또는 24시간 중 큰 쪽을 남긴다
+  saveEveryMs: 30_000, // 시간에 따른 값의 주기 저장
+  saveFailNotifyAfter: 3, // 이만큼 이어서 실패하면 관리 창 상태 안내에 남긴다
+};

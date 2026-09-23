@@ -1,0 +1,126 @@
+// 저장 v2 → v3 한 번 변환 — 규칙은 docs/specs/modules.md "V2 → V3 변환 규칙"
+//
+// 절차는 원본 백업 → 변환 → 검사 → 성공 시 교체다. 검사에 실패하면 원본을 유지하고 변환 결과를 버린다.
+// 여기서는 변환과 검사만 한다. 파일을 옮기는 것은 부르는 쪽(src/save/store.ts)이 한다.
+// 보존 대상: 개체 식별자, 친밀도, 성격, 포인트, 파티 순서, 표시 상태, 도감 기록, 구매 권리.
+// v2 에는 레벨과 경험치가 없다. 새 값으로 시작한다.
+import { localDate } from "../shared/clock.js";
+import type { BoxV3, PartySlotV3, PetV3, SaveV3 } from "../shared/save-v3";
+import type { Pet, SaveV2 } from "../shared/types";
+import { SAVE_V3_RULES } from "./rules.js";
+import { empty, emptySlots, putStrays } from "./v3.js";
+
+export interface MigrateResult {
+  save: SaveV3 | null; // 검사를 통과한 결과. 실패하면 null
+  checks: CheckResult[];
+  failed: string[]; // 어긋난 검사 이름
+}
+
+export interface CheckResult {
+  name: string;
+  ok: boolean;
+  before: number | string;
+  after: number | string;
+}
+
+const SHINY_RIGHT = "shiny:"; // v2 inventory 의 이로치 권리 기록. 도구가 아니라서 legacy 로 보존한다
+
+// v2 의 마리 → v3 의 개체. 배고픔을 만복도로 뒤집고 쿨타임은 남은 시간으로 바꾼다
+export function convertPet(pet: Pet, now: number, date: string): PetV3 {
+  const fedAt = typeof pet.fedAt === "number" ? pet.fedAt : null;
+  const remain = fedAt == null ? 0 : Math.max(0, SAVE_V3_RULES.feedCooldownMs - (now - fedAt));
+  return {
+    id: pet.id,
+    species: pet.species,
+    shiny: pet.shiny === true,
+    nature: pet.nature,
+    size: pet.size,
+    level: SAVE_V3_RULES.pet.level,
+    exp: SAVE_V3_RULES.pet.exp,
+    affinity: Math.min(100, Math.max(0, Math.round(pet.affinity))),
+    fullness: Math.min(100, Math.max(0, 100 - Math.round(pet.hunger))),
+    mood: Math.min(100, Math.max(0, Math.round(pet.mood))),
+    feedCooldownMs: Math.round(remain),
+    buffs: [],
+    home: { dx: pet.home.dx, dy: pet.home.dy },
+    since: pet.since,
+    stage: pet.stage,
+    evolved: [...pet.evolved],
+    daily: { ...pet.daily, date },
+  };
+}
+
+export function migrate(v2: SaveV2, now: number): MigrateResult {
+  const date = localDate(now);
+  const out = empty(now);
+
+  // 개체와 파티 칸 — v2 는 배열 순서가 곧 칸 순서다
+  out.pets = v2.party.map((p) => convertPet(p, now, date));
+  const slots: PartySlotV3[] = emptySlots();
+  const open = Math.min(slots.length, Math.max(SAVE_V3_RULES.party.openAtStart, Math.round(v2.slots)));
+  for (let i = 0; i < slots.length; i++) {
+    if (i >= open) continue;
+    const pet = v2.party[i];
+    // shown 은 화면에 보이나를 뜻한다. v3 의 hidden 은 그 반대다
+    slots[i] = pet ? { state: "pokemon", petId: pet.id, hidden: pet.shown !== true } : { state: "empty" };
+  }
+  out.party.slots = slots;
+
+  const placed = new Set<string>();
+  for (const s of slots) if (s.state === "pokemon" && s.petId) placed.add(s.petId);
+  putStrays(out.pets, placed, out.boxes);
+
+  // 가방 — 이로치 권리는 도구가 아니므로 legacy 로 옮긴다
+  for (const [k, v] of Object.entries(v2.inventory)) {
+    if (k.startsWith(SHINY_RIGHT)) {
+      out.legacy[k] = v;
+      continue;
+    }
+    if (typeof v === "number" && v > 0) out.bag[k] = Math.round(v);
+  }
+
+  out.points.balance = Math.max(0, Math.round(v2.points));
+  const acc = v2.acc as Record<string, unknown>;
+  const progress = typeof acc?.progressMs === "number" ? acc.progressMs : 0;
+  out.points.progressMs = Math.max(0, Math.round(progress));
+
+  out.dex.unlocked = [...new Set(v2.unlocked)];
+  out.dex.obtained = [...new Set(out.pets.map((p) => p.species))];
+  out.dex.shinyObtained = [...new Set(out.pets.filter((p) => p.shiny).map((p) => p.species))];
+
+  out.daily = { ...v2.daily };
+  out.totals = { ...v2.totals };
+  out.agents = { ...v2.agents };
+  out.log = [...v2.log];
+
+  // 새 화면에서 쓰지 않는 값은 지우지 않고 보존한다
+  for (const p of v2.party) {
+    if (p.nick != null) out.legacy[`nick:${p.id}`] = p.nick;
+    if (p.look != null) out.legacy[`look:${p.id}`] = p.look;
+  }
+
+  const checks = verify(v2, out);
+  const failed = checks.filter((c) => !c.ok).map((c) => c.name);
+  return { save: failed.length ? null : out, checks, failed };
+}
+
+// 변환 전후로 같아야 하는 값 — 하나라도 어긋나면 원본을 유지한다
+export function verify(v2: SaveV2, v3: SaveV3): CheckResult[] {
+  const idsBefore = v2.party.map((p) => p.id).sort().join(",");
+  const idsAfter = v3.pets.map((p) => p.id).sort().join(",");
+  const affinityBefore = v2.party.reduce((a, p) => a + Math.min(100, Math.max(0, Math.round(p.affinity))), 0);
+  const affinityAfter = v3.pets.reduce((a, p) => a + p.affinity, 0);
+  const inBoxes = v3.boxes.reduce((a, b) => a + b.slots.filter(Boolean).length, 0);
+  const inParty = v3.party.slots.filter((s) => s.state === "pokemon").length;
+  return [
+    { name: "개체 수", ok: v2.party.length === v3.pets.length, before: v2.party.length, after: v3.pets.length },
+    { name: "개체 식별자", ok: idsBefore === idsAfter, before: idsBefore, after: idsAfter },
+    { name: "친밀도 합계", ok: affinityBefore === affinityAfter, before: affinityBefore, after: affinityAfter },
+    { name: "포인트", ok: Math.max(0, Math.round(v2.points)) === v3.points.balance, before: v2.points, after: v3.points.balance },
+    { name: "해금 종 수", ok: new Set(v2.unlocked).size === v3.dex.unlocked.length, before: new Set(v2.unlocked).size, after: v3.dex.unlocked.length },
+    { name: "배치 누락", ok: inParty + inBoxes === v3.pets.length, before: v3.pets.length, after: inParty + inBoxes },
+  ];
+}
+
+// 박스에 담긴 개체 식별자 — 검사와 자체 검사에서 쓴다
+export const boxedIds = (boxes: BoxV3[]): string[] => boxes.flatMap((b) => b.slots.filter((s): s is string => typeof s === "string"));

@@ -1,0 +1,131 @@
+// 저장 v3 의 모양 — 계약은 docs/specs/modules.md "저장 구조". v2 는 열 때 한 번 변환한다 (src/save/migrate-v3.ts)
+//
+// v2 와 다른 점
+//   - 개체를 파티 배열에 직접 두지 않는다. `pets` 에 모으고 `party.slots` 가 식별자로 가리킨다.
+//     빈 칸과 잠긴 칸을 표현할 수 있어야 파티 칸 규칙이 성립한다.
+//   - 배고픔(hunger) 대신 만복도(fullness) 를 쓴다. 용어사전의 사용자 용어와 맞춘다. fullness = 100 − hunger
+//   - 멈추는 값은 시각이 아니라 남은 시간으로 저장한다. PC 잠금·절전 중에는 시간이 흐르지 않기 때문이다.
+//   - 시간 값은 전부 ms 정수다. 화면 표기만 초·분으로 반올림한다.
+import type { AgentStats, LogEntry, NatureId, PetDaily, Totals } from "./types";
+
+// ── 개체 ───────────────────────────────────────────────────────────────────────
+export type BuffKind = "premium-food" | "long-play" | "toy";
+
+export interface BuffV3 {
+  kind: BuffKind;
+  remainMs: number; // 남은 시간. 0 이면 끝
+}
+
+export interface PetV3 {
+  id: string; // 진화해도 그대로
+  species: string;
+  shiny: boolean;
+  nature: NatureId;
+  size: number; // 도트 배율
+  level: number; // 1~100
+  exp: number; // 누적 경험치. 레벨은 종의 성장 곡선으로 읽는다
+  affinity: number; // 친밀도 0~100, 누적이며 줄지 않는다
+  fullness: number; // 만복도 0~100. 높을수록 배부르다
+  mood: number; // 0~100
+  feedCooldownMs: number; // 밥 주기 남은 쿨타임
+  buffs: BuffV3[];
+  home: { dx: number; dy: number };
+  since: number;
+  stage: number; // 이 개체가 진화한 횟수
+  evolved: string[]; // 거쳐 온 종
+  daily: PetDaily;
+}
+
+// ── 파티 ───────────────────────────────────────────────────────────────────────
+export type SlotState = "pokemon" | "empty" | "locked";
+export type SlotUnlockBy = "shop" | "achievement";
+
+export interface PartySlotV3 {
+  state: SlotState;
+  petId?: string; // state 가 pokemon 일 때만
+  hidden?: boolean; // 숨김 여부. 숨겨도 포인트와 친밀도는 쌓인다
+  unlockBy?: SlotUnlockBy; // state 가 locked 일 때 어떻게 여는가
+}
+
+// ── 박스 ───────────────────────────────────────────────────────────────────────
+export interface BoxV3 {
+  id: string;
+  name: string;
+  slots: (string | null)[]; // 길이 30. 개체 식별자 또는 빈 칸
+}
+
+// ── 알 ─────────────────────────────────────────────────────────────────────────
+export interface EggV3 {
+  id: string;
+  kind: string; // data/eggs.json 의 키. random · ancient-stone
+  boughtAt: number;
+  remainMs: number; // 준비까지 남은 시간
+  ready: boolean;
+  candidates: string[]; // 구매 당시 후보 종
+  careCooldownMs: number; // 돌봄 남은 쿨타임
+  actions: { pat: number; song: number }; // 인정한 돌봄 횟수. 행동 조건의 입력
+}
+
+// ── 그 밖의 영역 ───────────────────────────────────────────────────────────────
+export interface PointsV3 {
+  balance: number;
+  progressMs: number; // 다음 1포인트까지의 부분 진행
+}
+
+export interface DexV3 {
+  unlocked: string[];
+  obtained: string[];
+  shinyObtained: string[];
+  discovered: Record<string, string>; // 종 → 발견한 알 행동 조건 식별자
+}
+
+export interface AchievementV3 {
+  achievedAt: number | null;
+  claimedAt: number | null;
+}
+
+export type TutorialState = "none" | "active" | "skipped" | "done";
+
+export interface TutorialV3 {
+  state: TutorialState;
+  steps: number; // 끝낸 단계 수
+}
+
+export type PlayAreaMode = "full" | "region";
+
+export interface SettingsV3 {
+  language: string;
+  startOnLogin: boolean;
+  sound: boolean;
+  sleepAfterMin: number;
+  playArea: { mode: PlayAreaMode; rect: { x: number; y: number; w: number; h: number } | null };
+  display: Record<string, unknown>;
+}
+
+export interface TxRecordV3 {
+  id: string; // 요청 식별자
+  at: number;
+  result: unknown; // 같은 요청을 다시 받으면 그대로 돌려준다
+}
+
+export interface SaveV3 {
+  v: 3;
+  savedAt: number;
+  lastTickAt: number;
+  pets: PetV3[];
+  party: { slots: PartySlotV3[] };
+  boxes: BoxV3[];
+  eggs: EggV3[];
+  bag: Record<string, number>;
+  points: PointsV3;
+  dex: DexV3;
+  achievements: Record<string, AchievementV3>;
+  tutorials: Record<string, TutorialV3>;
+  settings: SettingsV3;
+  daily: { date: string; streak: number; interacted: boolean };
+  totals: Totals;
+  agents: Partial<Record<string, AgentStats>>;
+  tx: TxRecordV3[];
+  legacy: Record<string, unknown>; // 새 화면에서 쓰지 않는 옛 값. 지우지 않고 보존한다
+  log: LogEntry[];
+}
