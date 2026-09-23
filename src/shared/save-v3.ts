@@ -9,7 +9,8 @@
 import type { AgentStats, LogEntry, NatureId, PetDaily, Totals } from "./types";
 
 // ── 개체 ───────────────────────────────────────────────────────────────────────
-export type BuffKind = "premium-food" | "long-play" | "toy";
+// 장난감은 오래 놀아주기와 같은 버프를 준다. 그래서 종류를 따로 두지 않는다 (docs/specs/s5.md "장난감")
+export type BuffKind = "premium-food" | "long-play";
 
 export interface BuffV3 {
   kind: BuffKind;
@@ -25,7 +26,9 @@ export interface PetV3 {
   level: number; // 1~100
   exp: number; // 누적 경험치. 레벨은 종의 성장 곡선으로 읽는다
   affinity: number; // 친밀도 0~100, 누적이며 줄지 않는다
+  affinityProgressMs: number; // 다음 친밀도 1 까지의 부분 진행. 버프와 디버프를 반영한 가중 시간
   fullness: number; // 만복도 0~100. 높을수록 배부르다
+  fullnessProgressMs: number; // 다음 만복도 1 감소까지의 부분 진행
   mood: number; // 0~100
   feedCooldownMs: number; // 밥 주기 남은 쿨타임
   buffs: BuffV3[];

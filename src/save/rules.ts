@@ -62,3 +62,16 @@ export const SAVE_V3_RULES = {
   saveEveryMs: 30_000, // 시간에 따른 값의 주기 저장
   saveFailNotifyAfter: 3, // 이만큼 이어서 실패하면 관리 창 상태 안내에 남긴다
 };
+
+// 시간에 따른 값의 규칙표 — 수치는 docs/specs/balance.md 를 따른다
+export const TIME_V3_RULES = {
+  fullnessDropMs: 120_000, // 만복도 1 감소에 걸리는 시간. 시간당 30 이므로 2분에 1
+  affinityGainMs: 600_000, // 친밀도 1 획득에 걸리는 가중 시간. 10분에 1
+  pointGainMs: 120_000, // 포인트 1 획득에 걸리는 가중 시간. 개체 1마리당 2분에 1
+  // 만복도 구간 — 아래 경계값 이상이면 그 구간이다
+  zone: { full: 60, normal: 40, hungry: 15 },
+  // 구간별 친밀도 증가 배율(백분율). 배고픔 −30%, 매우 배고픔 −60%
+  zonePercent: { full: 100, normal: 100, hungry: 70, starving: 40 },
+  // 버프의 추가 배율(백분율). 기준 100 에 더한다. 둘 다 있으면 250 이 된다
+  buffBonusPercent: { "premium-food": 100, "long-play": 50 },
+};

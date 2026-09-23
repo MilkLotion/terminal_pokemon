@@ -23,7 +23,7 @@ const str = (v: unknown, d = ""): string => (typeof v === "string" ? v : d);
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((s): s is string => typeof s === "string") : []);
 const unique = <T>(list: T[]): T[] => [...new Set(list)];
 
-const BUFF_KINDS: readonly BuffKind[] = ["premium-food", "long-play", "toy"];
+const BUFF_KINDS: readonly BuffKind[] = ["premium-food", "long-play"];
 const SLOT_STATES: readonly SlotState[] = ["pokemon", "empty", "locked"];
 const TUTORIAL_STATES: readonly TutorialState[] = ["none", "active", "skipped", "done"];
 
@@ -126,7 +126,9 @@ export function normalizePet(raw: unknown, date: string): PetV3 | null {
     level: clamp(int(raw.level, SAVE_V3_RULES.pet.level), 1, 100),
     exp: nonNeg(raw.exp, SAVE_V3_RULES.pet.exp),
     affinity: clamp(int(raw.affinity, SAVE_V3_RULES.pet.affinity), 0, 100),
+    affinityProgressMs: nonNeg(raw.affinityProgressMs),
     fullness: clamp(int(raw.fullness, SAVE_V3_RULES.pet.fullness), 0, 100),
+    fullnessProgressMs: nonNeg(raw.fullnessProgressMs),
     mood: clamp(int(raw.mood, SAVE_V3_RULES.pet.mood), 0, 100),
     feedCooldownMs: nonNeg(raw.feedCooldownMs),
     buffs: normalizeBuffs(raw.buffs),

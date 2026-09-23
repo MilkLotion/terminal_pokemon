@@ -1,0 +1,173 @@
+// 시간 처리 자체 확인 — npm run build 뒤 node dist/tools/selftest-time-v3.js
+//
+// 테스트 프레임워크 없이 assert 만. 파일을 만들지 않는다 — 값만으로 확인한다.
+// 계약은 docs/specs/modules.md "시간 처리 순서", 수치는 docs/specs/balance.md 다.
+// 끝에 "통과" 한 줄. 실패하면 어디서 깨졌는지와 함께 종료 코드 1
+import assert from "node:assert";
+import { TIME_V3_RULES } from "../save/rules";
+import { empty } from "../save/v3";
+import { affinityPercent, applyTime, buffPercent, zoneOf } from "../state/time-v3";
+import type { PetV3, SaveV3 } from "../shared/save-v3";
+
+const T0 = new Date(2026, 8, 24, 10, 0, 0).getTime();
+const HOUR = 3_600_000;
+const MIN = 60_000;
+
+const pet = (over: Partial<PetV3> = {}): PetV3 => ({
+  id: "p1", species: "charmander", shiny: false, nature: "hardy", size: 2,
+  level: 1, exp: 0, affinity: 0, affinityProgressMs: 0, fullness: 100, fullnessProgressMs: 0,
+  mood: 60, feedCooldownMs: 0, buffs: [], home: { dx: -24, dy: -60 }, since: T0, stage: 0, evolved: [],
+  daily: { date: "2026-09-24", gained: 0, feeds: 0, plays: 0, pokes: 0, presence: 0, work: 0, turns: 0 },
+  ...over,
+});
+
+// 개체 하나가 파티 첫 칸에 있는 저장
+function seed(over: Partial<PetV3> = {}): SaveV3 {
+  const s = empty(T0);
+  s.pets.push(pet(over));
+  s.party.slots[0] = { state: "pokemon", petId: "p1", hidden: false };
+  return s;
+}
+
+// (1) 만복도는 시간당 30 줄어든다
+{
+  const s = seed();
+  applyTime(s, 2 * HOUR, T0 + 2 * HOUR);
+  assert.equal(s.pets[0]?.fullness, 40, "2시간에 60 감소");
+  assert.equal(s.lastTickAt, T0 + 2 * HOUR);
+  process.stdout.write("(1) 만복도 · 시간당 30  ok\n");
+}
+
+// (2) 짧은 틱을 여러 번 돌려도 긴 틱 한 번과 같다
+{
+  const long = seed();
+  applyTime(long, HOUR, T0 + HOUR);
+  const short = seed();
+  for (let i = 0; i < 60; i++) applyTime(short, MIN, T0 + (i + 1) * MIN);
+  assert.equal(short.pets[0]?.fullness, long.pets[0]?.fullness, "만복도가 같다");
+  assert.equal(short.pets[0]?.affinity, long.pets[0]?.affinity, "친밀도가 같다");
+  // 포인트는 친밀도에 따라 속도가 달라진다. 틱을 나누면 오른 친밀도가 더 빨리 반영되어 1 차이까지 난다
+  assert.ok(Math.abs(short.points.balance - long.points.balance) <= 1, "포인트 차이는 1 이하");
+  process.stdout.write("(2) 부분 진행 · 틱을 나눠도 같다  ok\n");
+}
+
+// (3) 친밀도는 10분에 1. 배부른 구간에서는 배율이 없다
+{
+  const s = seed();
+  applyTime(s, 30 * MIN, T0 + 30 * MIN);
+  assert.equal(s.pets[0]?.affinity, 3, "30분에 3");
+  process.stdout.write("(3) 친밀도 · 10분에 1  ok\n");
+}
+
+// (4) 포인트는 2분에 1. 친밀도가 100 이면 두 배
+{
+  const s = seed();
+  applyTime(s, 20 * MIN, T0 + 20 * MIN);
+  assert.equal(s.points.balance, 10, "20분에 10");
+  const fast = seed({ affinity: 100 });
+  applyTime(fast, 20 * MIN, T0 + 20 * MIN);
+  assert.equal(fast.points.balance, 20, "친밀도 100 이면 두 배");
+  process.stdout.write("(4) 포인트 · 친밀도로 빨라진다  ok\n");
+}
+
+// (5) 박스에 있는 개체는 시간이 멈춘다
+{
+  const s = seed();
+  s.party.slots[0] = { state: "empty" };
+  const box = s.boxes[0];
+  if (box) box.slots[0] = "p1";
+  applyTime(s, 4 * HOUR, T0 + 4 * HOUR);
+  assert.equal(s.pets[0]?.fullness, 100, "만복도가 그대로");
+  assert.equal(s.pets[0]?.affinity, 0, "친밀도가 그대로");
+  assert.equal(s.points.balance, 0, "적립도 멈춘다");
+  process.stdout.write("(5) 박스 보관 · 시간이 멈춘다  ok\n");
+}
+
+// (6) 숨겨도 시간은 흐른다
+{
+  const s = seed();
+  s.party.slots[0] = { state: "pokemon", petId: "p1", hidden: true };
+  applyTime(s, 20 * MIN, T0 + 20 * MIN);
+  assert.equal(s.points.balance, 10, "숨겨도 적립한다");
+  assert.equal(s.pets[0]?.affinity, 2);
+  process.stdout.write("(6) 숨김 · 적립은 이어진다  ok\n");
+}
+
+// (7) 버프는 더한다. 프리미엄과 오래 놀아주기가 함께면 2.5배
+{
+  assert.equal(buffPercent([]), 100);
+  assert.equal(buffPercent([{ kind: "premium-food", remainMs: MIN }]), 200);
+  assert.equal(buffPercent([{ kind: "long-play", remainMs: MIN }]), 150);
+  assert.equal(buffPercent([{ kind: "premium-food", remainMs: MIN }, { kind: "long-play", remainMs: MIN }]), 250);
+  assert.equal(buffPercent([{ kind: "long-play", remainMs: MIN }, { kind: "long-play", remainMs: MIN }]), 150, "같은 버프는 겹치지 않는다");
+  const s = seed({ buffs: [{ kind: "premium-food", remainMs: HOUR }] });
+  applyTime(s, 30 * MIN, T0 + 30 * MIN);
+  assert.equal(s.pets[0]?.affinity, 6, "두 배로 쌓인다");
+  assert.equal(s.pets[0]?.buffs[0]?.remainMs, HOUR - 30 * MIN, "남은 시간이 준다");
+  process.stdout.write("(7) 버프 · 더하고 시간이 준다  ok\n");
+}
+
+// (8) 배고픔 구간은 친밀도 증가를 깎는다
+{
+  assert.equal(zoneOf(100), "full");
+  assert.equal(zoneOf(60), "full");
+  assert.equal(zoneOf(59), "normal");
+  assert.equal(zoneOf(40), "normal");
+  assert.equal(zoneOf(39), "hungry");
+  assert.equal(zoneOf(15), "hungry");
+  assert.equal(zoneOf(14), "starving");
+  assert.equal(affinityPercent(pet({ fullness: 30 })), TIME_V3_RULES.zonePercent.hungry);
+  assert.equal(affinityPercent(pet({ fullness: 5 })), TIME_V3_RULES.zonePercent.starving);
+  process.stdout.write("(8) 만복도 구간과 디버프  ok\n");
+}
+
+// (9) 배고픔과 매우 배고픔에 들어갈 때만 알린다
+{
+  const s = seed({ fullness: 42 });
+  const a = applyTime(s, 10 * MIN, T0 + 10 * MIN); // 42 → 37, 배고픔 진입
+  assert.deepStrictEqual(a.hungerEnter, [{ petId: "p1", zone: "hungry" }]);
+  const b = applyTime(s, 10 * MIN, T0 + 20 * MIN); // 37 → 32, 같은 구간
+  assert.deepStrictEqual(b.hungerEnter, [], "같은 구간 안에서는 알리지 않는다");
+  const c = applyTime(s, 40 * MIN, T0 + 60 * MIN); // 매우 배고픔 진입
+  assert.deepStrictEqual(c.hungerEnter, [{ petId: "p1", zone: "starving" }]);
+  const full = seed({ fullness: 70 });
+  const d = applyTime(full, 20 * MIN, T0 + 20 * MIN); // 70 → 60, 보통으로 내려가도 조용하다
+  assert.deepStrictEqual(d.hungerEnter, [], "보통 구간은 알리지 않는다");
+  process.stdout.write("(9) 말풍선 · 두 구간 진입만  ok\n");
+}
+
+// (10) 알은 준비 시간이 줄고 끝나면 한 번만 알린다
+{
+  const s = seed();
+  s.eggs.push({ id: "e1", kind: "random", boughtAt: T0, remainMs: 5 * MIN, ready: false, candidates: [], careCooldownMs: 30_000, actions: { pat: 0, song: 0 } });
+  const a = applyTime(s, 2 * MIN, T0 + 2 * MIN);
+  assert.deepStrictEqual(a.hatchReady, []);
+  assert.equal(s.eggs[0]?.remainMs, 3 * MIN);
+  assert.equal(s.eggs[0]?.careCooldownMs, 0, "돌봄 쿨타임도 준다");
+  const b = applyTime(s, 3 * MIN, T0 + 5 * MIN);
+  assert.deepStrictEqual(b.hatchReady, ["e1"]);
+  assert.equal(s.eggs[0]?.ready, true);
+  const c = applyTime(s, MIN, T0 + 6 * MIN);
+  assert.deepStrictEqual(c.hatchReady, [], "이미 알린 알은 다시 알리지 않는다");
+  process.stdout.write("(10) 알 · 준비 완료를 한 번만 알린다  ok\n");
+}
+
+// (11) 밥 쿨타임은 0 아래로 내려가지 않는다
+{
+  const s = seed({ feedCooldownMs: 3 * MIN });
+  applyTime(s, 10 * MIN, T0 + 10 * MIN);
+  assert.equal(s.pets[0]?.feedCooldownMs, 0);
+  process.stdout.write("(11) 쿨타임 · 0 에서 멈춘다  ok\n");
+}
+
+// (12) 흐른 시간이 없으면 아무것도 바꾸지 않는다
+{
+  const s = seed();
+  const res = applyTime(s, 0, T0 + 1000);
+  assert.deepStrictEqual(res.hatchReady, []);
+  assert.equal(s.pets[0]?.fullness, 100);
+  assert.equal(s.lastTickAt, T0 + 1000, "마지막 틱 시각은 갱신한다");
+  process.stdout.write("(12) 흐른 시간 0  ok\n");
+}
+
+process.stdout.write("selftest-time-v3: 통과 (만복도·친밀도·포인트·버프·구간·알)\n");
