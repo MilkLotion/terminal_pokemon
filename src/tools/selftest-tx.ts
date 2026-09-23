@@ -149,3 +149,102 @@ function fake(state: SaveV3, now = T0): Fake {
 }
 
 process.stdout.write("selftest-tx: 통과 (성공·중복·실패·격리·기록)\n");
+
+// ── 배치·교체·보관 ────────────────────────────────────────────────────────────
+// 개체 셋 — p1 은 파티 첫 칸, p2·p3 은 박스에 있다
+function seedBox(): SaveV3 {
+  const s = seed();
+  for (const id of ["p2", "p3"]) {
+    const base = s.pets[0];
+    if (!base) continue;
+    s.pets.push({ ...structuredClone(base), id });
+  }
+  const box = s.boxes[0];
+  if (box) {
+    box.slots[0] = "p2";
+    box.slots[1] = "p3";
+  }
+  return s;
+}
+
+// (8) 배치 — 박스 개체가 빈 칸에 숨김으로 들어간다
+{
+  const f = fake(seedBox());
+  const tx = createExecutor(f.ports, HANDLERS);
+  const res = tx.run({ id: "r1", name: "party.place", args: { petId: "p2" } });
+  assert.equal(res.ok, true);
+  const slot = f.state.party.slots[1];
+  assert.equal(slot?.state, "pokemon");
+  assert.equal(slot?.petId, "p2");
+  assert.equal(slot?.hidden, true, "배치한 개체는 숨김으로 시작한다");
+  assert.equal(f.state.boxes[0]?.slots[0], null, "박스에서 빠진다");
+  process.stdout.write("(8) 배치 · 빈 칸에 숨김으로  ok\n");
+}
+
+// (9) 배치 — 잠긴 칸과 이미 찬 칸은 거절한다
+{
+  const f = fake(seedBox());
+  const tx = createExecutor(f.ports, HANDLERS);
+  const locked = tx.run({ id: "r1", name: "party.place", args: { petId: "p2", slotIndex: 5 } });
+  assert.equal(locked.ok === false && locked.reason, "slot-locked");
+  const taken = tx.run({ id: "r2", name: "party.place", args: { petId: "p2", slotIndex: 0 } });
+  assert.equal(taken.ok === false && taken.reason, "slot-not-empty");
+  const inParty = tx.run({ id: "r3", name: "party.place", args: { petId: "p1" } });
+  assert.equal(inParty.ok === false && inParty.reason, "not-in-box", "이미 파티에 있는 개체");
+  assert.equal(f.writes, 0);
+  process.stdout.write("(9) 배치 · 잠김·차 있음·파티 개체 거절  ok\n");
+}
+
+// (10) 교체 — 한 번에 맞바꾸고 들어온 개체는 숨김이다
+{
+  const f = fake(seedBox());
+  const tx = createExecutor(f.ports, HANDLERS);
+  const res = tx.run({ id: "r1", name: "party.swap", args: { slotIndex: 0, petId: "p2" } });
+  assert.equal(res.ok, true);
+  const slot = f.state.party.slots[0];
+  assert.equal(slot?.petId, "p2");
+  assert.equal(slot?.hidden, true, "교체로 들어와도 숨김이다");
+  const boxed = f.state.boxes[0]?.slots.filter(Boolean);
+  assert.deepStrictEqual(boxed?.sort(), ["p1", "p3"], "나간 개체가 박스로");
+  assert.equal(f.writes, 1, "한 번에 맞바꾼다");
+  process.stdout.write("(10) 교체 · 한 번에 맞바꾸고 숨김  ok\n");
+}
+
+// (11) 보관 — 파티 칸이 비고 개체는 박스로
+{
+  const f = fake(seedBox());
+  const tx = createExecutor(f.ports, HANDLERS);
+  const res = tx.run({ id: "r1", name: "party.keep", args: { petId: "p1" } });
+  assert.equal(res.ok, true);
+  assert.equal(f.state.party.slots[0]?.state, "empty", "칸이 빈다");
+  assert.ok(f.state.boxes[0]?.slots.includes("p1"));
+  const again = tx.run({ id: "r2", name: "party.keep", args: { petId: "p1" } });
+  assert.equal(again.ok === false && again.reason, "not-in-party");
+  process.stdout.write("(11) 보관 · 칸이 비고 박스로  ok\n");
+}
+
+// (12) 박스가 가득 차면 새 박스를 만든다
+{
+  const s = seedBox();
+  const box = s.boxes[0];
+  if (box) for (let i = 0; i < box.slots.length; i++) box.slots[i] = box.slots[i] ?? `x${i}`;
+  const f = fake(s);
+  const tx = createExecutor(f.ports, HANDLERS);
+  assert.equal(tx.run({ id: "r1", name: "party.keep", args: { petId: "p1" } }).ok, true);
+  assert.equal(f.state.boxes.length, 2, "박스를 새로 만든다");
+  assert.equal(f.state.boxes[1]?.slots[0], "p1");
+  process.stdout.write("(12) 박스 자동 추가  ok\n");
+}
+
+// (13) 교체가 실패하면 박스도 파티도 그대로다
+{
+  const f = fake(seedBox());
+  const tx = createExecutor(f.ports, HANDLERS);
+  const res = tx.run({ id: "r1", name: "party.swap", args: { slotIndex: 1, petId: "p2" } });
+  assert.equal(res.ok === false && res.reason, "not-in-party", "빈 칸과는 맞바꿀 수 없다");
+  assert.equal(f.writes, 0);
+  assert.equal(f.state.boxes[0]?.slots[0], "p2", "박스가 그대로");
+  process.stdout.write("(13) 교체 실패 · 양쪽 모두 그대로  ok\n");
+}
+
+process.stdout.write("selftest-tx: 배치·교체·보관 통과\n");
