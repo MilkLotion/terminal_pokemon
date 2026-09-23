@@ -90,3 +90,10 @@ export const SHOP_V3_RULES = {
   slotPrices: [300, 600] as const, // 상점에서 여는 파티 칸 두 개. 첫 칸과 둘째 칸의 값이 다르다
   startPoints: 120, // 첫 선택을 마치면 한 번 지급한다
 };
+
+// 가방 도구의 규칙표 — 수치는 docs/specs/balance.md "버프와 친밀도"
+export const BAG_V3_RULES = {
+  buffMs: { "premium-food": 2 * 60 * 60_000, "long-play": 30 * 60_000 }, // 프리미엄 2시간, 오래 놀아주기 30분
+  feedAffinity: 2, // 밥 주기로 오르는 친밀도
+  playAffinity: 3, // 놀아주기로 오르는 친밀도
+};

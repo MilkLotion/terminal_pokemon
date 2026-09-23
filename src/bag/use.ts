@@ -1,0 +1,135 @@
+// 가방 도구 사용 — 규칙은 docs/specs/s5.md, 수치는 docs/specs/balance.md, 효과는 data/items.json
+//
+// 검사와 반영을 한 거래로 묶는다. 하나라도 걸리면 아무것도 바꾸지 않는다.
+// 기본먹이는 무료이며 무제한이라 가방에서 차감하지 않는다. 나머지는 하나씩 쓴다.
+// 진화용 도구는 여기서 다루지 않는다. 진화는 따로 계약이 있다.
+import { loadJson, type DexOptions } from "../dex/data.js";
+import { expForLevel, growthOf, levelFor, MAX_LEVEL } from "../dex/growth.js";
+import { isNatureId } from "../dex/natures.js";
+import { BAG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
+import type { BuffKind, PetV3, SaveV3 } from "../shared/save-v3";
+
+export type ItemEffect = "fullness" | "fullness-full-buff" | "play-buff" | "exp" | "level" | "nature" | "shiny-on" | "shiny-off";
+
+export interface ItemEntry {
+  ko: string;
+  price: number | null;
+  effect: ItemEffect;
+  amount: number;
+}
+
+export type UseFailure =
+  | "no-item" // 그런 도구가 없다
+  | "none-left" // 가방에 없다
+  | "no-pet" // 그런 개체가 없다
+  | "full" // 만복도가 이미 가득이다
+  | "cooldown" // 밥 주기 쿨타임이다
+  | "max-level" // 이미 최대 레벨이다
+  | "already" // 이미 그 상태다
+  | "bad-nature"; // 바꿀 성격을 모른다
+
+export interface UseResult {
+  ok: boolean;
+  reason?: UseFailure;
+  petId?: string;
+  left?: number; // 쓰고 남은 개수
+  level?: number;
+  exp?: number;
+  fullness?: number;
+  nature?: string;
+  shiny?: boolean;
+}
+
+const items = (opts?: DexOptions): Record<string, ItemEntry> => loadJson<Record<string, ItemEntry>>("items.json", opts);
+
+export const itemOf = (id: string, opts?: DexOptions): ItemEntry | null => (id.startsWith("_") ? null : items(opts)[id] ?? null);
+
+// 버프를 건다. 남아 있으면 기본 지속시간으로 바꾼다. 더하지 않는다
+function setBuff(pet: PetV3, kind: BuffKind): void {
+  const remainMs = BAG_V3_RULES.buffMs[kind];
+  const hit = pet.buffs.find((b) => b.kind === kind);
+  if (hit) hit.remainMs = remainMs;
+  else pet.buffs.push({ kind, remainMs });
+}
+
+const addAffinity = (pet: PetV3, gain: number): void => {
+  pet.affinity = Math.min(100, pet.affinity + gain);
+};
+
+export function use(save: SaveV3, itemId: string, petId: string, args: { nature?: string } = {}, opts?: DexOptions): UseResult {
+  const item = itemOf(itemId, opts);
+  if (!item) return { ok: false, reason: "no-item" };
+
+  const pet = save.pets.find((p) => p.id === petId);
+  if (!pet) return { ok: false, reason: "no-pet" };
+
+  const free = item.price === null; // 기본먹이처럼 무료인 도구는 재고를 세지 않는다
+  const stock = save.bag[itemId] ?? 0;
+  if (!free && stock <= 0) return { ok: false, reason: "none-left" };
+
+  const rate = growthOf(pet.species, opts);
+  const done = (extra: Partial<UseResult>): UseResult => {
+    if (!free) {
+      const left = stock - 1;
+      if (left > 0) save.bag[itemId] = left;
+      else delete save.bag[itemId];
+      return { ok: true, petId, left, ...extra };
+    }
+    return { ok: true, petId, ...extra };
+  };
+
+  switch (item.effect) {
+    case "fullness":
+    case "fullness-full-buff": {
+      if (pet.fullness >= 100) return { ok: false, reason: "full" };
+      if (pet.feedCooldownMs > 0) return { ok: false, reason: "cooldown" };
+      pet.fullness = item.effect === "fullness-full-buff" ? 100 : Math.min(100, pet.fullness + item.amount);
+      pet.fullnessProgressMs = 0;
+      pet.feedCooldownMs = SAVE_V3_RULES.feedCooldownMs;
+      if (item.effect === "fullness-full-buff") setBuff(pet, "premium-food");
+      addAffinity(pet, BAG_V3_RULES.feedAffinity);
+      pet.daily.feeds += 1;
+      return done({ fullness: pet.fullness });
+    }
+    case "play-buff": {
+      setBuff(pet, "long-play");
+      addAffinity(pet, BAG_V3_RULES.playAffinity);
+      pet.daily.plays += 1;
+      return done({});
+    }
+    case "exp": {
+      if (pet.level >= MAX_LEVEL) return { ok: false, reason: "max-level" };
+      pet.exp += item.amount;
+      const capped = expForLevel(rate, MAX_LEVEL);
+      if (pet.exp > capped) pet.exp = capped;
+      pet.level = levelFor(rate, pet.exp);
+      return done({ level: pet.level, exp: pet.exp });
+    }
+    case "level": {
+      if (pet.level >= MAX_LEVEL) return { ok: false, reason: "max-level" };
+      pet.level += 1;
+      pet.exp = expForLevel(rate, pet.level); // 새 레벨의 진행은 0부터
+      return done({ level: pet.level, exp: pet.exp });
+    }
+    case "nature": {
+      const next = args.nature ?? "";
+      if (!isNatureId(next, opts)) return { ok: false, reason: "bad-nature" };
+      if (pet.nature === next) return { ok: false, reason: "already" };
+      pet.nature = next;
+      return done({ nature: next });
+    }
+    case "shiny-on": {
+      if (pet.shiny) return { ok: false, reason: "already" };
+      pet.shiny = true;
+      if (!save.dex.shinyObtained.includes(pet.species)) save.dex.shinyObtained.push(pet.species);
+      return done({ shiny: true });
+    }
+    case "shiny-off": {
+      if (!pet.shiny) return { ok: false, reason: "already" };
+      pet.shiny = false; // 도감의 이로치 획득 기록은 지우지 않는다
+      return done({ shiny: false });
+    }
+    default:
+      return { ok: false, reason: "no-item" };
+  }
+}

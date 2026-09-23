@@ -2,6 +2,7 @@
 //
 // 처리기는 사본만 고치고 성공 여부를 돌려준다. 저장은 거래 실행기가 한다.
 // 도메인 규칙은 각 모듈(src/party 등)에 두고 여기서는 인자를 풀어 넘기기만 한다.
+import { use } from "../bag/use.js";
 import { care, isCareAction } from "../egg/care.js";
 import { open } from "../egg/open.js";
 import { keep, place, swap } from "../party/placement.js";
@@ -119,3 +120,22 @@ const buyHandler: TxHandler = (draft, args, ctx) => {
 };
 
 HANDLERS["shop.buy"] = buyHandler;
+
+// ── 가방 ───────────────────────────────────────────────────────────────────────
+
+// 도구 사용 — 대상 개체에 효과를 적용하고 하나를 차감한다
+const useHandler: TxHandler = (draft, args) => {
+  if (!isObj(args)) return { ok: false, reason: "bad-args" };
+  const itemId = typeof args.itemId === "string" ? args.itemId : "";
+  const petId = petIdOf(args);
+  if (!itemId || !petId) return { ok: false, reason: "bad-args" };
+  const nature = typeof args.nature === "string" ? args.nature : undefined;
+  const res = use(draft, itemId, petId, { nature });
+  if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  return {
+    ok: true,
+    result: { itemId, petId, left: res.left, level: res.level, exp: res.exp, fullness: res.fullness, nature: res.nature, shiny: res.shiny },
+  };
+};
+
+HANDLERS["bag.use"] = useHandler;
