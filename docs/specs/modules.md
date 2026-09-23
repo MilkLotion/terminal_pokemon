@@ -89,7 +89,7 @@
 | `points` | `balance`, `progressMs`(다음 1포인트까지의 부분 진행) |
 | `dex` | `unlocked[]`, `obtained[]`, `shinyObtained[]`, `discovered`(종별 발견한 알 행동 조건) |
 | `achievements` | 업적 식별자별 `achievedAt`, `claimedAt` |
-| `tutorials` | 튜토리얼 식별자별 `state`(`none`·`active`·`skipped`·`done`) |
+| `tutorials` | 튜토리얼 식별자별 `state`(`none`·`active`·`skipped`·`done`)와 `steps`(단계별 완료 여부) |
 | `settings` | `language`, `startOnLogin`, `sound`, `sleepAfterMin`, `playArea`(`mode`, `rect`), `display` |
 | `agents` | 기존 `AgentStats`를 유지한다 |
 | `totals` · `log` | 기존 구조를 유지한다. `log`는 최근 200건 |
