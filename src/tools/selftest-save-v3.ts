@@ -1,10 +1,15 @@
 // 저장 v3 의 빈 상태·정규화·v2 이전 자체 확인 — npm run build 뒤 node dist/tools/selftest-save-v3.js
 //
-// 테스트 프레임워크 없이 assert 만. 파일을 만들지 않는다 — 값만으로 확인한다.
+// 테스트 프레임워크 없이 assert 만. 앞쪽은 값만으로, 뒤쪽 파일 통로는 임시 폴더에서 확인한다.
 // 계약은 docs/specs/modules.md "저장 구조"와 "V2 → V3 변환 규칙"이다.
 // 끝에 "통과" 한 줄. 실패하면 어디서 깨졌는지와 함께 종료 코드 1
 import assert from "node:assert";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { migrate, verify } from "../save/migrate-v3";
+import * as store from "../save/store";
+import * as storeV3 from "../save/store-v3";
 import { SAVE_V3_RULES } from "../save/rules";
 import { empty, normalize } from "../save/v3";
 import type { Pet, SaveV2 } from "../shared/types";
@@ -163,3 +168,81 @@ const v2Save = (over: Partial<SaveV2> = {}): SaveV2 => ({
 }
 
 process.stdout.write("selftest-save-v3: 통과 (빈 저장·이전·검사·정규화)\n");
+
+// ── 파일 통로 ──────────────────────────────────────────────────────────────────
+// 여기부터는 임시 폴더에서 실제 파일로 확인한다. 끝나면 지운다
+{
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pokebuddy-selftest-v3-"));
+  try {
+    // (9) 없는 파일
+    {
+      const res = storeV3.read(path.join(root, "none.json"));
+      assert.equal(res.state, null);
+      assert.equal(res.corrupted, false);
+      process.stdout.write("(9) 파일 없음  ok\n");
+    }
+
+    // (10) v3 파일은 그대로 읽는다
+    {
+      const file = path.join(root, "v3.json");
+      const s = empty(T0);
+      s.points.balance = 77;
+      assert.equal(storeV3.write(file, s), true);
+      const res = storeV3.read(file);
+      assert.ok(res.state);
+      assert.equal(res.migrated, false);
+      assert.equal(res.state.points.balance, 77);
+      process.stdout.write("(10) v3 읽기·쓰기  ok\n");
+    }
+
+    // (11) v2 파일은 백업하고 v3 으로 옮긴다
+    {
+      const file = path.join(root, "v2.json");
+      const src = v2Save();
+      assert.equal(store.write(file, src), true);
+      const res = storeV3.read(file);
+      assert.ok(res.state, "이전 결과가 있다");
+      assert.equal(res.migrated, true);
+      assert.equal(res.state.v, 3);
+      assert.equal(res.state.points.balance, 120);
+      assert.ok(fs.existsSync(storeV3.backupName(file)), "원본을 백업한다");
+      const backup = JSON.parse(fs.readFileSync(storeV3.backupName(file), "utf8")) as { v: number };
+      assert.equal(backup.v, 2, "백업은 v2 그대로");
+      // 파일은 v3 으로 바뀌었다 — 다시 읽어도 옮기지 않는다
+      const again = storeV3.read(file);
+      assert.equal(again.migrated, false);
+      assert.equal(again.state?.v, 3);
+      process.stdout.write("(11) v2 이전 · 백업 후 교체  ok\n");
+    }
+
+    // (12) 파손 파일은 .bak 으로 옮긴다
+    {
+      const file = path.join(root, "broken.json");
+      fs.writeFileSync(file, "{ 이건 JSON 이 아니다");
+      const res = storeV3.read(file);
+      assert.equal(res.state, null);
+      assert.equal(res.corrupted, true);
+      assert.ok(fs.existsSync(`${file}.bak`), "파손 파일을 격리한다");
+      process.stdout.write("(12) 파손 격리  ok\n");
+    }
+
+    // (13) 읽기 전용은 파손 파일을 손대지 않는다
+    {
+      const file = path.join(root, "broken2.json");
+      fs.writeFileSync(file, "깨진 내용");
+      const res = storeV3.read(file, { repair: false });
+      assert.equal(res.corrupted, true);
+      assert.ok(fs.existsSync(file), "원본이 남아 있다");
+      assert.equal(fs.existsSync(`${file}.bak`), false);
+      process.stdout.write("(13) 읽기 전용은 격리하지 않는다  ok\n");
+    }
+  } finally {
+    try {
+      fs.rmSync(root, { recursive: true, force: true });
+    } catch {
+      // 지우지 못해도 검사 결과는 그대로다
+    }
+  }
+}
+
+process.stdout.write("selftest-save-v3: 파일 통로 통과 (없음·v3·v2 이전·파손)\n");
