@@ -1,0 +1,91 @@
+// 거래 실행기 — 계약은 docs/specs/modules.md "거래 실행기". 저장을 쓰는 곳은 여기 하나다.
+//
+// 처리 순서
+//   1. 요청 ID 를 확인한다. 이미 완료한 요청이면 저장된 결과를 그대로 돌려준다 (중복 반영 방지)
+//   2. 현재 저장 상태를 읽는다
+//   3. 도메인 모듈로 검사와 결과를 계산한다 — 사본에만 쓴다
+//   4. 모든 검사를 통과하면 바뀔 상태를 한 번에 저장한다
+//   5. 실패하면 아무 상태도 바꾸지 않고 실패로 끝낸다. 재시도 버튼은 제공하지 않는다
+//
+// 전부 동기다. 그래서 거래는 저절로 한 번에 하나이고 들어온 순서대로 처리된다.
+// 파일을 직접 다루지 않는다. 읽기·쓰기·시계를 받아서 쓴다 — 자체 검사가 파일 없이 돈다.
+import type { SaveV3, TxRecordV3 } from "../shared/save-v3";
+import { SAVE_V3_RULES } from "../save/rules.js";
+
+export interface TxRequest {
+  id: string; // 요청 식별자. 같은 값으로 다시 보내도 한 번만 반영한다
+  name: string;
+  args?: unknown;
+}
+
+// 도메인 모듈이 돌려주는 것 — 사본을 고치고 성공 여부만 알린다
+export type TxOutcome = { ok: true; result?: unknown } | { ok: false; reason: string };
+
+export interface TxContext {
+  now: number;
+}
+
+export type TxHandler = (draft: SaveV3, args: unknown, ctx: TxContext) => TxOutcome;
+
+export type TxResult =
+  | { ok: true; result: unknown; replayed: boolean }
+  | { ok: false; reason: TxFailure };
+
+// 실패 이유 — 저장 실패와 규칙 실패를 구분한다. 화면이 다른 문구를 쓴다
+export type TxFailure = "no-save" | "unknown-command" | "save-failed" | string;
+
+export interface TxPorts {
+  read: () => SaveV3 | null;
+  write: (save: SaveV3) => boolean;
+  now: () => number;
+}
+
+export interface Executor {
+  run: (req: TxRequest) => TxResult;
+  saveFailStreak: () => number; // 이어서 실패한 횟수. 정해진 수를 넘으면 화면이 안내를 남긴다
+  shouldNotifySaveFail: () => boolean;
+}
+
+// 완료한 요청 기록을 최근 건수와 보관 기간 중 큰 쪽으로 자른다
+export function trimTx(list: TxRecordV3[], now: number): TxRecordV3[] {
+  const { keep, ttlMs } = SAVE_V3_RULES.tx;
+  const sorted = [...list].sort((a, b) => a.at - b.at);
+  const fresh = sorted.filter((t) => now - t.at <= ttlMs);
+  return fresh.length >= keep ? fresh : sorted.slice(-keep);
+}
+
+export function createExecutor(ports: TxPorts, handlers: Record<string, TxHandler>): Executor {
+  let failStreak = 0;
+
+  const run = (req: TxRequest): TxResult => {
+    const save = ports.read();
+    if (!save) return { ok: false, reason: "no-save" };
+
+    const done = save.tx.find((t) => t.id === req.id);
+    if (done) return { ok: true, result: done.result, replayed: true };
+
+    const handler = handlers[req.name];
+    if (!handler) return { ok: false, reason: "unknown-command" };
+
+    const now = ports.now();
+    const draft = structuredClone(save);
+    const out = handler(draft, req.args, { now });
+    if (!out.ok) return { ok: false, reason: out.reason };
+
+    const result = out.result ?? null;
+    draft.tx = trimTx([...draft.tx, { id: req.id, at: now, result }], now);
+    draft.savedAt = now;
+    if (!ports.write(draft)) {
+      failStreak += 1;
+      return { ok: false, reason: "save-failed" };
+    }
+    failStreak = 0;
+    return { ok: true, result, replayed: false };
+  };
+
+  return {
+    run,
+    saveFailStreak: () => failStreak,
+    shouldNotifySaveFail: () => failStreak >= SAVE_V3_RULES.saveFailNotifyAfter,
+  };
+}
