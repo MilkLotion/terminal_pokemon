@@ -54,7 +54,7 @@
 그대로 재사용하는 기초 자산: `Button`, `Type Badge`, `Status Dot`, `Divider`, `Visibility Marker`, `Portrait`, 텍스트 컴포넌트, 아이콘. `Portrait`와 `Visibility Marker`는 작은 크기 변형이 필요하다.
 상세 화면에서 계속 쓰는 자산: `Pokemon Profile`, `Page Header`, `Care Section`, `Care Action`, `Settings Section`, `Growth & Tools Section`, `Party Management Section`, `Traits`, `Debuff Badge`, `Notice`, `Status Banner`, `Action Group`, `Size Step`, `Size Selector`. 이번 와이어프레임에는 쓰이지 않았다. 삭제 대상으로 판정하지 않는다.
 Figma 반영: 2026-09-23 C-01·C-02·C-03·C-04·C-05·C-13·C-18을 반영했다. 같은 날 나머지 신규 C-06~C-12, C-14~C-17, C-19~C-25를 만들었다. `Portrait`는 Large·Medium·Small, `Visibility Marker`는 Default·Small 변형을 더했다. 근거는 [신규 반영 기록](../work/s5-design-system-v2/plan.md#ui-신규-컴포넌트-figma-반영)을 따른다. 노드와 결정은 각 계약의 `Figma` 줄과 [작업 기록](../work/s5-design-system-v2/plan.md#ui-컴포넌트-수정-6개-figma-반영)을 따른다.
-템플릿: 2026-09-23 수정했다. `Party Layout` `196:189`의 제목 줄 문구, 새 `Box Layout` `340:3665`, `Pokemon Detail Layout` `226:913`의 새 상세 구조와 `Location=Party|Box` 파티 관리다. 근거는 [템플릿 수정](../work/s5-design-system-v2/plan.md#템플릿-수정)을 따른다. 아래는 수정 전 판정이다.
+템플릿: 2026-09-23 `Dex Layout` `378:1524`, `Shop Layout` `379:1757`, `Bag Layout` `380:2064`를 만들었다. 입력칸은 새 `Field` `377:303`을 쓴다. 2026-09-23 수정했다. `Party Layout` `196:189`의 제목 줄 문구, 새 `Box Layout` `340:3665`, `Pokemon Detail Layout` `226:913`의 새 상세 구조와 `Location=Party|Box` 파티 관리다. 근거는 [템플릿 수정](../work/s5-design-system-v2/plan.md#템플릿-수정)을 따른다. 아래는 수정 전 판정이다.
 템플릿: `App Shell`은 C-01·C-03 수정을 반영한다. `Party Layout`은 파티 칸만 담도록 수정한다. 박스 탭 레이아웃은 신규다. `Pokemon Detail Layout`에는 박스 개체용 `파티에 배치`·`교체` 버튼이 필요하다.
 
 ## 계약
