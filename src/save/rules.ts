@@ -83,3 +83,10 @@ export const EGG_V3_RULES = {
   careCooldownMs: 60_000, // 돌봄 인정 간격 1분
   maxEggs: 6, // 돌보미집 칸 수
 };
+
+// 상점의 규칙표 — 가격은 docs/specs/balance.md 가격표
+export const SHOP_V3_RULES = {
+  evoItemPrice: 150, // 진화용 도구는 종류와 무관하게 같은 값이다
+  slotPrices: [300, 600] as const, // 상점에서 여는 파티 칸 두 개. 첫 칸과 둘째 칸의 값이 다르다
+  startPoints: 120, // 첫 선택을 마치면 한 번 지급한다
+};

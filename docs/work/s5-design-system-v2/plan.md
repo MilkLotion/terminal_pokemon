@@ -2755,3 +2755,17 @@ SSOT: `docs/specs/modules.md`의 시간 처리 순서, `docs/specs/balance.md`.
 검증: `npx tsc --noEmit` 통과. 새 자체 검사 13건 통과. `npm run selftest` 전체 통과.
 `[스펙 미확정]` 알 구매(`shop.buy`)가 아직 없어 알은 검사에서 직접 넣는다. 힌트와 반응 표현도 없다.
 SSOT: `docs/specs/s5.md`의 알과 알 행동 조건, `data/egg-conditions.json`.
+
+### 상점 구매 명령
+
+날짜: 2026-09-24. 사용자 지시: “진행”. 다음 작업 3번의 앞쪽인 `shop.buy` 다. 가방 사용은 다음으로 나눴다.
+만든 파일: `data/items.json`(가방 도구 12종), `src/shop/catalog-v3.ts`(가격 찾기), `src/shop/buy.ts`(구매), `src/tools/selftest-shop-v3.ts`(자체 검사 10건)다. `src/save/rules.ts` 에 `SHOP_V3_RULES` 를 더하고 `src/tx/handlers.ts` 에 `shop.buy` 를 등록했다.
+가격의 단일 원본: 알은 `data/eggs.json`, 진화용 도구는 공통 값 하나, 그 밖 도구는 `data/items.json`, 파티 칸은 규칙표, 종은 `data/unlocks.json` 이 가진다. 같은 값을 두 곳에 적지 않는다. 그래야 가격이 어긋나지 않는다.
+알 구매: 돌보미집 여섯 칸이 차 있으면 거절한다. 사면 바로 들어가고 준비 시간 5분이 시작된다. 태고의돌은 화석 15종을 후보로 담고 랜덤알은 해금한 종을 담는다.
+파티 칸: 상점으로 여는 칸은 둘이다. 첫 칸 300P, 둘째 칸 600P다. 셋째부터는 거절한다. 업적으로 여는 칸 둘은 그대로 남는다.
+종 지정 구매: 해금한 종만 산다. 새 개체는 빈 파티 칸에 숨김으로, 없으면 박스로 간다. 지금 상점에서 파는 종은 잠만보 하나다.
+사고와 복구: 새 파일을 만들면서 기존 `src/shop/catalog.ts` 를 덮어썼다. 타입 검사가 바로 잡아냈다. `git checkout` 으로 되돌리고 새 코드를 `catalog-v3.ts` 로 옮겼다. 기존 v2 경로는 그대로 돈다.
+검사 보강: 종 지정 구매 검사가 피카츄를 찾다 건너뛰고 있었다. 실제로 상점 가격이 있는 종이 잠만보뿐임을 확인하고 검사를 잠만보로 바꿨다. 건너뛰는 검사는 검사가 아니다.
+검증: `npx tsc --noEmit` 통과. 새 자체 검사 10건 통과. `npm run selftest` 전체 통과.
+`[스펙 미확정]` 가방 사용(`bag.use`)은 아직 없다. 상품 목록 화면에 무엇을 보일지도 코드로는 정하지 않았다.
+SSOT: `docs/specs/balance.md` 가격표, `docs/specs/s5.md` 상점.

@@ -6,6 +6,7 @@ import { care, isCareAction } from "../egg/care.js";
 import { open } from "../egg/open.js";
 import { keep, place, swap } from "../party/placement.js";
 import { setHidden, shownCount } from "../party/visibility.js";
+import { buy } from "../shop/buy.js";
 import type { TxHandler } from "./executor";
 
 const isObj = (v: unknown): v is Record<string, unknown> => v != null && typeof v === "object" && !Array.isArray(v);
@@ -101,3 +102,20 @@ const openHandler: TxHandler = (draft, args, ctx) => {
 
 HANDLERS["egg.care"] = careHandler;
 HANDLERS["egg.open"] = openHandler;
+
+// ── 상점 ───────────────────────────────────────────────────────────────────────
+
+// 구매 — 검사와 반영을 한 거래로 묶는다. 하나라도 걸리면 아무것도 바꾸지 않는다
+const buyHandler: TxHandler = (draft, args, ctx) => {
+  if (!isObj(args)) return { ok: false, reason: "bad-args" };
+  const productId = typeof args.productId === "string" ? args.productId : "";
+  if (!productId) return { ok: false, reason: "bad-args" };
+  const res = buy(draft, productId, ctx.now, ctx.rand);
+  if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  return {
+    ok: true,
+    result: { productId, spent: res.spent, balance: res.balance, eggId: res.eggId, petId: res.petId, slotIndex: res.slotIndex, toBox: res.toBox },
+  };
+};
+
+HANDLERS["shop.buy"] = buyHandler;
