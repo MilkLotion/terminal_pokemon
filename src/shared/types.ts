@@ -37,9 +37,16 @@ export interface Nature {
 // data/species.defaults.json(PokeAPI 에서 뽑은 기본값) 위에 data/species.overrides.json 을 덧씌운 결과
 export type Like = "work" | "play" | "company" | "food";
 
+// 원작의 경험치 타입 6종 — 레벨 곡선을 고른다 (docs/specs/balance.md "성장")
+export type GrowthRate = "fast" | "medium-fast" | "medium-slow" | "slow" | "erratic" | "fluctuating";
+
 export interface SpeciesProfile {
   slug: string;
   dex: number;
+  growthRate: GrowthRate; // 레벨 곡선
+  bst: number; // 종족값 합계 — 수집 난이도 계산에 쓴다
+  stage: number; // 사슬 뿌리부터의 거리 + 1 (1 이 진화 전)
+  rank: number; // 수집 난이도 1~5 — 1 이 흔하고 5 가 귀하다
   affinityRate: number; // 시간 원천(켜 두기·일한 양·턴) 배율 — 1 이 기준
   hungerRate: number; // 배고픔이 차는 속도 배율 — 1 이 기준
   sleepiness: number; // 잠이 드는 빠름 배율 — 1 이 기준
@@ -54,6 +61,16 @@ export interface SpeciesProfile {
 // ── 해금 조건 ──────────────────────────────────────────────────────────────────
 // data/unlocks.json — 종 하나에 규칙 하나. 적힌 조건은 전부 만족해야 한다 (design.md "도감 · 해금")
 export type DayPart = "day" | "night";
+
+// ── 진화 조건 ──────────────────────────────────────────────────────────────────
+// data/evo.json 의 간선마다 하나. 원작 조건을 우리 게임의 조건으로 바꾼 결과다 (docs/specs/s5.md "진화 계약")
+//   level    원작 레벨 그대로
+//   affinity 친밀도 0~100. 원작 친밀도(0~255)를 환산하고, 우리에 없는 특수 조건도 여기로 모은다
+//   item     진화용 도구 슬러그. 원작 도구와 새 도구(bond-cord · blank-cd)를 함께 쓴다
+export type EvoNeed =
+  | { kind: "level"; level: number }
+  | { kind: "affinity"; value: number }
+  | { kind: "item"; item: string };
 
 export interface UnlockRule {
   starter?: true;

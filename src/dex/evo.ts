@@ -4,12 +4,13 @@
 // stageOf 는 사슬의 뿌리부터의 거리(도감 사실)다. 저장의 Pet.stage(그 마리가 몇 번 진화했나)와는 다른 수 —
 // 피츄→피카츄→라이츄에서 스타터 피카츄는 stageOf 1, Pet.stage 0
 
-import type { DayPart } from "../shared/types";
+import type { DayPart, EvoNeed } from "../shared/types";
 import { isMetaKey, loadJson, normalizeSlug, type DexOptions } from "./data";
 
 export interface EvoStep {
   to: string;
   when?: DayPart;
+  need?: EvoNeed; // 진화 조건 — 옛 data/evo.json 에는 없다 (src/tools/build-evo.ts)
 }
 
 type EvoTable = Record<string, EvoStep[]>;

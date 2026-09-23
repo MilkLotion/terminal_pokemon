@@ -4,36 +4,77 @@
 //
 // 출처: PokeAPI 저장소의 CSV (https://github.com/PokeAPI/pokeapi/tree/master/data/v2/csv)
 //   pokemon_species.csv     종 번호 · 식별자 · evolves_from_species_id
-//   pokemon_evolution.csv   진화 조건 — time_of_day 만 쓴다 (day · night)
+//   pokemon_evolution.csv   진화 조건 — 시간대와 트리거·도구·레벨·친밀도·장소·기술
 //   pokemon.csv             종의 기본 폼 식별자 (종 식별자가 도감에 없을 때 대신)
+//   items.csv               도구 번호 → 식별자
 //
-// 결과: { "<slug>": [{ "to": "<slug>", "when"?: "day" | "night" }] }
+// 결과: { "<slug>": [{ "to": "<slug>", "when"?: "day" | "night", "need": {…} }] }
 //   - 종 단위. 폼 슬러그(raichu-alola · rotom-wash)는 사슬에 넣지 않는다 — 기본 종만
 //   - 슬러그는 lib/dex.json 에 있는 것만. 종 식별자(deoxys)가 도감에 있으면 그것, 없으면 기본 폼 식별자(deoxys-normal)
 //   - when 은 그 종으로의 진화 조건 행들이 전부 같은 시간대일 때만 적는다 (루가루암처럼 폼마다 다르면 생략).
 //     dusk · full-moon 같은 다른 값은 시간대 없음으로 본다
 //   - 부모가 도감에 없으면 그 간선은 버린다 (사슬이 끊긴 채 남지 않게 개수를 출력)
+//
+// need 의 우선순위 — 한 종에 원작 조건이 여럿이면 위에서부터 고른다 (docs/specs/s5.md "진화 계약")
+//   1 레벨      원작 값 그대로
+//   2 친밀도    원작 친밀도 0~255 를 0~100 으로 환산해 5 단위로 반올림
+//   3 도구      원작 도구를 그대로 쓴다 (진화의돌 10종 + 사과·주전자 같은 특수 도구)
+//   4 교환      우리에 교환이 없다 → bond-cord(유대의끈)
+//   5 기술      우리에 기술이 없다 → blank-cd(빈 CD). 기술과 특수가 겹치면 기술로 본다
+//   6 장소      우리에 장소가 없다 → 그 장소를 대표하는 원작 돌 (LOCATION_STONE)
+//   7 그 밖의 특수  배틀·걸음·수집 조건 → 친밀도 100
 import path from "node:path";
-import type { DayPart } from "../shared/types";
+import type { DayPart, EvoNeed } from "../shared/types";
 import { DATA_DIR, csv, readDex, runBuild, writeLineJson } from "./pokeapi-csv";
 
 const OUT = path.join(DATA_DIR, "evo.json");
 const DAY_PARTS = new Set<string>(["day", "night"] satisfies DayPart[]);
 
+// 우리에 없는 조건을 바꿀 때 쓰는 도구
+export const BOND_CORD = "bond-cord";
+export const BLANK_CD = "blank-cd";
+export const AFFINITY_MAX = 100;
+
+// 장소 진화 — 결과 종마다 그 장소를 대표하는 원작 돌. 표에 없는 종이 나오면 빌드가 멈춘다
+export const LOCATION_STONE: Readonly<Record<string, string>> = {
+  magnezone: "thunder-stone",
+  probopass: "thunder-stone",
+  vikavolt: "thunder-stone",
+  leafeon: "leaf-stone",
+  glaceon: "ice-stone",
+  crabominable: "ice-stone",
+};
+
+// 원작 친밀도 0~255 → 우리 친밀도 0~100, 5 단위
+export const affinityOf = (happiness: number): number =>
+  Math.min(AFFINITY_MAX, Math.max(5, Math.round((happiness / 255) * AFFINITY_MAX / 5) * 5));
+
 // 간선 하나 — src/dex/evo.ts EvoStep 과 같은 모양 (빌드가 만들고 dex 가 읽는다)
 export interface EvoEdge {
   to: string;
   when?: DayPart;
+  need: EvoNeed;
 }
 
 export type EvoTable = Record<string, EvoEdge[]>;
 
 export async function build(): Promise<void> {
   const dex = readDex();
-  const [speciesRows, evoRows, pokemonRows] = await Promise.all([
+  const [speciesRows, evoRows, pokemonRows, itemRows] = await Promise.all([
     csv("pokemon_species.csv", ["id", "identifier", "evolves_from_species_id"]),
-    csv("pokemon_evolution.csv", ["evolved_species_id", "time_of_day"]),
+    csv("pokemon_evolution.csv", [
+      "evolved_species_id",
+      "evolution_trigger_id",
+      "time_of_day",
+      "trigger_item_id",
+      "minimum_level",
+      "minimum_happiness",
+      "location_id",
+      "known_move_id",
+      "known_move_type_id",
+    ]),
     csv("pokemon.csv", ["species_id", "identifier", "is_default"]),
+    csv("items.csv", ["id", "identifier"]),
   ]);
   type SpeciesRow = (typeof speciesRows)[number];
 
@@ -61,6 +102,37 @@ export async function build(): Promise<void> {
     return uniq.length === 1 && only && DAY_PARTS.has(only) ? (only as DayPart) : undefined;
   };
 
+  // 진화 대상 종 번호 → 조건 하나. 여러 행(버전마다 다름)을 우선순위로 합친다
+  const itemName = new Map(itemRows.map((r) => [r.id, r.identifier]));
+  const LEVEL_UP = "1";
+  const TRADE = "2";
+  const USE_MOVE = "14";
+  const rowsOf = new Map<string, (typeof evoRows)[number][]>();
+  for (const r of evoRows) {
+    const list = rowsOf.get(r.evolved_species_id) ?? [];
+    list.push(r);
+    rowsOf.set(r.evolved_species_id, list);
+  }
+  const needOf = (speciesId: string, slug: string): EvoNeed => {
+    const rows = rowsOf.get(speciesId) ?? [];
+    // 우리에게 있는 조건이 원작에 있으면 그것부터 — 야돈처럼 레벨과 지역 도구가 함께 있는 종을 원작 쪽으로 둔다
+    const level = rows.map((r) => Number(r.minimum_level)).find((v) => v > 0);
+    if (level) return { kind: "level", level };
+    const happiness = rows.map((r) => Number(r.minimum_happiness)).find((v) => v > 0);
+    if (happiness) return { kind: "affinity", value: affinityOf(happiness) };
+    const item = rows.map((r) => itemName.get(r.trigger_item_id)).find((v): v is string => Boolean(v));
+    if (item) return { kind: "item", item };
+    if (rows.some((r) => r.evolution_trigger_id === TRADE)) return { kind: "item", item: BOND_CORD };
+    if (rows.some((r) => r.known_move_id || r.known_move_type_id || r.evolution_trigger_id === USE_MOVE)) return { kind: "item", item: BLANK_CD };
+    // 장소는 레벨업으로 진화할 때만 본다 — 데스판처럼 피해·배틀 조건에 장소가 붙은 것은 특수로 넘긴다
+    if (rows.some((r) => r.location_id && r.evolution_trigger_id === LEVEL_UP)) {
+      const stone = LOCATION_STONE[slug];
+      if (!stone) throw new Error(`장소 진화의 돌이 표에 없다: ${slug}`);
+      return { kind: "item", item: stone };
+    }
+    return { kind: "affinity", value: AFFINITY_MAX };
+  };
+
   const byId = new Map(speciesRows.map((r) => [r.id, r]));
   const out: EvoTable = {};
   let edges = 0;
@@ -74,7 +146,7 @@ export async function build(): Promise<void> {
       dropped.push(`${parent?.identifier ?? "?"}→${sp.identifier}`);
       continue;
     }
-    const step: EvoEdge = { to };
+    const step: EvoEdge = { to, need: needOf(sp.id, to) };
     const when = pickWhen(sp.id);
     if (when) step.when = when;
     (out[from] ??= []).push(step);
@@ -87,6 +159,15 @@ export async function build(): Promise<void> {
   process.stdout.write(`도감에 없어 버린 간선 ${dropped.length}${dropped.length ? `: ${dropped.slice(0, 20).join(", ")}${dropped.length > 20 ? " …" : ""}` : ""}\n`);
   const timed = Object.values(sorted).flat().filter((s) => s.when);
   process.stdout.write(`시간대 있는 간선 ${timed.length}: ${timed.map((s) => `${s.to}(${s.when})`).join(" · ")}\n`);
+  const all = Object.values(sorted).flat();
+  const byKind = new Map<string, number>();
+  const byItem = new Map<string, number>();
+  for (const s of all) {
+    byKind.set(s.need.kind, (byKind.get(s.need.kind) ?? 0) + 1);
+    if (s.need.kind === "item") byItem.set(s.need.item, (byItem.get(s.need.item) ?? 0) + 1);
+  }
+  process.stdout.write(`조건 종류: ${[...byKind].map(([k, v]) => `${k} ${v}`).join(" · ")}\n`);
+  process.stdout.write(`진화용 도구 ${byItem.size}종: ${[...byItem].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(" · ")}\n`);
   if (sorted.eevee) process.stdout.write(`  eevee → ${sorted.eevee.map((s) => s.to).join(" ")}\n`);
 }
 

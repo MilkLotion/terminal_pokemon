@@ -142,7 +142,7 @@ function world(over: Partial<Pick<World, "now" | "hour">> = {}, save: Partial<Sa
   assert.strictEqual(dex.profile("rowlet").moodBase, 60 + 2 + 2, "override 에 없는 필드는 defaults (grass+flying)");
 
   const unknown = dex.profile("not-a-mon");
-  assert.deepStrictEqual(unknown, { slug: "not-a-mon", dex: 0, affinityRate: 1, hungerRate: 1, sleepiness: 1, moodBase: 60, moodSwing: 1, likes: ["play"], types: [] }, "모르는 슬러그는 기본 프로필");
+  assert.deepStrictEqual(unknown, { slug: "not-a-mon", dex: 0, growthRate: "medium-fast", bst: 0, stage: 1, rank: 1, affinityRate: 1, hungerRate: 1, sleepiness: 1, moodBase: 60, moodSwing: 1, likes: ["play"], types: [] }, "모르는 슬러그는 기본 프로필");
   assert.strictEqual(dex.hasProfile("pikachu"), true);
   assert.strictEqual(dex.hasProfile("pikachu-3d"), true);
   assert.strictEqual(dex.hasProfile("not-a-mon"), false);

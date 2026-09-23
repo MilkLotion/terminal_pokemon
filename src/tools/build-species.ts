@@ -4,8 +4,9 @@
 //
 // 출처: PokeAPI 저장소의 CSV (https://github.com/PokeAPI/pokeapi/tree/master/data/v2/csv)
 //   pokemon.csv             포켓몬 번호 → 종 번호 · 키 · 몸무게(hg) · 기본 폼 여부
-//   pokemon_species.csv     종 번호 → 전설(is_legendary) · 환상(is_mythical)
-//   pokemon_stats.csv       포켓몬 번호 → 종족값 (stats.csv 의 speed 만 쓴다)
+//   pokemon_species.csv     종 번호 → 전설(is_legendary) · 환상(is_mythical) · 성장 속도 · 진화 부모
+//   growth_rates.csv        성장 속도 번호 → 식별자 (원작 경험치 타입 6종)
+//   pokemon_stats.csv       포켓몬 번호 → 종족값 (speed 와 여섯 값의 합)
 //   pokemon_types.csv       포켓몬 번호 → 타입 (types.csv 로 이름)
 //   pokemon_form_types.csv  폼 고유 타입 (아르세우스 폼처럼 폼마다 타입이 다른 것)
 //   pokemon_forms.csv       폼 식별자(arceus-bug · burmy-sandy) → 포켓몬 번호
@@ -29,8 +30,12 @@
 // | moodBase      | 60 + 타입별 MOOD 합, 55~65 로 자른다                                       |
 // | moodSwing     | 스피드pct ≥ 0.8 → 1.2 · < 0.2 → 0.8 · 나머지 1.0                            |
 // | likes         | 타입별 LIKES — 두 타입이면 둘(중복 제거). 표에 없는 타입은 food              |
+// | growthRate    | 원작 경험치 타입 그대로. PokeAPI 이름을 원작 이름으로 바꾼다               |
+// | bst           | 종족값 여섯 값의 합                                                       |
+// | stage         | 진화 사슬 뿌리부터의 거리 + 1 (1 이 진화 전)                              |
+// | rank          | 수집 난이도 1~5. 종족값 구간으로 1~4, 전설·환상은 5, 더 진화하는 종은 한 등급 낮춘다 |
 import path from "node:path";
-import type { Like } from "../shared/types";
+import type { GrowthRate, Like } from "../shared/types";
 import { DATA_DIR, csv, must, readDex, runBuild, writeLineJson } from "./pokeapi-csv";
 
 const OUT = path.join(DATA_DIR, "species.defaults.json");
@@ -41,6 +46,18 @@ export const RULES = {
   sleepiness: { min: 0.7, span: 0.6 },
   mood: { base: 60, min: 55, max: 65 },
   swing: { fast: 0.8, slow: 0.2, high: 1.2, low: 0.8, mid: 1.0 },
+  // 수집 난이도 — 종족값 합계의 경계. 위에서부터 4·3·2 등급이고 그 아래가 1 등급
+  rank: { high: 570, mid: 500, low: 400, rare: 5 },
+};
+
+// PokeAPI 성장 속도 식별자 → 원작 경험치 타입
+export const GROWTH: Readonly<Record<string, GrowthRate>> = {
+  fast: "fast",
+  medium: "medium-fast",
+  "medium-slow": "medium-slow",
+  slow: "slow",
+  "slow-then-very-fast": "erratic",
+  "fast-then-very-slow": "fluctuating",
 };
 
 // 타입 → 기분 기준값 보정
@@ -62,6 +79,10 @@ interface StoredProfile {
   types: string[];
   baseSpeed?: number;
   weightKg?: number;
+  growthRate: GrowthRate;
+  bst: number;
+  stage: number;
+  rank: number;
   affinityRate: number;
   hungerRate: number;
   sleepiness: number;
@@ -71,7 +92,7 @@ interface StoredProfile {
 }
 
 // 못 이은 슬러그의 값
-export const DEFAULT: Readonly<Omit<StoredProfile, "dex">> = { affinityRate: 1.0, hungerRate: 1.0, sleepiness: 1.0, moodBase: 60, moodSwing: 1.0, likes: ["play"], types: [] };
+export const DEFAULT: Readonly<Omit<StoredProfile, "dex">> = { growthRate: "medium-fast", bst: 0, stage: 1, rank: 1, affinityRate: 1.0, hungerRate: 1.0, sleepiness: 1.0, moodBase: 60, moodSwing: 1.0, likes: ["play"], types: [] };
 
 // 1차에 모은 원자료 — 못 이은 슬러그는 null
 interface RawProfile {
@@ -79,6 +100,17 @@ interface RawProfile {
   baseSpeed: number;
   types: string[];
   rare: boolean;
+  growthRate: GrowthRate;
+  bst: number;
+  stage: number;
+  evolvesFurther: boolean;
+}
+
+// 수집 난이도 — 종족값 구간으로 나누고 전설·환상은 가장 귀하게, 더 진화하는 종은 한 등급 낮춘다
+export function rankOf(r: { bst: number; rare: boolean; evolvesFurther: boolean }): number {
+  if (r.rare) return RULES.rank.rare;
+  const base = r.bst >= RULES.rank.high ? 4 : r.bst >= RULES.rank.mid ? 3 : r.bst >= RULES.rank.low ? 2 : 1;
+  return r.evolvesFurther ? Math.max(1, base - 1) : base;
 }
 
 const round2 = (v: number): number => Math.round(v * 100) / 100;
@@ -114,15 +146,16 @@ function moodOf(types: string[]): number {
 
 export async function build(): Promise<void> {
   const dex = readDex();
-  const [pokemonRows, speciesRows, statRows, statNames, typeRows, typeNames, formRows, formTypeRows] = await Promise.all([
+  const [pokemonRows, speciesRows, statRows, statNames, typeRows, typeNames, formRows, formTypeRows, growthRows] = await Promise.all([
     csv("pokemon.csv", ["id", "identifier", "species_id", "weight", "is_default"]),
-    csv("pokemon_species.csv", ["id", "identifier", "is_legendary", "is_mythical"]),
+    csv("pokemon_species.csv", ["id", "identifier", "is_legendary", "is_mythical", "growth_rate_id", "evolves_from_species_id"]),
     csv("pokemon_stats.csv", ["pokemon_id", "stat_id", "base_stat"]),
     csv("stats.csv", ["id", "identifier"]),
     csv("pokemon_types.csv", ["pokemon_id", "type_id", "slot"]),
     csv("types.csv", ["id", "identifier"]),
     csv("pokemon_forms.csv", ["id", "identifier", "pokemon_id"]),
     csv("pokemon_form_types.csv", ["pokemon_form_id", "type_id", "slot"]),
+    csv("growth_rates.csv", ["id", "identifier"]),
   ]);
   type PokemonRow = (typeof pokemonRows)[number];
   type FormRow = (typeof formRows)[number];
@@ -140,7 +173,32 @@ export async function build(): Promise<void> {
   const formByName = new Map(formRows.map((r) => [r.identifier, r]));
 
   const speedOf = new Map<string, number>();
-  for (const r of statRows) if (r.stat_id === speedStat.id) speedOf.set(r.pokemon_id, Number(r.base_stat));
+  const bstOf = new Map<string, number>();
+  const SIX = new Set(["1", "2", "3", "4", "5", "6"]);
+  for (const r of statRows) {
+    if (r.stat_id === speedStat.id) speedOf.set(r.pokemon_id, Number(r.base_stat));
+    if (SIX.has(r.stat_id)) bstOf.set(r.pokemon_id, (bstOf.get(r.pokemon_id) ?? 0) + Number(r.base_stat));
+  }
+
+  // 성장 속도 — PokeAPI 이름을 원작 경험치 타입으로
+  const growthName = new Map(growthRows.map((r) => [r.id, r.identifier]));
+  const growthOf = (sp: { growth_rate_id: string } | undefined): GrowthRate => {
+    const key = sp ? growthName.get(sp.growth_rate_id) : undefined;
+    return (key && GROWTH[key]) || "medium-fast";
+  };
+
+  // 진화 단계 — 부모를 거슬러 올라간 깊이 + 1. 자식이 있으면 더 진화하는 종
+  const hasChild = new Set(speciesRows.map((r) => r.evolves_from_species_id).filter(Boolean));
+  const stageCache = new Map<string, number>();
+  const stageOf = (id: string): number => {
+    const hit = stageCache.get(id);
+    if (hit) return hit;
+    stageCache.set(id, 1); // 자기 참조가 생겨도 멈춘다
+    const parent = speciesById.get(id)?.evolves_from_species_id;
+    const v = parent ? stageOf(parent) + 1 : 1;
+    stageCache.set(id, v);
+    return v;
+  };
 
   // 슬롯 순서대로 타입 이름 — 모르는 타입 번호는 undefined 로 끼고 뒤에서 걸러 낸다
   const typesOfPokemon = new Map<string, (string | undefined)[]>();
@@ -187,6 +245,10 @@ export async function build(): Promise<void> {
       baseSpeed: speedOf.get(pokemon.id) ?? 0,
       types: types.filter((t): t is string => Boolean(t)),
       rare: sp ? sp.is_legendary === "1" || sp.is_mythical === "1" : false,
+      growthRate: growthOf(sp),
+      bst: bstOf.get(pokemon.id) ?? 0,
+      stage: sp ? stageOf(sp.id) : 1,
+      evolvesFurther: sp ? hasChild.has(sp.id) : false,
     });
   }
 
@@ -210,6 +272,10 @@ export async function build(): Promise<void> {
       types: r.types,
       baseSpeed: r.baseSpeed,
       weightKg: r.weightKg,
+      growthRate: r.growthRate,
+      bst: r.bst,
+      stage: r.stage,
+      rank: rankOf(r),
       affinityRate: r.rare ? RULES.affinity.rare : RULES.affinity.base,
       hungerRate: round2(RULES.hunger.min + RULES.hunger.span * w + (s - 0.5) * RULES.hunger.speedSwing),
       sleepiness: round2(RULES.sleepiness.min + RULES.sleepiness.span * w),
@@ -225,6 +291,14 @@ export async function build(): Promise<void> {
   process.stdout.write(`못 이은 슬러그 ${missing.length}${missing.length ? `: ${missing.slice(0, 30).join(", ")}${missing.length > 30 ? " …" : ""}` : ""}\n`);
   const rare = Object.values(out).filter((p) => p.affinityRate === RULES.affinity.rare).length;
   process.stdout.write(`전설·환상 ${rare}종 (affinityRate ${RULES.affinity.rare})\n`);
+  const byGrowth = new Map<string, number>();
+  const byRank = new Map<number, number>();
+  for (const p of Object.values(out)) {
+    byGrowth.set(p.growthRate, (byGrowth.get(p.growthRate) ?? 0) + 1);
+    byRank.set(p.rank, (byRank.get(p.rank) ?? 0) + 1);
+  }
+  process.stdout.write(`성장 속도: ${[...byGrowth].map(([k, v]) => `${k} ${v}`).join(" · ")}\n`);
+  process.stdout.write(`수집 난이도: ${[...byRank].sort((a, b) => a[0] - b[0]).map(([k, v]) => `${k}등급 ${v}`).join(" · ")}\n`);
   for (const k of ["pikachu", "eevee", "squirtle", "snorlax", "mewtwo"]) if (out[k]) process.stdout.write(`  ${k} ${JSON.stringify(out[k])}\n`);
 }
 
