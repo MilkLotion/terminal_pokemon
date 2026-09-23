@@ -14,6 +14,7 @@
 | [specs/s5.md](specs/s5.md) | S5 기능 계약과 미확정 제안 |
 | [specs/s5-scenarios.md](specs/s5-scenarios.md) | S5 사용자 흐름, 예외, 수용 조건과 열린 결정 |
 | [specs/ui-components.md](specs/ui-components.md) | 화면에서 반복되는 UI 컴포넌트 계약과 Figma 자산 판정 |
+| [specs/modules.md](specs/modules.md) | 모듈 책임과 경계, 저장 구조, 명령 계약 |
 
 완료한 작업의 설명을 이 문서들에 반복해서 넣지 않는다. 상세 근거는 작업 기록으로 연결한다.
 
