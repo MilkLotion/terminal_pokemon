@@ -1,0 +1,31 @@
+{
+  "_comment": "알 종류 — 규칙은 docs/specs/s5.md '알'. 손으로 다듬는 콘텐츠 데이터다. pool 이 `unlocked` 이면 해금한 종 중 알 입수처가 허용된 종에서 뽑는다. 종 목록이면 그 목록에서만 뽑는다. 화석 포켓몬은 태고의돌로만 얻는다. 랜덤알 후보에서는 제외한다",
+  "random": {
+    "ko": "랜덤알",
+    "en": "Random Egg",
+    "price": 120,
+    "pool": "unlocked"
+  },
+  "ancient-stone": {
+    "ko": "태고의돌",
+    "en": "Ancient Stone",
+    "price": 200,
+    "pool": [
+      "omanyte",
+      "kabuto",
+      "lileep",
+      "anorith",
+      "cranidos",
+      "shieldon",
+      "tirtouga",
+      "archen",
+      "tyrunt",
+      "amaura",
+      "aerodactyl",
+      "dracozolt",
+      "arctozolt",
+      "dracovish",
+      "arctovish"
+    ]
+  }
+}
