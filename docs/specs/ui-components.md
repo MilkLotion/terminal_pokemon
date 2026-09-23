@@ -108,7 +108,7 @@ Figma: `Friendship`을 `Stat Meter` `296:190`의 `Size=Wide`로 바꾸고 `Size=
 내용: 원형 초상, 이름, 레벨. 숨긴 개체 표시는 없다. 박스 개체는 파티 밖이기 때문이다.
 변형: 박스 탭용 기본 크기, 개체 선택 창용 작은 크기.
 규칙: 빈 칸은 옅은 회색 면이며 누를 수 없다. 개체를 누르면 상세로 이어진다.
-Figma: `Box Slot` `333:231`. `State=Pokemon|Empty|Selected`와 `Size=Default|Compact`의 6개 변형이다.
+Figma: `Box Slot` `333:231`. `State=Pokemon|Empty|Selected|InParty`와 `Size=Default|Compact`의 8개 변형이다. `InParty`는 공유 개체 중 파티에 나가 있는 종이며 고를 수 없다. `Show Shared`는 같은 개체를 공유하는 두 칸의 표시다.
 
 ### C-07 박스 넘김·검색 줄
 
