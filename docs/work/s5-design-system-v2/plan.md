@@ -2389,3 +2389,14 @@ SSOT: `docs/work/s5-design-system-v2/feedback.md`의 열린 디자인 항목, `d
 작업: `docs/specs/modules.md`를 만들었다. 경계 원칙 5개, 모듈 표 16개, 거래 실행기 처리 순서, `SaveV3` 영역 11개와 변환 절차, 명령 계약 17개를 적었다.
 `[스펙 미확정]` 저장 필드 이름과 타입, 요청 ID 보관 기간과 동시 요청 처리, 알림 배너 모듈 분리, 기존 `party.summon`·`party.dismiss` 폐기 시점, VS Code 확장 명령 호환은 정하지 않았다.
 SSOT: `docs/specs/modules.md`. 게임 규칙은 `docs/specs/s5.md`, 흐름은 `docs/specs/s5-scenarios.md`를 따른다.
+
+### SaveV3 필드와 변환 규칙
+
+날짜: 2026-09-23. 사용자 지시: “커밋하고 다음거 하나씩 처리해보자”. 모듈 계약의 남은 일 2번인 저장 필드 확정을 진행했다. 코드 구현 미시작.
+근거 확인: 현재 `src/shared/types.ts`의 `SaveV2`는 `party: Pet[]`, `slots`, `inventory`, `unlocked`, `acc`, `log`를 둔다. 개체는 `hunger`(높을수록 배고픔), `mood`, `affinity`, `fedAt`, `playedAt`, `nick`, `look`, `shown`을 가진다.
+결정 1 만복도: 저장은 `fullness`(높을수록 배부름)로 둔다. 변환은 `fullness = 100 − hunger`다. 근거: 용어사전과 화면이 만복도를 쓴다. 코드와 문서의 용어를 하나로 맞춘다.
+결정 2 시간 값: 멈추는 값은 절대 시각 대신 남은 시간으로 저장한다. 대상은 밥 주기 쿨타임, 버프, 알 준비 시간이다. 근거: PC 잠금·절전·종료에서 시간을 정지하고 남은 시간을 보존하는 기존 규칙이다.
+결정 3 옛 필드: `nick`과 `look`은 화면에서 쓰지 않지만 `legacy` 영역에 보존한다. 근거: 원본 백업 없이 지우지 않는다는 기존 계약이다.
+작업: `docs/specs/modules.md`에 영역별 필드표 15개, V2 → V3 변환 규칙 9줄, 변환 검사 항목, 저장 시점을 적었다. 변환 검사는 개체 수, 개체 식별자, 친밀도 합계, 포인트, 해금 종 수를 전후로 비교한다. 칸에 없는 개체는 박스 1에 넣는다.
+`[스펙 미확정]` 주기 간격, 부분 진행의 반올림 단위, 기존 먹이 재고와 이로치 권리의 대응표, 저장 실패가 이어질 때의 처리는 남겼다.
+SSOT: `docs/specs/modules.md`의 저장 구조.

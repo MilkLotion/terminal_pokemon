@@ -74,9 +74,51 @@
 | `settings` | 표시, 동작, 언어, 시작, 놀이공간 영역, 알림 소리 |
 | `tx` | 완료한 요청 ID와 결과 |
 
+### 영역별 필드
+
+아래 이름은 제안이다. 시각은 ms다. 멈추는 값은 남은 시간으로 저장한다. 근거는 [실행 상태별 시간](s5.md#실행-상태별-시간)을 따른다.
+
+| 영역 | 필드 |
+|---|---|
+| `meta` | `v: 3`, `savedAt`, `lastTickAt` |
+| `pets[]` | `id`, `species`, `stage`, `shiny`, `nature`, `size`, `level`, `exp`, `affinity`(친밀도 누적), `fullness`(만복도 0~100), `mood`, `feedCooldownMs`(남은 시간), `buffs[]`(`kind`, `remainMs`), `since`, `evolved[]`, `daily` |
+| `party` | `slots[6]`. 칸마다 `state`(`pokemon`·`empty`·`locked`), `petId`, `hidden`, `unlockBy`(`shop`·`achievement`) |
+| `boxes[]` | `id`, `name`, `slots[30]`(개체 식별자 또는 빈 칸) |
+| `eggs[]` | `id`, `boughtAt`, `remainMs`(준비 남은 시간), `ready`, `candidates[]`(구매 당시 후보 종), `actions`(누적한 행동 조건) |
+| `bag` | 도구 식별자별 보유 수량 |
+| `points` | `balance`, `progressMs`(다음 1포인트까지의 부분 진행) |
+| `dex` | `unlocked[]`, `obtained[]`, `shinyObtained[]`, `discovered`(종별 발견한 알 행동 조건) |
+| `achievements` | 업적 식별자별 `achievedAt`, `claimedAt` |
+| `tutorials` | 튜토리얼 식별자별 `state`(`none`·`active`·`skipped`·`done`) |
+| `settings` | `language`, `startOnLogin`, `sound`, `sleepAfterMin`, `playArea`(`mode`, `rect`), `display` |
+| `agents` | 기존 `AgentStats`를 유지한다 |
+| `totals` · `log` | 기존 구조를 유지한다. `log`는 최근 200건 |
+| `tx` | 완료한 요청의 `id`, `at`, `result`. 최근 200건 또는 24시간 중 큰 쪽을 남긴다 |
+| `legacy` | `nick`, `look`처럼 새 화면에서 쓰지 않는 값. 지우지 않고 보존한다 |
+
+### V2 → V3 변환 규칙
+
+| V2 | V3 | 규칙 |
+|---|---|---|
+| `party: Pet[]` | `pets[]` + `party.slots` | 개체는 `pets`로 옮긴다. 순서대로 칸에 넣는다. `shown`은 칸의 `hidden`으로 뒤집어 옮긴다 |
+| `slots` | `party.slots` 길이 | 남은 칸은 `locked`로 둔다. 기본 2칸을 넘는 칸은 `unlockBy: shop`으로 본다 |
+| `hunger` | `fullness` | `fullness = 100 − hunger`. 코드 용어를 용어사전의 만복도로 맞춘다 |
+| `fedAt` · `playedAt` | `feedCooldownMs` | 남은 쿨타임으로 바꾼다. 남은 시간이 없으면 0 |
+| `inventory` | `bag` | 그대로 옮긴다. 이름이 바뀐 도구는 대응표를 쓴다 |
+| `unlocked` | `dex.unlocked` | 그대로 옮긴다. 보유 개체의 종은 `dex.obtained`에도 넣는다 |
+| `acc` | `points.progressMs` | 부분 진행을 옮긴다. 값이 없으면 0 |
+| `nick` · `look` | `legacy` | 값이 있으면 보존한다 |
+| 없음 | `boxes`, `eggs`, `achievements`, `tutorials`, `tx` | 빈 값으로 시작한다 |
+
+변환 검사: 개체 수, 개체 식별자, 친밀도 합계, 포인트, 해금 종 수가 변환 전후로 같아야 한다. 칸에 없는 개체는 박스 1에 넣는다. 하나라도 어긋나면 원본을 유지한다.
+
 변환 절차: 원본 백업 → 변환 → 검사 → 성공 시 교체. 검사에 실패하면 원본을 유지하고 변환 결과를 버린다.
-보존 대상: 개체 식별자, 친밀도, 성격, 레벨, 포인트, 파티 순서, 표시 상태, 도감 기록, 구매 권리다. 별명과 `look`은 새 화면에서 쓰지 않으며 원본 백업 없이 지우지 않는다.
-`[스펙 미확정]` 정확한 필드 이름과 타입, 기존 먹이 재고·이로치 권리의 보존 방식, 저장 주기와 부분 진행의 정밀도는 정하지 않았다.
+보존 대상: 개체 식별자, 친밀도, 성격, 레벨, 포인트, 파티 순서, 표시 상태, 도감 기록, 구매 권리다.
+
+### 저장 시점
+
+거래는 성공한 순간에 저장한다. 시간에 따른 값은 주기적으로 저장한다. 앱 종료와 PC 잠금·절전 진입 때도 저장한다.
+`[스펙 미확정]` 주기 간격, 부분 진행의 반올림 단위, 기존 먹이 재고와 이로치 권리의 대응표, 저장 실패가 이어질 때의 처리는 정하지 않았다.
 
 ## 명령 계약
 
@@ -107,6 +149,6 @@
 ## 남은 일
 
 1. 사용자와 이 초안을 검토한다.
-2. 저장 필드 이름과 타입을 확정한다. 변환 검사 항목을 정한다.
+2. 2026-09-23 저장 필드와 변환 규칙, 변환 검사 항목을 적었다. 사용자 검토 뒤 이름과 타입을 코드로 옮긴다.
 3. 콘텐츠 데이터(첫 선택 후보, 알 후보, 조건표, 가격)를 `data/`에 정의한다.
 4. 확정한 모듈부터 구현한다. 구현 순서는 [진행 현황](../progress.md)에 기록한다.
