@@ -1,6 +1,6 @@
 # UI 컴포넌트 계약
 
-날짜: 2026-09-23. 상태: 계약 초안. C-01~C-25를 Figma에 반영했다. 템플릿 수정과 기능 구현 미시작.
+날짜: 2026-09-23. 상태: 계약 초안. C-01~C-26을 Figma에 반영했다. 템플릿 수정과 기능 구현 미시작.
 근거: [07 · 와이어프레임](https://www.figma.com/design/MA3K41Y6omAi5mRu6YDFly/pokebuddy?node-id=252-121)의 WF-01~WF-09와 상태 예시, Figma `00`~`04` 자산의 읽기 전용 확인, [작업 기록](../work/s5-design-system-v2/plan.md#ui-컴포넌트-계약-추출-설계).
 
 ## 읽는 기준
@@ -50,10 +50,11 @@
 | C-23 | 코치마크 말풍선 | 없음 | 신규 |
 | C-24 | 돌봄 타일 | `Care Action` 모양 참고 | 신규 |
 | C-25 | 정보 상자 | 없음 | 신규 |
+| C-26 | 첫 선택 후보 카드 | `Species Card` 모양 참고 | 신규 |
 
 그대로 재사용하는 기초 자산: `Button`, `Type Badge`, `Status Dot`, `Divider`, `Visibility Marker`, `Portrait`, 텍스트 컴포넌트, 아이콘. `Portrait`와 `Visibility Marker`는 작은 크기 변형이 필요하다.
 상세 화면에서 계속 쓰는 자산: `Pokemon Profile`, `Page Header`, `Care Section`, `Care Action`, `Settings Section`, `Growth & Tools Section`, `Party Management Section`, `Traits`, `Debuff Badge`, `Notice`, `Status Banner`, `Action Group`, `Size Step`, `Size Selector`. 이번 와이어프레임에는 쓰이지 않았다. 삭제 대상으로 판정하지 않는다.
-Figma 반영: 2026-09-23 C-01·C-02·C-03·C-04·C-05·C-13·C-18을 반영했다. 같은 날 나머지 신규 C-06~C-12, C-14~C-17, C-19~C-25를 만들었다. `Portrait`는 Large·Medium·Small, `Visibility Marker`는 Default·Small 변형을 더했다. 근거는 [신규 반영 기록](../work/s5-design-system-v2/plan.md#ui-신규-컴포넌트-figma-반영)을 따른다. 노드와 결정은 각 계약의 `Figma` 줄과 [작업 기록](../work/s5-design-system-v2/plan.md#ui-컴포넌트-수정-6개-figma-반영)을 따른다.
+Figma 반영: 2026-09-23 C-01·C-02·C-03·C-04·C-05·C-13·C-18을 반영했다. 같은 날 나머지 신규 C-06~C-12, C-14~C-17, C-19~C-25를 만들었다. 2026-09-23 첫 선택 화면을 조립하며 C-26을 더했다. 근거는 [첫 선택 화면 조립](../work/s5-design-system-v2/plan.md#첫-선택-화면-조립)을 따른다. `Portrait`는 Large·Medium·Small, `Visibility Marker`는 Default·Small 변형을 더했다. 근거는 [신규 반영 기록](../work/s5-design-system-v2/plan.md#ui-신규-컴포넌트-figma-반영)을 따른다. 노드와 결정은 각 계약의 `Figma` 줄과 [작업 기록](../work/s5-design-system-v2/plan.md#ui-컴포넌트-수정-6개-figma-반영)을 따른다.
 템플릿: 2026-09-23 `Dex Layout` `378:1524`, `Shop Layout` `379:1757`, `Bag Layout` `380:2064`를 만들었다. 입력칸은 새 `Field` `377:303`을 쓴다. 2026-09-23 수정했다. `Party Layout` `196:189`의 제목 줄 문구, 새 `Box Layout` `340:3665`, `Pokemon Detail Layout` `226:913`의 새 상세 구조와 `Location=Party|Box` 파티 관리다. 근거는 [템플릿 수정](../work/s5-design-system-v2/plan.md#템플릿-수정)을 따른다. 아래는 수정 전 판정이다.
 템플릿: `App Shell`은 C-01·C-03 수정을 반영한다. `Party Layout`은 파티 칸만 담도록 수정한다. 박스 탭 레이아웃은 신규다. `Pokemon Detail Layout`에는 박스 개체용 `파티에 배치`·`교체` 버튼이 필요하다.
 
@@ -254,6 +255,14 @@ Figma: `Care Tile` `334:268`(`Default|Disabled`).
 역할: 결과나 주의 사항을 굵은 첫 줄과 보조 줄로 보여준다.
 사용: 가방 사용 패널의 미리보기, 진화 확인, 박스 보관 확인, 부화 결과.
 Figma: `Info Box` `334:269`. 보조 줄은 `Show Line 2`, `Show Line 3`으로 끈다.
+
+### C-26 첫 선택 후보 카드
+
+역할: 첫 선택 화면의 후보 한 종을 보여준다. 초상과 이름만 담는다.
+상태: 기본, 선택. 선택은 왼쪽 blade와 tonal 배경으로 보여준다. 컬러 테두리를 쓰지 않는다.
+사용: 첫 선택 화면의 후보 29개.
+재사용하지 않는 이유: `Species Card`는 도감 번호와 획득 상태를 끄는 속성이 없다. 첫 선택 화면에는 두 값이 없다.
+Figma: `Candidate Card` `401:315`(`Default|Selected`). 이름은 `Name` 속성으로 바꾼다.
 
 ## 남은 일
 
