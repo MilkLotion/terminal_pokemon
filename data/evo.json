@@ -448,7 +448,7 @@
   "wooper": [{"to":"quagsire","need":{"kind":"level","level":20}},{"to":"clodsire","need":{"kind":"level","level":20}}],
   "wurmple": [{"to":"silcoon","need":{"kind":"level","level":7}},{"to":"cascoon","need":{"kind":"level","level":7}}],
   "wynaut": [{"to":"wobbuffet","need":{"kind":"level","level":15}}],
-  "yamask": [{"to":"cofagrigus","need":{"kind":"level","level":34}},{"to":"runerigus","need":{"kind":"affinity","value":100}}],
+  "yamask": [{"to":"cofagrigus","need":{"kind":"level","level":34}},{"to":"runerigus","need":{"kind":"item","item":"dusk-stone"}}],
   "yamper": [{"to":"boltund","need":{"kind":"level","level":25}}],
   "yanma": [{"to":"yanmega","need":{"kind":"item","item":"blank-cd"}}],
   "yungoos": [{"to":"gumshoos","need":{"kind":"level","level":20},"when":"day"}],

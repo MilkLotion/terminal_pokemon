@@ -37,12 +37,13 @@ export const AFFINITY_MAX = 100;
 
 // 장소 진화 — 결과 종마다 그 장소를 대표하는 원작 돌. 표에 없는 종이 나오면 빌드가 멈춘다
 export const LOCATION_STONE: Readonly<Record<string, string>> = {
-  magnezone: "thunder-stone",
+  magnezone: "thunder-stone", // 특수 자기장 터
   probopass: "thunder-stone",
   vikavolt: "thunder-stone",
-  leafeon: "leaf-stone",
-  glaceon: "ice-stone",
-  crabominable: "ice-stone",
+  leafeon: "leaf-stone", // 이끼바위
+  glaceon: "ice-stone", // 얼음바위
+  crabominable: "ice-stone", // 눈 덮인 산
+  runerigus: "dusk-stone", // 폐허의 바위 아치
 };
 
 // 원작 친밀도 0~255 → 우리 친밀도 0~100, 5 단위
@@ -104,7 +105,6 @@ export async function build(): Promise<void> {
 
   // 진화 대상 종 번호 → 조건 하나. 여러 행(버전마다 다름)을 우선순위로 합친다
   const itemName = new Map(itemRows.map((r) => [r.id, r.identifier]));
-  const LEVEL_UP = "1";
   const TRADE = "2";
   const USE_MOVE = "14";
   const rowsOf = new Map<string, (typeof evoRows)[number][]>();
@@ -124,8 +124,8 @@ export async function build(): Promise<void> {
     if (item) return { kind: "item", item };
     if (rows.some((r) => r.evolution_trigger_id === TRADE)) return { kind: "item", item: BOND_CORD };
     if (rows.some((r) => r.known_move_id || r.known_move_type_id || r.evolution_trigger_id === USE_MOVE)) return { kind: "item", item: BLANK_CD };
-    // 장소는 레벨업으로 진화할 때만 본다 — 데스판처럼 피해·배틀 조건에 장소가 붙은 것은 특수로 넘긴다
-    if (rows.some((r) => r.location_id && r.evolution_trigger_id === LEVEL_UP)) {
+    // 장소는 트리거를 가리지 않고 본다 — 데스판처럼 피해 조건에 장소가 붙은 것도 그 장소의 돌로 간다
+    if (rows.some((r) => r.location_id)) {
       const stone = LOCATION_STONE[slug];
       if (!stone) throw new Error(`장소 진화의 돌이 표에 없다: ${slug}`);
       return { kind: "item", item: stone };
