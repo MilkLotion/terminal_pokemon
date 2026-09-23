@@ -23,6 +23,7 @@ export type TxOutcome = { ok: true; result?: unknown } | { ok: false; reason: st
 
 export interface TxContext {
   now: number;
+  rand: () => number; // 0 이상 1 미만. 자체 검사가 결과를 정할 수 있게 받아서 쓴다
 }
 
 export type TxHandler = (draft: SaveV3, args: unknown, ctx: TxContext) => TxOutcome;
@@ -38,6 +39,7 @@ export interface TxPorts {
   read: () => SaveV3 | null;
   write: (save: SaveV3) => boolean;
   now: () => number;
+  rand?: () => number; // 없으면 Math.random
 }
 
 export interface Executor {
@@ -69,7 +71,7 @@ export function createExecutor(ports: TxPorts, handlers: Record<string, TxHandle
 
     const now = ports.now();
     const draft = structuredClone(save);
-    const out = handler(draft, req.args, { now });
+    const out = handler(draft, req.args, { now, rand: ports.rand ?? Math.random });
     if (!out.ok) return { ok: false, reason: out.reason };
 
     const result = out.result ?? null;

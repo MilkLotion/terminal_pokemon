@@ -2741,3 +2741,17 @@ SSOT: `docs/specs/modules.md`의 명령 계약, `docs/specs/s5.md`의 개체 획
 아직 없는 것: 진화 가능과 업적 달성 판정이다. 배너 순서는 부화 → 진화 → 업적이므로 두 판정을 붙일 자리는 남겨 두었다.
 검증: `npx tsc --noEmit` 통과. 새 자체 검사 12건 통과. `npm run selftest` 전체 통과.
 SSOT: `docs/specs/modules.md`의 시간 처리 순서, `docs/specs/balance.md`.
+
+### 알 명령 구현
+
+날짜: 2026-09-24. 사용자 지시: “커밋하고 다음거 진행”. 다음 작업 2번인 알 명령이다. 새로 만든 `data/egg-conditions.json` 과 종 데이터의 `rank` 를 처음 쓰는 코드다.
+만든 파일: `src/egg/care.ts`(돌봄), `src/egg/conditions.ts`(조건 판정), `src/egg/hatch.ts`(결과 추첨), `src/egg/open.ts`(열기), `src/tools/selftest-egg.ts`(자체 검사 13건)다. `src/save/rules.ts` 에 `EGG_V3_RULES` 를 더하고 `src/tx/handlers.ts` 에 `egg.care` 와 `egg.open` 을 등록했다.
+무작위 주입: 거래 실행기의 문맥에 `rand` 를 더했다. 없으면 `Math.random` 이다. 자체 검사가 결과를 정할 수 있어야 부화를 확인할 수 있다.
+돌봄: 한 번에 30초를 줄이고 쿨타임 1분을 건다. 쿨타임 중에는 횟수도 늘지 않는다. 남은 시간은 0 에서 멈춘다. 준비가 끝난 뒤에도 조건은 계속 쌓인다.
+결과 판정 순서: 조건에 맞으면 그 조건의 종에서, 아니면 알의 후보 범위에서 뽑는다. 어느 쪽이든 난이도 가중치를 쓴다. 이로치는 따로 같은 확률로 뽑는다.
+조건은 범위를 넘어선다: 조건으로 나온 종은 해금 기록이 없을 수 있다. 그래서 획득 기록과 함께 해금 기록도 남긴다. 발견한 조건은 `dex.discovered` 에 적는다.
+배치: 빈 파티 칸에 숨김으로 넣는다. 칸이 없으면 박스로 보낸다. 새 개체의 숨김 배치 규칙 그대로다.
+검사로 확인한 것: 조건 일곱 개가 겹치지 않고 빈틈이 있다는 것, 쓰다듬기 10회와 노래 4회처럼 어디에도 맞지 않는 조합이 일반 추첨으로 간다는 것, 600족 조건이 열 종이라는 것이다.
+검증: `npx tsc --noEmit` 통과. 새 자체 검사 13건 통과. `npm run selftest` 전체 통과.
+`[스펙 미확정]` 알 구매(`shop.buy`)가 아직 없어 알은 검사에서 직접 넣는다. 힌트와 반응 표현도 없다.
+SSOT: `docs/specs/s5.md`의 알과 알 행동 조건, `data/egg-conditions.json`.

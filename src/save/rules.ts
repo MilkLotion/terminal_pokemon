@@ -75,3 +75,11 @@ export const TIME_V3_RULES = {
   // 버프의 추가 배율(백분율). 기준 100 에 더한다. 둘 다 있으면 250 이 된다
   buffBonusPercent: { "premium-food": 100, "long-play": 50 },
 };
+
+// 알의 규칙표 — 수치는 docs/specs/balance.md "확률과 알"
+export const EGG_V3_RULES = {
+  readyMs: 5 * 60_000, // 준비 시간 5분
+  careShortenMs: 30_000, // 돌봄 한 번에 30초 단축
+  careCooldownMs: 60_000, // 돌봄 인정 간격 1분
+  maxEggs: 6, // 돌보미집 칸 수
+};
