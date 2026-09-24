@@ -1,8 +1,8 @@
 # pokebuddy 현재 설계
 
-갱신: 2026-09-21. 현재 구현은 S4다. S5는 제품·화면 설계 단계다.
+갱신: 2026-09-25. 실제 앱은 S5 새 게임 규칙을 저장 v3 로 돌린다. 남은 화면과 기능은 [작업 후보](progress.md#작업-후보)를 따른다. 번호의 뜻은 [번호 체계](terms.md#번호-체계)를 따른다.
 
-이 문서는 채택한 결정을 기록한다. 구현 상태는 [진행 현황](progress.md)을 따른다. S5 기능 계약은 [설정창 계획](specs/s5.md)을 따른다.
+이 문서는 채택한 결정을 기록한다. 구현 상태는 [진행 현황](progress.md)을 따른다. S5 기능 계약은 [S5 기능 계약](specs/s5.md)을 따른다.
 확정한 결정을 사용 순서로 연결한 [사용자 시나리오](specs/s5-scenarios.md)를 작성했다. 화면 역할과 예외 처리의 새 제안은 확정 결정과 구분한다.
 정리 이전의 결정과 예시는 [설계 보관본](archive/s5-legacy/design-before-v2-cleanup.md)에 보존했다. 과거 시안의 값은 현재 구현 규칙을 덮어쓰지 않는다.
 
@@ -69,7 +69,7 @@ PC 잠금·절전·앱 종료 중에는 배고픔·친밀도·포인트·버프 
 | 표시 구조 | 투명 창 하나에 최대 여섯 마리를 그린다. 마리별 크기·성격·표시 상태를 유지한다. | [표시 창](../src/main/stage-window.ts), [무대](../src/main/stage.ts) |
 | 정식 로고 | 원본은 `assets/logo/src/logo.svg`다. 산출물은 `assets/logo/out/`에 둔다. | [원본](../assets/logo/src/logo.svg), [검수](work/logo/review.md) |
 | 구현 기술 | `src/`에 TypeScript를 작성한다. 메인과 렌더러를 `tsc`로 각각 빌드한다. | [패키지 설정](../package.json) |
-| S5 설정창 | 바닐라 HTML·CSS와 컴파일한 TypeScript ESM을 사용한다. 기능 구현은 미시작이다. | [S5 계획](specs/s5.md) |
+| S5 관리 창 | 바닐라 HTML·CSS와 컴파일한 TypeScript를 사용한다. 파티·박스·도감·상점·가방 탭과 모달 다섯이 돈다. | [S5 기능 계약](specs/s5.md), [구현 기록](work/game-runtime/record.md) |
 | 문구 | 사용자 문구는 언어 파일에서 관리한다. 한국어와 영어를 제공한다. S5 명칭은 명칭 사전을 따른다. | [언어 파일](../lib/i18n/ko.json), [명칭 사전](terms.md) |
 
 ## 놀이공간과 직접 돌봄
@@ -141,7 +141,7 @@ PC 잠금·절전·앱 종료 중에는 배고픔·친밀도·포인트·버프 
 | `src/shared/` | 저장·명령·표시 계약 |
 | `src/tools/` | 자체 검사와 화면 검사 도구 |
 
-S5 설정창 파일은 아직 없다. 기존 `art/`, `lib/`, `cli/`는 런타임 참조가 남아 있으므로 유지한다. 남은 JavaScript의 이식은 별도 작업이다.
+S5 관리 창은 `src/main/manage-window.ts` 와 `src/renderer/manage.ts` 다. 기존 `art/`, `lib/`, `cli/`는 런타임 참조가 남아 있으므로 유지한다. 남은 JavaScript의 이식은 별도 작업이다.
 
 ## 성격과 육성
 
