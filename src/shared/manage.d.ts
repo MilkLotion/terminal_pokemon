@@ -19,8 +19,8 @@ export interface PetView {
   shiny: boolean;
   level: number;
   percentToNext: number; // 다음 레벨까지 백분율
-  types: string[];
-  nature: string;
+  types: string[]; // 화면에 보이는 타입 이름
+  nature: string; // 화면에 보이는 성격 이름
   affinity: number;
   fullness: number;
   zone: ViewZone;

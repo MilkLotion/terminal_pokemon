@@ -49,3 +49,12 @@ export function stateLine(pet: Pet): string {
   if (thresholds.length) return t("state.evolution", { n: Math.max(0, Math.ceil(Math.min(...thresholds) - pet.affinity)) });
   return t("state.mood", { mood: moodWord(pet.mood) });
 }
+
+// 타입의 화면 이름 — 18종 고정이라 표를 여기 둔다. 모르는 값은 그대로 보여 무엇이 빠졌는지 드러나게
+const TYPE_KO: Readonly<Record<string, string>> = {
+  normal: "노말", fire: "불꽃", water: "물", electric: "전기", grass: "풀", ice: "얼음",
+  fighting: "격투", poison: "독", ground: "땅", flying: "비행", psychic: "에스퍼", bug: "벌레",
+  rock: "바위", ghost: "고스트", dragon: "드래곤", dark: "악", steel: "강철", fairy: "페어리",
+};
+
+export const typeName = (id: string, lang: Lang = getLang()): string => (lang === "ko" ? TYPE_KO[id] ?? id : id);

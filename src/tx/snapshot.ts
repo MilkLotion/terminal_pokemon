@@ -11,7 +11,7 @@ import { profile } from "../dex/species.js";
 import { itemOf } from "../bag/use.js";
 import { eggName } from "../shop/catalog-v3.js";
 import { zoneOf } from "../state/time-v3.js";
-import { petName } from "../main/text.js";
+import { natureName, petName, typeName } from "../main/text.js";
 import type { BagItemView, BoxView, EggView, PetView, SlotView, Snapshot } from "../shared/manage";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
 
@@ -32,8 +32,8 @@ export function petView(pet: PetV3, hidden: boolean): PetView {
     shiny: pet.shiny,
     level: pet.level,
     percentToNext: percent,
-    types: profile(pet.species).types,
-    nature: pet.nature,
+    types: profile(pet.species).types.map((t) => typeName(t)),
+    nature: natureName(pet.nature),
     affinity: pet.affinity,
     fullness: pet.fullness,
     zone: zoneOf(pet.fullness),

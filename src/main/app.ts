@@ -16,6 +16,7 @@ import { STAGE_RULES, stageOf, toLocal, type Rect } from "./layout";
 import { clearFailure, createLifetime, petFileOf, reportFailure, type Lifetime } from "./lifetime";
 import { petMenu, trayMenu } from "./menus";
 import { createSandboxParty, createSaveParty, type PartyPet, type PartySource } from "./party";
+import { openManage } from "./manage-window";
 import { PATHS, loadConfig, logoFile, preloadFile, readSavedWindows, rendererFile, saveConfig } from "./paths";
 import { pickStarter } from "./picker-window";
 import { createShortcuts, type Shortcuts } from "./shortcuts";
@@ -203,6 +204,9 @@ const displayName = (): string => {
 };
 
 const trayTemplate = () => [
+  // 관리 창 — 파티·박스·도감·상점·가방. 저장 v3 을 읽는다 (src/main/manage-window.ts)
+  { label: "관리 창 열기", click: () => void openManage({ preload: preloadFile(), html: rendererFile("manage.html") }) },
+  { type: "separator" as const },
   ...(party?.save() ? gameMenu(party.save()!, runGameCommand) : []),
   ...trayMenu(
     { name: displayName(), hidden: userHidden, ghost: !!config.clickThrough },

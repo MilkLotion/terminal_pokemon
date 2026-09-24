@@ -165,6 +165,7 @@
         font-size: 11px;
         color: var(--muted);
       }
+      /* 숨김 마커 — 닫힌 몬스터볼. 그림 예외라 색을 변수에 묶지 않는다 */
       .mark {
         position: absolute;
         right: -2px;
@@ -172,12 +173,31 @@
         width: 18px;
         height: 18px;
         border-radius: 50%;
+        border: 1.5px solid var(--ink);
+        background: linear-gradient(to bottom, #e35b4f 0 50%, #ffffff 50% 100%);
+        overflow: hidden;
+      }
+      .mark::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 1.5px;
+        margin-top: -0.75px;
         background: var(--ink);
-        color: var(--inverse);
-        font-size: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      }
+      .mark::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 5px;
+        height: 5px;
+        margin: -2.5px 0 0 -2.5px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1.5px solid var(--ink);
       }
       .info {
         flex: 1;
@@ -303,13 +323,16 @@
         color: var(--disabled);
         cursor: default;
       }
+      /* 알림 — 할 말이 없으면 자리도 차지하지 않는다 */
       .notice {
         margin-top: 14px;
         padding: 10px 12px;
         border-radius: 8px;
         background: var(--accent-bg);
         font-size: 12px;
-        min-height: 38px;
+      }
+      .notice:empty {
+        display: none;
       }
       .notice.bad {
         background: #fdecec;

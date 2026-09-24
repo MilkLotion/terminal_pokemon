@@ -43,7 +43,8 @@ function seed(): SaveV3 {
   const first = v.party.slots[0]?.pet;
   assert.equal(first?.species, "pikachu");
   assert.equal(first?.name, "피카츄", "화면 이름으로 바꾼다");
-  assert.deepStrictEqual(first?.types, ["electric"]);
+  assert.deepStrictEqual(first?.types, ["전기"], "타입도 화면 이름으로");
+  assert.equal(first?.nature, "노력", "성격도 화면 이름으로");
   process.stdout.write("(1) 이름과 타입  ok\n");
 }
 

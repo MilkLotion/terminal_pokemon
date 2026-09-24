@@ -63,7 +63,11 @@ function petCard(slot: SlotView, pet: PetView): HTMLElement {
   card.type = "button";
 
   const portrait = el("div", "portrait", pet.shiny ? "이로치" : "");
-  if (pet.hidden) portrait.appendChild(el("span", "mark", "＋"));
+  if (pet.hidden) {
+    const mark = el("span", "mark");
+    mark.title = "숨긴 상태";
+    portrait.appendChild(mark);
+  }
   card.appendChild(portrait);
 
   const info = el("div", "info");
