@@ -119,6 +119,7 @@ export interface SaveV3 {
   savedAt: number;
   lastTickAt: number;
   pets: PetV3[];
+  starterPetId: string | null; // 첫 선택으로 만난 개체. 업적 판정에 쓴다
   party: { slots: PartySlotV3[] };
   boxes: BoxV3[];
   eggs: EggV3[];

@@ -170,6 +170,8 @@ export type CommandName =
   | "party.place" | "party.swap" | "party.keep"
   | "egg.care" | "egg.open"
   | "bag.use"
+  | "achievement.claim"
+  | "tutorial.skip" | "tutorial.done"
   | "pet.set" | "pet.look"
   | "agent.connect" | "agent.disconnect"
   | "settings.set"

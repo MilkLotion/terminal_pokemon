@@ -9,6 +9,7 @@
 //
 // 전부 동기다. 그래서 거래는 저절로 한 번에 하나이고 들어온 순서대로 처리된다.
 // 파일을 직접 다루지 않는다. 읽기·쓰기·시계를 받아서 쓴다 — 자체 검사가 파일 없이 돈다.
+import { evaluate } from "../achievement/core.js";
 import type { SaveV3, TxRecordV3 } from "../shared/save-v3";
 import { SAVE_V3_RULES } from "../save/rules.js";
 
@@ -29,7 +30,7 @@ export interface TxContext {
 export type TxHandler = (draft: SaveV3, args: unknown, ctx: TxContext) => TxOutcome;
 
 export type TxResult =
-  | { ok: true; result: unknown; replayed: boolean }
+  | { ok: true; result: unknown; replayed: boolean; achieved?: string[] }
   | { ok: false; reason: TxFailure };
 
 // 실패 이유 — 저장 실패와 규칙 실패를 구분한다. 화면이 다른 문구를 쓴다
@@ -74,6 +75,9 @@ export function createExecutor(ports: TxPorts, handlers: Record<string, TxHandle
     const out = handler(draft, req.args, { now, rand: ports.rand ?? Math.random });
     if (!out.ok) return { ok: false, reason: out.reason };
 
+    // 상태가 바뀌었으니 업적을 다시 본다. 꺼내기 한 번으로도 달성이 생긴다
+    const achieved = evaluate(draft, now);
+
     const result = out.result ?? null;
     draft.tx = trimTx([...draft.tx, { id: req.id, at: now, result }], now);
     draft.savedAt = now;
@@ -82,7 +86,7 @@ export function createExecutor(ports: TxPorts, handlers: Record<string, TxHandle
       return { ok: false, reason: "save-failed" };
     }
     failStreak = 0;
-    return { ok: true, result, replayed: false };
+    return { ok: true, result, replayed: false, achieved };
   };
 
   return {

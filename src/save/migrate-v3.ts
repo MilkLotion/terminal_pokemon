@@ -63,6 +63,8 @@ export function migrate(v2: SaveV2, now: number): MigrateResult {
 
   // 개체와 파티 칸 — v2 는 배열 순서가 곧 칸 순서다
   out.pets = v2.party.map((p) => convertPet(p, now, date));
+  // v2 에는 첫 개체 표시가 없다. 파티의 첫 마리를 첫 개체로 본다
+  out.starterPetId = out.pets[0]?.id ?? null;
   const slots: PartySlotV3[] = emptySlots();
   const open = Math.min(slots.length, Math.max(SAVE_V3_RULES.party.openAtStart, Math.round(v2.slots)));
   for (let i = 0; i < slots.length; i++) {

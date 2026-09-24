@@ -11,6 +11,7 @@
 // 부분 진행은 ms 정수로 쌓는다. 그래서 짧은 틱을 여러 번 돌려도 긴 틱 한 번과 결과가 같다.
 // 포인트만 예외다. 적립 속도가 친밀도에 달려 있는데 친밀도는 구간 안에서도 오른다.
 // 구간 시작 시점의 친밀도로 셈해서 소급을 막는다. 그래서 틱을 잘게 나누면 포인트가 조금 더 정확해진다.
+import { evaluate } from "../achievement/core.js";
 import { TIME_V3_RULES } from "../save/rules.js";
 import type { BuffV3, PetV3, SaveV3 } from "../shared/save-v3";
 
@@ -22,6 +23,7 @@ export interface HungerEnter {
 }
 
 export interface TickEvents {
+  achieved: string[]; // 이번에 달성한 업적
   hatchReady: string[]; // 이번에 준비가 끝난 알
   hungerEnter: HungerEnter[]; // 배고픔·매우 배고픔 구간에 들어간 개체
   pointsGained: number;
@@ -72,7 +74,7 @@ const partyPetIds = (save: SaveV3): string[] =>
   save.party.slots.filter((s) => s.state === "pokemon" && s.petId).map((s) => s.petId as string);
 
 export function applyTime(save: SaveV3, elapsedMs: number, now: number): TickEvents {
-  const events: TickEvents = { hatchReady: [], hungerEnter: [], pointsGained: 0, affinityGained: [] };
+  const events: TickEvents = { achieved: [], hatchReady: [], hungerEnter: [], pointsGained: 0, affinityGained: [] };
   const elapsed = Math.max(0, Math.round(elapsedMs));
   save.lastTickAt = now;
   if (elapsed === 0) return events;
@@ -133,5 +135,7 @@ export function applyTime(save: SaveV3, elapsedMs: number, now: number): TickEve
     if (!was && egg.ready) events.hatchReady.push(egg.id);
   }
 
+  // 상태 판정 — 배너 순서는 부화 → 진화 → 업적이다. 진화 판정은 아직 없다
+  events.achieved = evaluate(save, now);
   return events;
 }

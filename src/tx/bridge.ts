@@ -25,6 +25,9 @@ export const V3_COMMANDS: readonly CommandName[] = [
   "evolve",
   "feed",
   "play",
+  "achievement.claim",
+  "tutorial.skip",
+  "tutorial.done",
 ];
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
@@ -61,6 +64,11 @@ export function argsOf(command: Command): Record<string, unknown> {
     case "feed":
     case "play":
       return { petId: target ?? str(a.petId) };
+    case "achievement.claim":
+      return { id: target ?? str(a.id) };
+    case "tutorial.skip":
+    case "tutorial.done":
+      return { id: target ?? str(a.id), steps: int(a.steps) };
     default:
       return { ...a };
   }

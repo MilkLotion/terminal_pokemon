@@ -3,7 +3,9 @@
 // 처리기는 사본만 고치고 성공 여부를 돌려준다. 저장은 거래 실행기가 한다.
 // 도메인 규칙은 각 모듈(src/party 등)에 두고 여기서는 인자를 풀어 넘기기만 한다.
 import { use } from "../bag/use.js";
+import { claim } from "../achievement/core.js";
 import { dayPartOf, evolve } from "../dex/evolve.js";
+import { done as doneTutorial, skip as skipTutorial } from "../tutorial/core.js";
 import { care, isCareAction } from "../egg/care.js";
 import { open } from "../egg/open.js";
 import { keep, place, swap } from "../party/placement.js";
@@ -179,3 +181,33 @@ const playHandler: TxHandler = (draft, args) => {
 
 HANDLERS["feed"] = feedHandler;
 HANDLERS["play"] = playHandler;
+
+// ── 업적과 튜토리얼 ────────────────────────────────────────────────────────────
+
+const idOf = (args: unknown): string | null => {
+  if (!isObj(args)) return null;
+  const id = args.id;
+  return typeof id === "string" && id ? id : null;
+};
+
+// 업적 보상 수령 — 업적당 한 번. 파티 칸 하나를 연다
+const claimHandler: TxHandler = (draft, args, ctx) => {
+  const id = idOf(args);
+  if (!id) return { ok: false, reason: "bad-args" };
+  const res = claim(draft, id, ctx.now);
+  if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  return { ok: true, result: { id, slotIndex: res.slotIndex } };
+};
+
+const tutorialHandler = (kind: "skip" | "done"): TxHandler => (draft, args) => {
+  const id = idOf(args);
+  if (!id) return { ok: false, reason: "bad-args" };
+  const steps = isObj(args) && typeof args.steps === "number" ? args.steps : undefined;
+  const res = kind === "skip" ? skipTutorial(draft, id) : doneTutorial(draft, id, steps);
+  if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  return { ok: true, result: { id, state: res.state, steps: res.steps } };
+};
+
+HANDLERS["achievement.claim"] = claimHandler;
+HANDLERS["tutorial.skip"] = tutorialHandler("skip");
+HANDLERS["tutorial.done"] = tutorialHandler("done");
