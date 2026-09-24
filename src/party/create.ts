@@ -39,6 +39,7 @@ export function newPet({ id, species, shiny, nature, now }: NewPetOptions): PetV
     fullness: SAVE_V3_RULES.pet.fullness,
     fullnessProgressMs: 0,
     mood: SAVE_V3_RULES.pet.mood,
+    moodProgressMs: 0,
     feedCooldownMs: 0,
     playCooldownMs: 0,
     playWindowMs: 0,

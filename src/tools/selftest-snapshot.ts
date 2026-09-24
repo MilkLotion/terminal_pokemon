@@ -15,7 +15,7 @@ const MIN = 60_000;
 const pet = (over: Partial<PetV3> = {}): PetV3 => ({
   id: "p1", species: "charmander", shiny: false, nature: "hardy", size: 2,
   level: 1, exp: 0, affinity: 0, affinityProgressMs: 0, fullness: 100, fullnessProgressMs: 0,
-  mood: 60, feedCooldownMs: 0, playCooldownMs: 0, playWindowMs: 0, playStreak: 0, buffs: [], home: { dx: -24, dy: -60 }, since: T0, stage: 0, evolved: [],
+  mood: 60, moodProgressMs: 0, feedCooldownMs: 0, playCooldownMs: 0, playWindowMs: 0, playStreak: 0, buffs: [], home: { dx: -24, dy: -60 }, since: T0, stage: 0, evolved: [],
   daily: { date: "2026-09-24", gained: 0, feeds: 0, plays: 0, pokes: 0, presence: 0, work: 0, turns: 0 },
   ...over,
 });
@@ -54,7 +54,9 @@ function seed(): SaveV3 {
   assert.equal(v.party.slots[0]?.pet?.fullness, 55);
   assert.equal(v.party.slots[0]?.pet?.zone, "normal", "55 는 보통");
   assert.equal(v.party.slots[1]?.pet?.zone, "hungry", "30 은 배고픔");
-  process.stdout.write("(2) 만복도 구간  ok\n");
+  assert.equal(v.party.slots[0]?.pet?.mood, 60, "기분 값");
+  assert.equal(v.party.slots[0]?.pet?.moodWord, "좋음", "기분 단계 말 — 60 은 좋음");
+  process.stdout.write("(2) 만복도 구간과 기분  ok\n");
 }
 
 // (3) 쿨타임과 버프는 사람이 읽는 단위로

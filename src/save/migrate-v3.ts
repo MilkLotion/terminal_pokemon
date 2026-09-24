@@ -48,6 +48,7 @@ export function convertPet(pet: Pet, now: number, date: string): PetV3 {
     fullness: Math.min(100, Math.max(0, 100 - Math.round(pet.hunger))),
     fullnessProgressMs: 0,
     mood: Math.min(100, Math.max(0, Math.round(pet.mood))),
+    moodProgressMs: 0,
     feedCooldownMs: Math.round(remain),
     playCooldownMs: Math.round(left(playedAt, SAVE_V3_RULES.playCooldownMs)),
     playWindowMs: 0,

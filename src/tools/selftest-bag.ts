@@ -23,7 +23,7 @@ const T0 = new Date(2026, 8, 24, 10, 0, 0).getTime();
 const pet = (over: Partial<PetV3> = {}): PetV3 => ({
   id: "p1", species: "charmander", shiny: false, nature: "hardy", size: 2,
   level: 1, exp: 0, affinity: 0, affinityProgressMs: 0, fullness: 100, fullnessProgressMs: 0,
-  mood: 60, feedCooldownMs: 0, playCooldownMs: 0, playWindowMs: 0, playStreak: 0, buffs: [], home: { dx: -24, dy: -60 }, since: T0, stage: 0, evolved: [],
+  mood: 60, moodProgressMs: 0, feedCooldownMs: 0, playCooldownMs: 0, playWindowMs: 0, playStreak: 0, buffs: [], home: { dx: -24, dy: -60 }, since: T0, stage: 0, evolved: [],
   daily: { date: "2026-09-24", gained: 0, feeds: 0, plays: 0, pokes: 0, presence: 0, work: 0, turns: 0 },
   ...over,
 });
@@ -286,6 +286,23 @@ process.stdout.write("selftest-bag: 돌봄 통과 (밥·놀이·쿨타임)\n");
   assert.equal(s.pets[0]?.playWindowMs, 0);
   assert.equal(s.pets[0]?.playStreak, 0, "창이 닫히면 중첩도 0");
   process.stdout.write("(21) 창이 닫히면 중첩이 풀린다  ok\n");
+}
+
+// (22) 기분 — 놀아주기·장난감 +15, 밥 주기 +10, 100 을 넘지 않는다
+{
+  const played = seed({ mood: 60 });
+  assert.equal(play(played, "p1").ok, true);
+  assert.equal(played.pets[0]?.mood, 75, "놀아주기 +15");
+  const fed = seed({ mood: 60, fullness: 50 });
+  assert.equal(feed(fed, "p1").ok, true);
+  assert.equal(fed.pets[0]?.mood, 70, "밥 주기 +10");
+  const toyed = seed({ mood: 60 }, { toy: 1 });
+  assert.equal(use(toyed, "toy", "p1").ok, true);
+  assert.equal(toyed.pets[0]?.mood, 75, "장난감도 놀아주기다");
+  const full = seed({ mood: 95 });
+  play(full, "p1");
+  assert.equal(full.pets[0]?.mood, 100, "100 을 넘지 않는다");
+  process.stdout.write("(22) 기분 · 돌봄으로 오른다  ok\n");
 }
 
 process.stdout.write("selftest-bag: 놀아주기 중첩 통과\n");

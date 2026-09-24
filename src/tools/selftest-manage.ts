@@ -26,7 +26,7 @@ function seed(): SaveV3 {
   s.pets.push({
     id: "p1", species: "pikachu", shiny: false, nature: "hardy", size: 2,
     level: 12, exp: 2000, affinity: 80, affinityProgressMs: 0, fullness: 55, fullnessProgressMs: 0,
-    mood: 60, feedCooldownMs: 0, playCooldownMs: 0, playWindowMs: 0, playStreak: 0,
+    mood: 60, moodProgressMs: 0, feedCooldownMs: 0, playCooldownMs: 0, playWindowMs: 0, playStreak: 0,
     buffs: [], home: { dx: -24, dy: -60 }, since: T0, stage: 0, evolved: [],
     daily: { date: "2026-09-24", gained: 0, feeds: 0, plays: 0, pokes: 0, presence: 0, work: 0, turns: 0 },
   });

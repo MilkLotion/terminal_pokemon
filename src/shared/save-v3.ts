@@ -30,6 +30,7 @@ export interface PetV3 {
   fullness: number; // 만복도 0~100. 높을수록 배부르다
   fullnessProgressMs: number; // 다음 만복도 1 감소까지의 부분 진행
   mood: number; // 0~100
+  moodProgressMs: number; // 다음 기분 1 감소까지의 부분 진행 (배율을 반영한 가중 시간)
   feedCooldownMs: number; // 밥 주기 남은 쿨타임
   playCooldownMs: number; // 놀아주기 남은 쿨타임
   playWindowMs: number; // 놀아주기 상태의 남은 시간. 이 안에 또 놀아주면 중첩이 오른다

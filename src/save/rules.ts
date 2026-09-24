@@ -84,6 +84,15 @@ export const TIME_V3_RULES = {
   buffBonusPercent: { "premium-food": 100, "long-play": 50 },
 };
 
+// 기분 — 보이기만 하고 다른 수치를 바꾸지 않는다 (docs/specs/balance.md "기분")
+export const MOOD_RULES = {
+  dropMs: 600_000, // 파티 칸 개체의 기분 1 감소에 걸리는 시간. 10분에 1
+  // 만복도 구간별 감소 배율(백분율). 배고픔 2배, 매우 배고픔 3배
+  zonePercent: { full: 100, normal: 100, hungry: 200, starving: 300 },
+  feed: 10, // 밥 주기 — 기본먹이·프리미엄먹이
+  play: 15, // 놀아주기 — 클릭 놀아주기와 장난감
+};
+
 // 알의 규칙표 — 수치는 docs/specs/balance.md "확률과 알"
 export const EGG_V3_RULES = {
   readyMs: 5 * 60_000, // 준비 시간 5분

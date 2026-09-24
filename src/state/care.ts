@@ -6,7 +6,7 @@
 // 순수 함수이며 저장을 쓰지 않는다. 저장은 거래 실행기가 한다.
 import { use, type UseResult } from "../bag/use.js";
 import type { DexOptions } from "../dex/data";
-import { BAG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
+import { BAG_V3_RULES, MOOD_RULES, SAVE_V3_RULES } from "../save/rules.js";
 import type { SaveV3 } from "../shared/save-v3";
 
 export const BASIC_FOOD = "basic-food";
@@ -40,6 +40,7 @@ export function play(save: SaveV3, petId: string): PlayResult {
   pet.playWindowMs = SAVE_V3_RULES.playWindowMs;
   pet.playCooldownMs = SAVE_V3_RULES.playCooldownMs;
   pet.affinity = Math.min(100, pet.affinity + BAG_V3_RULES.playAffinity);
+  pet.mood = Math.min(100, pet.mood + MOOD_RULES.play);
   pet.daily.plays += 1;
 
   const longPlay = pet.playStreak >= SAVE_V3_RULES.longPlayAt;

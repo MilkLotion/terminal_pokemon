@@ -12,7 +12,7 @@ import { profile } from "../dex/species.js";
 import { itemOf } from "../bag/use.js";
 import { eggName } from "../shop/catalog.js";
 import { zoneOf } from "../state/time.js";
-import { natureName, petName, typeName } from "../main/text.js";
+import { moodWord, natureName, petName, typeName } from "../main/text.js";
 import type { AchievementView, BagItemView, BoxView, EggView, PetView, SlotView, Snapshot } from "../shared/manage";
 import { nameOfItem, shopList } from "./lists.js";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
@@ -42,6 +42,8 @@ export function petView(pet: PetV3, hidden: boolean): PetView {
     affinity: pet.affinity,
     fullness: pet.fullness,
     zone: zoneOf(pet.fullness),
+    mood: pet.mood,
+    moodWord: moodWord(pet.mood),
     hidden,
     feedReady: pet.feedCooldownMs <= 0,
     feedInSec: sec(pet.feedCooldownMs),

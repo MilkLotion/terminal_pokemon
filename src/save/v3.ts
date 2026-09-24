@@ -131,6 +131,7 @@ export function normalizePet(raw: unknown, date: string): PetV3 | null {
     fullness: clamp(int(raw.fullness, SAVE_V3_RULES.pet.fullness), 0, 100),
     fullnessProgressMs: nonNeg(raw.fullnessProgressMs),
     mood: clamp(int(raw.mood, SAVE_V3_RULES.pet.mood), 0, 100),
+    moodProgressMs: nonNeg(raw.moodProgressMs), // 2026-09-25 에 더했다. 옛 저장에는 없어 0 이다
     feedCooldownMs: nonNeg(raw.feedCooldownMs),
     playCooldownMs: nonNeg(raw.playCooldownMs),
     playWindowMs: nonNeg(raw.playWindowMs),

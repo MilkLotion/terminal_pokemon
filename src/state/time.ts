@@ -6,7 +6,7 @@
 // 기본 적립에 더하는 추가 이득이며 상한이 없다 (docs/specs/balance.md "에이전트 작업 보너스")
 //
 // 값 변경 대상
-//   파티에 있는 개체   만복도 감소, 친밀도 획득, 포인트 적립, 밥 쿨타임, 버프 잔여 시간
+//   파티에 있는 개체   만복도 감소, 기분 감소, 친밀도 획득, 포인트 적립, 밥 쿨타임, 버프 잔여 시간
 //   박스에 있는 개체   아무것도 하지 않는다. 박스 보관은 시간을 멈춘다
 //   알                 준비 남은 시간, 돌봄 쿨타임
 //
@@ -14,7 +14,7 @@
 // 포인트만 예외다. 적립 속도가 친밀도에 달려 있는데 친밀도는 구간 안에서도 오른다.
 // 구간 시작 시점의 친밀도로 셈해서 소급을 막는다. 그래서 틱을 잘게 나누면 포인트가 조금 더 정확해진다.
 import { evaluate } from "../achievement/core.js";
-import { TIME_V3_RULES } from "../save/rules.js";
+import { MOOD_RULES, TIME_V3_RULES } from "../save/rules.js";
 import type { BuffV3, PetV3, SaveV3 } from "../shared/save-v3";
 
 export type FullnessZone = "full" | "normal" | "hungry" | "starving";
@@ -118,6 +118,14 @@ export function applyTime(save: SaveV3, elapsedMs: number, now: number, input: T
       const next = Math.min(100, pet.affinity + gain);
       if (next !== pet.affinity) events.affinityGained.push({ petId: pet.id, gained: next - pet.affinity });
       pet.affinity = next;
+    }
+
+    // 기분 — 부분 진행을 쌓아 1씩 줄인다. 줄어든 만복도의 구간으로 배율을 정한다. 보이기만 하는 값이다
+    pet.moodProgressMs += Math.round((elapsed * MOOD_RULES.zonePercent[zoneOf(pet.fullness)]) / 100);
+    const moodDrop = Math.floor(pet.moodProgressMs / MOOD_RULES.dropMs);
+    if (moodDrop > 0) {
+      pet.moodProgressMs -= moodDrop * MOOD_RULES.dropMs;
+      pet.mood = Math.max(0, pet.mood - moodDrop);
     }
 
     pet.feedCooldownMs = countDown(pet.feedCooldownMs, elapsed);

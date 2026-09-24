@@ -16,7 +16,7 @@ const MIN = 60_000;
 const pet = (over: Partial<PetV3> = {}): PetV3 => ({
   id: "p1", species: "charmander", shiny: false, nature: "hardy", size: 2,
   level: 1, exp: 0, affinity: 0, affinityProgressMs: 0, fullness: 100, fullnessProgressMs: 0,
-  mood: 60, feedCooldownMs: 0, playCooldownMs: 0, playWindowMs: 0, playStreak: 0, buffs: [], home: { dx: -24, dy: -60 }, since: T0, stage: 0, evolved: [],
+  mood: 60, moodProgressMs: 0, feedCooldownMs: 0, playCooldownMs: 0, playWindowMs: 0, playStreak: 0, buffs: [], home: { dx: -24, dy: -60 }, since: T0, stage: 0, evolved: [],
   daily: { date: "2026-09-24", gained: 0, feeds: 0, plays: 0, pokes: 0, presence: 0, work: 0, turns: 0 },
   ...over,
 });
@@ -196,4 +196,33 @@ function seed(over: Partial<PetV3> = {}): SaveV3 {
   process.stdout.write("(14) 작업 보너스 · 상한과 대상  ok\n");
 }
 
-process.stdout.write("selftest-time: 통과 (만복도·친밀도·포인트·버프·구간·알·작업 보너스)\n");
+// (15) 기분 — 파티 개체는 10분에 1 줄고, 배고프면 2배·매우 배고프면 3배로 준다
+{
+  const s = seed({ mood: 60 });
+  applyTime(s, HOUR, T0 + HOUR);
+  assert.equal(s.pets[0]?.mood, 54, "배부른 1시간에 6 감소");
+  const hungry = seed({ mood: 60, fullness: 30 });
+  applyTime(hungry, 10 * MIN, T0 + 10 * MIN);
+  assert.equal(hungry.pets[0]?.mood, 58, "배고픔 구간 10분에 2 감소");
+  const starving = seed({ mood: 60, fullness: 10 });
+  applyTime(starving, 10 * MIN, T0 + 10 * MIN);
+  assert.equal(starving.pets[0]?.mood, 57, "매우 배고픔 구간 10분에 3 감소");
+  process.stdout.write("(15) 기분 · 시간 감소와 배고픔 배율  ok\n");
+}
+
+// (16) 기분 — 박스 개체는 멈춘다. 0 아래로 가지 않는다. 틱을 나눠도 같다
+{
+  const s = seed({ mood: 1 });
+  s.pets.push(pet({ id: "p2", mood: 60 })); // 파티 칸에 없다 — 박스와 같다
+  applyTime(s, HOUR, T0 + HOUR);
+  assert.equal(s.pets[0]?.mood, 0, "0 에서 멈춘다");
+  assert.equal(s.pets[1]?.mood, 60, "파티 밖 개체는 줄지 않는다");
+  const long = seed({ mood: 80 });
+  applyTime(long, HOUR, T0 + HOUR);
+  const short = seed({ mood: 80 });
+  for (let i = 0; i < 60; i++) applyTime(short, MIN, T0 + (i + 1) * MIN);
+  assert.equal(short.pets[0]?.mood, long.pets[0]?.mood, "짧은 틱 여러 번과 긴 틱 한 번이 같다");
+  process.stdout.write("(16) 기분 · 박스·바닥·틱 나누기  ok\n");
+}
+
+process.stdout.write("selftest-time: 통과 (만복도·친밀도·포인트·버프·구간·알·작업 보너스·기분)\n");

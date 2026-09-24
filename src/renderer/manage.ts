@@ -520,7 +520,7 @@ function drawPet(petId: string): void {
   dialogEl.append(...dialogHead(pet.name, `Lv.${pet.level} · ${pet.nature} · ${ZONE_WORD[pet.zone] ?? pet.zone}${kept}`));
 
   const meters = el("div", "meters");
-  meters.append(meter("친밀도", pet.affinity), meter("만복도", pet.fullness, pet.zone));
+  meters.append(meter("친밀도", pet.affinity), meter("만복도", pet.fullness, pet.zone), meter(`기분 · ${pet.moodWord}`, pet.mood));
   dialogEl.appendChild(meters);
 
   if (!inParty) {

@@ -24,6 +24,8 @@ export interface PetView {
   affinity: number;
   fullness: number;
   zone: ViewZone;
+  mood: number; // 0~100. 보이기만 하는 값이다
+  moodWord: string; // 기분 단계 말 — "좋음" 처럼 화면에 그대로 쓴다
   hidden: boolean;
   feedReady: boolean;
   feedInSec: number;

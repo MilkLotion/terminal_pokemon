@@ -6,7 +6,7 @@
 import { loadJson, type DexOptions } from "../dex/data.js";
 import { expForLevel, growthOf, levelFor, MAX_LEVEL } from "../dex/growth.js";
 import { isNatureId } from "../dex/natures.js";
-import { BAG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
+import { BAG_V3_RULES, MOOD_RULES, SAVE_V3_RULES } from "../save/rules.js";
 import type { BuffKind, PetV3, SaveV3 } from "../shared/save-v3";
 
 export type ItemEffect = "fullness" | "fullness-full-buff" | "play-buff" | "exp" | "level" | "nature" | "shiny-on" | "shiny-off";
@@ -88,12 +88,14 @@ export function use(save: SaveV3, itemId: string, petId: string, args: { nature?
       pet.feedCooldownMs = SAVE_V3_RULES.feedCooldownMs;
       if (item.effect === "fullness-full-buff") setBuff(pet, "premium-food");
       addAffinity(pet, BAG_V3_RULES.feedAffinity);
+      pet.mood = Math.min(100, pet.mood + MOOD_RULES.feed);
       pet.daily.feeds += 1;
       return done({ fullness: pet.fullness });
     }
     case "play-buff": {
       setBuff(pet, "long-play");
       addAffinity(pet, BAG_V3_RULES.playAffinity);
+      pet.mood = Math.min(100, pet.mood + MOOD_RULES.play); // 장난감도 놀아주기다
       pet.daily.plays += 1;
       return done({});
     }
