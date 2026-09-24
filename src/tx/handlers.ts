@@ -3,6 +3,7 @@
 // 처리기는 사본만 고치고 성공 여부를 돌려준다. 저장은 거래 실행기가 한다.
 // 도메인 규칙은 각 모듈(src/party 등)에 두고 여기서는 인자를 풀어 넘기기만 한다.
 import { use } from "../bag/use.js";
+import { dayPartOf, evolve } from "../dex/evolve.js";
 import { care, isCareAction } from "../egg/care.js";
 import { open } from "../egg/open.js";
 import { keep, place, swap } from "../party/placement.js";
@@ -139,3 +140,18 @@ const useHandler: TxHandler = (draft, args) => {
 };
 
 HANDLERS["bag.use"] = useHandler;
+
+// ── 진화 ───────────────────────────────────────────────────────────────────────
+
+// 진화 — 조건을 채운 개체를 사용자가 직접 진화시킨다. 후보가 여럿이면 골라야 한다
+const evolveHandler: TxHandler = (draft, args, ctx) => {
+  const petId = petIdOf(args);
+  if (!petId) return { ok: false, reason: "bad-args" };
+  const choice = isObj(args) && typeof args.to === "string" ? args.to : undefined;
+  const part = dayPartOf(ctx.now);
+  const res = evolve(draft, petId, part, choice);
+  if (!res.ok) return { ok: false, reason: res.reason ?? "failed", ...(res.choices ? { choices: res.choices } : {}) };
+  return { ok: true, result: { petId, from: res.from, to: res.to, usedItem: res.usedItem } };
+};
+
+HANDLERS["evolve"] = evolveHandler;
