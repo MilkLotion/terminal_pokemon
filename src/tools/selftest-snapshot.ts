@@ -1,0 +1,143 @@
+// 화면이 읽는 스냅샷 자체 확인 — npm run build 뒤 node dist/tools/selftest-snapshot.js
+//
+// 테스트 프레임워크 없이 assert 만. 저장을 화면이 바로 그릴 수 있는 값으로 바꾸는지 본다.
+// 계약은 docs/specs/modules.md 의 `settings:snapshot`, 화면은 Figma `05 · Screens` 다.
+// 끝에 "통과" 한 줄. 실패하면 어디서 깨졌는지와 함께 종료 코드 1
+import assert from "node:assert";
+import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules";
+import { empty } from "../save/v3";
+import type { PetV3, SaveV3 } from "../shared/save-v3";
+import { snapshot } from "../tx/snapshot";
+
+const T0 = new Date(2026, 8, 24, 10, 0, 0).getTime();
+const MIN = 60_000;
+
+const pet = (over: Partial<PetV3> = {}): PetV3 => ({
+  id: "p1", species: "charmander", shiny: false, nature: "hardy", size: 2,
+  level: 1, exp: 0, affinity: 0, affinityProgressMs: 0, fullness: 100, fullnessProgressMs: 0,
+  mood: 60, feedCooldownMs: 0, buffs: [], home: { dx: -24, dy: -60 }, since: T0, stage: 0, evolved: [],
+  daily: { date: "2026-09-24", gained: 0, feeds: 0, plays: 0, pokes: 0, presence: 0, work: 0, turns: 0 },
+  ...over,
+});
+
+function seed(): SaveV3 {
+  const s = empty(T0);
+  s.points.balance = 1240;
+  s.pets.push(pet({ id: "p1", species: "pikachu", level: 12, exp: 2000, affinity: 80, fullness: 55 }));
+  s.pets.push(pet({ id: "p2", species: "charmander", fullness: 30, feedCooldownMs: 90_000, buffs: [{ kind: "premium-food", remainMs: 45 * MIN }] }));
+  s.party.slots[0] = { state: "pokemon", petId: "p1", hidden: false };
+  s.party.slots[1] = { state: "pokemon", petId: "p2", hidden: true };
+  const box = s.boxes[0];
+  if (box) box.slots[0] = "p3";
+  s.pets.push(pet({ id: "p3", species: "squirtle", level: 5 }));
+  s.eggs.push({ id: "e1", kind: "random", boughtAt: T0, remainMs: 2 * MIN, ready: false, candidates: [], careCooldownMs: 30_000, actions: { pat: 2, song: 0 } });
+  s.bag = { mint: 2, "exp-candy-s": 1, "없는도구": 3 };
+  s.dex = { unlocked: ["pikachu", "charmander"], obtained: ["pikachu"], shinyObtained: [], discovered: {} };
+  s.achievements = { a1: { achievedAt: T0, claimedAt: null }, a2: { achievedAt: T0, claimedAt: T0 }, a3: { achievedAt: null, claimedAt: null } };
+  return s;
+}
+
+// (1) 슬러그 대신 한국어 이름이 온다
+{
+  const v = snapshot(seed());
+  const first = v.party.slots[0]?.pet;
+  assert.equal(first?.species, "pikachu");
+  assert.equal(first?.name, "피카츄", "화면 이름으로 바꾼다");
+  assert.deepStrictEqual(first?.types, ["electric"]);
+  process.stdout.write("(1) 이름과 타입  ok\n");
+}
+
+// (2) 만복도는 값과 구간 이름을 함께 준다
+{
+  const v = snapshot(seed());
+  assert.equal(v.party.slots[0]?.pet?.fullness, 55);
+  assert.equal(v.party.slots[0]?.pet?.zone, "normal", "55 는 보통");
+  assert.equal(v.party.slots[1]?.pet?.zone, "hungry", "30 은 배고픔");
+  process.stdout.write("(2) 만복도 구간  ok\n");
+}
+
+// (3) 쿨타임과 버프는 사람이 읽는 단위로
+{
+  const v = snapshot(seed());
+  const second = v.party.slots[1]?.pet;
+  assert.equal(second?.feedReady, false);
+  assert.equal(second?.feedInSec, 90, "ms 를 초로");
+  assert.deepStrictEqual(second?.buffs, [{ kind: "premium-food", remainMin: 45 }], "ms 를 분으로");
+  assert.equal(v.party.slots[0]?.pet?.feedReady, true);
+  process.stdout.write("(3) 쿨타임과 버프 단위  ok\n");
+}
+
+// (4) 숨김과 표시 수
+{
+  const v = snapshot(seed());
+  assert.equal(v.party.slots[0]?.pet?.hidden, false);
+  assert.equal(v.party.slots[1]?.pet?.hidden, true);
+  assert.equal(v.party.shown, 1, "보이는 개체는 하나");
+  assert.equal(v.party.usable, SAVE_V3_RULES.party.openAtStart, "쓸 수 있는 칸");
+  process.stdout.write("(4) 숨김과 표시 수  ok\n");
+}
+
+// (5) 잠긴 칸은 여는 방법을 알려준다
+{
+  const v = snapshot(seed());
+  const locked = v.party.slots.filter((s) => s.state === "locked");
+  assert.equal(locked.length, 4);
+  assert.equal(locked.filter((s) => s.unlockBy === "shop").length, 2);
+  assert.equal(locked.filter((s) => s.unlockBy === "achievement").length, 2);
+  process.stdout.write("(5) 잠긴 칸의 해제 출처  ok\n");
+}
+
+// (6) 박스는 사용 칸 수와 개체를 준다
+{
+  const v = snapshot(seed());
+  const box = v.boxes[0];
+  assert.equal(box?.used, 1);
+  assert.equal(box?.size, SAVE_V3_RULES.box.size);
+  assert.equal(box?.slots[0]?.name, "꼬부기");
+  assert.equal(box?.slots[1], null, "빈 칸은 null");
+  process.stdout.write("(6) 박스 사용 칸과 개체  ok\n");
+}
+
+// (7) 알은 남은 초와 진행 백분율을 준다
+{
+  const v = snapshot(seed());
+  const egg = v.eggs.list[0];
+  assert.equal(egg?.name, "랜덤알");
+  assert.equal(egg?.remainSec, 120);
+  assert.equal(egg?.percent, 60, "5분 중 3분이 지났다");
+  assert.equal(egg?.careReady, false, "돌봄 쿨타임이 남았다");
+  assert.deepStrictEqual(egg?.actions, { pat: 2, song: 0 });
+  assert.equal(v.eggs.used, 1);
+  assert.equal(v.eggs.size, EGG_V3_RULES.maxEggs);
+  process.stdout.write("(7) 알 남은 시간과 진행  ok\n");
+}
+
+// (8) 가방은 이름을 붙이고 이름순으로 준다
+{
+  const v = snapshot(seed());
+  assert.equal(v.bag.length, 3);
+  assert.deepStrictEqual(v.bag.map((i) => i.name), ["경험사탕 S", "민트", "없는도구"], "이름순");
+  assert.equal(v.bag.find((i) => i.id === "mint")?.count, 2);
+  assert.equal(v.bag.find((i) => i.id === "없는도구")?.name, "없는도구", "모르는 도구는 식별자 그대로");
+  process.stdout.write("(8) 가방 이름과 정렬  ok\n");
+}
+
+// (9) 도감과 업적은 수만 준다
+{
+  const v = snapshot(seed());
+  assert.deepStrictEqual(v.dex, { unlocked: 2, obtained: 1, shiny: 0 });
+  assert.equal(v.achievements.total, 2, "달성한 업적");
+  assert.equal(v.achievements.unclaimed, 1, "받지 않은 업적");
+  process.stdout.write("(9) 도감과 업적 수  ok\n");
+}
+
+// (10) 없는 개체를 가리키는 칸은 빈 칸으로 보인다
+{
+  const s = seed();
+  s.party.slots[0] = { state: "pokemon", petId: "없는개체" };
+  const v = snapshot(s);
+  assert.equal(v.party.slots[0]?.state, "empty", "화면이 빈 칸을 그린다");
+  process.stdout.write("(10) 어긋난 참조는 빈 칸  ok\n");
+}
+
+process.stdout.write("selftest-snapshot: 통과 (이름·구간·단위·칸·알·가방·도감)\n");
