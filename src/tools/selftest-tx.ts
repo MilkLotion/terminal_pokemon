@@ -7,6 +7,9 @@ import assert from "node:assert";
 import { SAVE_V3_RULES } from "../save/rules";
 import { empty } from "../save/v3";
 import type { SaveV3 } from "../shared/save-v3";
+import { createDispatcher } from "../commands/dispatcher";
+import type { CommandResult } from "../shared/types";
+import { argsOf, registerV3, requestIdOf, V3_COMMANDS } from "../tx/bridge";
 import { createExecutor, type TxHandler, type TxPorts } from "../tx/executor";
 import { HANDLERS } from "../tx/handlers";
 
@@ -248,3 +251,77 @@ function seedBox(): SaveV3 {
 }
 
 process.stdout.write("selftest-tx: 배치·교체·보관 통과\n");
+
+
+// ── 커맨드 처리기와의 다리 ────────────────────────────────────────────────────
+// dispatch 는 비동기라 여기서부터는 기다린다. 실패하면 종료 코드 1
+async function bridgeChecks(): Promise<void> {
+  // (14) 표면이 보낸 Command 가 실행기까지 간다
+  {
+    const f = fake(seedBox());
+    const tx = createExecutor(f.ports, HANDLERS);
+    const d = createDispatcher();
+    const off = registerV3(d, tx);
+    for (const cmd of V3_COMMANDS) assert.equal(d.has(cmd), true, `${cmd} 을 맡는다`);
+    const res = await d.dispatch({ cmd: "party.hide", target: "p1", from: "menu", at: T0 });
+    assert.equal(res.ok, true);
+    assert.equal(res.reason, "ok");
+    assert.equal(f.state.party.slots[0]?.hidden, true, "저장까지 갔다");
+    off();
+    assert.equal(d.has("party.hide"), false, "걷으면 사라진다");
+    process.stdout.write("(14) 다리 · Command 가 실행기까지  ok\n");
+  }
+
+  // (15) 요청 식별자 — 준 값을 쓰고, 없으면 만든다
+  {
+    assert.equal(requestIdOf({ cmd: "shop.buy", from: "cli", at: 1, args: { reqId: "abc" } }), "abc");
+    assert.equal(requestIdOf({ cmd: "shop.buy", target: "random", from: "cli", at: 7 }), "cli:7:shop.buy:random");
+    process.stdout.write("(15) 다리 · 요청 식별자  ok\n");
+  }
+
+  // (16) target 과 args 를 명령마다 다른 모양으로 바꾼다
+  {
+    assert.deepStrictEqual(argsOf({ cmd: "party.keep", target: "p1", from: "menu" }), { petId: "p1" });
+    assert.deepStrictEqual(argsOf({ cmd: "party.swap", target: "p2", from: "menu", args: { slotIndex: 3 } }), { petId: "p2", slotIndex: 3 });
+    assert.deepStrictEqual(argsOf({ cmd: "egg.care", target: "e1", from: "menu", args: { action: "song" } }), { eggId: "e1", action: "song" });
+    assert.deepStrictEqual(argsOf({ cmd: "bag.use", target: "mint", from: "menu", args: { petId: "p1", nature: "brave" } }), { itemId: "mint", petId: "p1", nature: "brave" });
+    assert.deepStrictEqual(argsOf({ cmd: "shop.buy", target: "random", from: "cli" }), { productId: "random" });
+    process.stdout.write("(16) 다리 · 인자 모양 바꾸기  ok\n");
+  }
+
+  // (17) 같은 reqId 로 두 번 보내면 한 번만 반영한다
+  {
+    const f = fake(seedBox());
+    const tx = createExecutor(f.ports, HANDLERS);
+    const d = createDispatcher();
+    registerV3(d, tx);
+    const send = (): Promise<CommandResult> =>
+      d.dispatch({ cmd: "party.keep", target: "p1", from: "cli", at: T0, args: { reqId: "once" } });
+    const first = await send();
+    const second = await send();
+    assert.equal(first.ok, true);
+    assert.equal(second.ok, true);
+    assert.equal(second.replayed, true, "두 번째는 재생");
+    assert.equal(f.writes, 1, "쓰기는 한 번뿐");
+    process.stdout.write("(17) 다리 · reqId 로 한 번만 반영  ok\n");
+  }
+
+  // (18) 실패는 이유 그대로 표면에 간다
+  {
+    const f = fake(seedBox());
+    const tx = createExecutor(f.ports, HANDLERS);
+    const d = createDispatcher();
+    registerV3(d, tx);
+    const res = await d.dispatch({ cmd: "party.place", target: "p1", from: "menu", at: T0 });
+    assert.equal(res.ok, false);
+    assert.equal(res.reason, "not-in-box", "규칙 실패 이유를 그대로");
+    process.stdout.write("(18) 다리 · 실패 이유 전달  ok\n");
+  }
+
+  process.stdout.write("selftest-tx: 다리 통과 (등록·식별자·인자·중복·실패)\n");
+}
+
+bridgeChecks().catch((e: unknown) => {
+  process.stderr.write(`${e instanceof Error ? e.stack ?? e.message : String(e)}\n`);
+  process.exit(1);
+});

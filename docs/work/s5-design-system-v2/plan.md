@@ -2794,3 +2794,15 @@ SSOT: `docs/specs/balance.md` 의 성장과 버프, `data/items.json`.
 검증: `npx tsc --noEmit` 통과. 새 검사 13단계 통과. `npm run selftest` 전체 통과.
 남은 것: 앱 진입점이 v3 을 읽는 코드, mailbox 에서 거래 실행기로 가는 길, 화면이 v3 을 그리는 코드다. 이 셋이 붙어야 실제 e2e 가 성립한다.
 SSOT: `docs/specs/s5-scenarios.md`.
+
+### 커맨드 처리기와 거래 실행기의 다리
+
+날짜: 2026-09-24. 사용자 지시: “커밋하고 다음거 진행”. 앱 연결의 첫 조각이다. 표면이 보낸 명령이 거래 실행기까지 가는 길을 놓았다.
+만든 파일: `src/tx/bridge.ts` 다. `src/shared/types.ts` 의 `CommandName` 에 새 명령 여섯을 더하고 `src/tools/selftest-tx.ts` 에 검사 5건을 더했다.
+하는 일: `Command` 를 `TxRequest` 로 바꾸고 결과를 `CommandResult` 로 되돌린다. 표면은 v3 을 알 필요가 없다. 우클릭·트레이·CLI·확장이 지금 쓰는 모양 그대로 보낸다.
+인자 모양: 명령마다 `target` 이 가리키는 것이 다르다. 파티 명령은 개체, 알 명령은 알, 가방은 도구, 상점은 상품이다. 다리가 그 차이를 흡수한다.
+요청 식별자: 보낸 쪽이 `args.reqId` 를 주면 그것을 쓴다. 없으면 보낸 곳·시각·명령·대상으로 만든다. 같은 순간에 같은 명령을 두 번 보내면 구분하지 못한다. 한 번만 반영해야 하는 조작은 보낸 쪽이 `reqId` 를 주는 것이 맞다. 주석에 적었다.
+검사를 고쳤다: 처음에는 `dispatch` 가 비동기인데 기다리지 않고 `void` 로 흘려보냈다. 검사가 통과해도 확인한 것이 없는 상태였다. 비동기 함수로 묶어 기다리고 실패하면 종료 코드 1 로 끝내도록 고쳤다.
+검증: `npx tsc --noEmit` 통과. `selftest-tx` 18건 통과. `npm run selftest` 전체 통과.
+아직 하지 않은 것: 앱 진입점(`src/main/app.ts`)은 그대로 v2 를 쓴다. 다리를 실제로 거는 것은 화면이 v3 을 읽을 준비가 된 뒤다. 지금 걸면 v2 화면이 v3 저장을 못 읽는다.
+SSOT: `docs/specs/modules.md`의 명령 계약.

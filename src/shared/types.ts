@@ -167,6 +167,9 @@ export interface SaveV2 {
 export type CommandName =
   | "feed" | "play" | "poke" | "evolve"
   | "party.show" | "party.hide" | "party.remove"
+  | "party.place" | "party.swap" | "party.keep"
+  | "egg.care" | "egg.open"
+  | "bag.use"
   | "pet.set" | "pet.look"
   | "agent.connect" | "agent.disconnect"
   | "settings.set"
