@@ -5,7 +5,7 @@
 // `--shot <파일>` 을 주면 창을 그려 PNG 로 저장하고 끝낸다. 화면을 눈으로 확인할 때 쓴다.
 // `--tab <파티|박스|도감|상점|가방>` 을 주면 그 탭을 눌러 놓고 찍는다.
 // `--detail` 을 주면 첫 칸을 눌러 개체 상세까지 찍는다.
-// `--click <선택자>` 를 주면 그 요소를 한 번 눌러 놓고 찍는다.
+// `--click <선택자>` 를 주면 그 요소를 한 번 눌러 놓고 찍는다. 여러 번 주면 순서대로 누른다.
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -22,6 +22,8 @@ const argAfter = (flag) => {
   const at = process.argv.indexOf(flag);
   return at >= 0 ? process.argv[at + 1] : null;
 };
+// 같은 이름을 여러 번 줄 수 있다 — 모달을 열고 그 안을 또 누를 때 쓴다
+const argsAfter = (flag) => process.argv.map((v, i) => (v === flag ? process.argv[i + 1] : null)).filter((v) => v != null);
 const shotFile = argAfter("--shot");
 const tabLabel = argAfter("--tab");
 
@@ -59,6 +61,7 @@ function seed(now) {
   save.starterPetId = "p1";
   save.party.slots[0] = { state: "pokemon", petId: "p1", hidden: false };
   save.party.slots[1] = { state: "pokemon", petId: "p2", hidden: true };
+  save.party.slots[2] = { state: "empty" }; // 빈 칸도 한 번에 보이게 상점 칸 하나를 열어 둔다
 
   // 박스 — 앞의 몇 칸을 채워 격자와 쪽 넘김을 본다
   const kept = [
@@ -96,6 +99,9 @@ function seed(now) {
 
   save.bag = { "premium-food": 3, toy: 2, "rare-candy": 1, "fire-stone": 1, mint: 1 };
 
+  // 업적 — 하나는 받지 않은 보상으로 둔다. 헤더 점과 `보상 받기` 를 같이 본다
+  save.achievements = { "show-two": { achievedAt: now, claimedAt: null } };
+
   const seen = ["pikachu", "charmander", "bulbasaur", "squirtle", "eevee", "machop"];
   save.dex = { unlocked: seen, obtained: seen, shinyObtained: ["eevee"], discovered: { eevee: "pat-3" } };
   return save;
@@ -120,8 +126,9 @@ app.whenReady().then(async () => {
         step = step.then(() => click(js));
       }
       if (process.argv.includes("--detail")) step = step.then(() => click("document.querySelector('.slot:not(.blank)').click(); true"));
-      const pick = argAfter("--click");
-      if (pick) step = step.then(() => click(`document.querySelector(${JSON.stringify(pick)}).click(); true`));
+      for (const pick of argsAfter("--click")) {
+        step = step.then(() => click(`document.querySelector(${JSON.stringify(pick)}).click(); true`));
+      }
       step
         .then(() => win.webContents.capturePage())
         .then((img) => {

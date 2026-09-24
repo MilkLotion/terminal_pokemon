@@ -269,7 +269,7 @@ function normalizeSettings(raw: unknown): SettingsV3 {
     language: str(r.language, base.language),
     startOnLogin: bool(r.startOnLogin, base.startOnLogin),
     sound: bool(r.sound, base.sound),
-    sleepAfterMin: clamp(int(r.sleepAfterMin, base.sleepAfterMin), 1, 600),
+    sleepAfterMin: clamp(int(r.sleepAfterMin, base.sleepAfterMin), 0, 600), // 0 은 잠들지 않음 (docs/specs/s5.md "설정과 연결")
     playArea: {
       mode: str(area.mode) === "region" ? "region" : "full",
       rect: rect ? { x: int(rect.x), y: int(rect.y), w: nonNeg(rect.w), h: nonNeg(rect.h) } : null,

@@ -66,6 +66,8 @@ try {
   let seq = 0;
   const click = (cmd: string, target: string): ReturnType<typeof game.send> =>
     game.send({ cmd, target, args: { reqId: `ui:${++seq}` } }, "settings");
+  const click2 = (cmd: string, target: string, args: Record<string, unknown>): ReturnType<typeof game.send> =>
+    game.send({ cmd, target, args: { ...args, reqId: `ui:${++seq}` } }, "settings");
 
   // (3) 명령을 보내면 저장이 바뀌고 다음 스냅샷에 보인다
   {
@@ -179,7 +181,42 @@ try {
     process.stdout.write("(11) 도감 목록  ok\n");
   }
 
-  process.stdout.write("selftest-manage: 통과 (스냅샷·명령·틱·실패·목록)\n");
+  // (12) 설정은 한 항목씩 바꾼다. 허용 밖의 값이면 저장을 건드리지 않는다
+  {
+    assert.equal(game.view()?.settings.sound, true, "기본은 켬");
+    assert.equal(click2("settings.set", "sound", { value: false }).ok, true);
+    assert.equal(game.view()?.settings.sound, false, "끔으로 바뀐다");
+
+    const bad = click2("settings.set", "sleepAfterMin", { value: 7 });
+    assert.equal(bad.ok, false);
+    assert.equal(bad.reason, "bad-value", "목록에 없는 값은 거절");
+    assert.equal(click2("settings.set", "sleepAfterMin", { value: 0 }).ok, true, "0 은 잠들지 않음");
+    assert.equal(game.view()?.settings.sleepAfterMin, 0);
+
+    const unknown = click2("settings.set", "없는키", { value: 1 });
+    assert.equal(unknown.ok, false);
+    assert.equal(unknown.reason, "bad-args");
+    process.stdout.write("(12) 설정 바꾸기  ok\n");
+  }
+
+  // (13) 업적창이 읽는 목록 — 이름·설명·보상과 세 가지 상태
+  {
+    const list = game.view()?.achievements.list ?? [];
+    assert.equal(list.length, 2, "업적 2개");
+    const two = list.find((a) => a.id === "show-two");
+    assert.equal(two?.name, "두 마리 꺼내기");
+    assert.equal(two?.reward, "파티 칸 +1", "보상은 화면 문구로");
+    assert.equal(two?.state, "locked", "한 마리뿐이라 아직 달성 전");
+    assert.equal(game.view()?.achievements.unclaimed, 0);
+
+    // 달성하지 않은 업적의 보상은 받을 수 없다
+    const claim = click2("achievement.claim", "show-two", {});
+    assert.equal(claim.ok, false);
+    assert.equal(claim.reason, "not-achieved");
+    process.stdout.write("(13) 업적 목록  ok\n");
+  }
+
+  process.stdout.write("selftest-manage: 통과 (스냅샷·명령·틱·실패·목록·설정·업적)\n");
 } finally {
   try {
     fs.rmSync(root, { recursive: true, force: true });

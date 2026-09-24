@@ -5,6 +5,7 @@
 // 모양은 src/shared/manage.d.ts 가 가진다. 렌더러와 같은 타입을 본다.
 // 저장을 쓰지 않는다. 읽기만 한다.
 // 시간 표기는 반올림한다. 저장은 ms 정수로 두고 화면만 사람이 읽는 단위로 본다 (docs/specs/modules.md "저장 시점")
+import { defs } from "../achievement/core.js";
 import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
 import { growthOf, progressTo } from "../dex/growth.js";
 import { profile } from "../dex/species.js";
@@ -12,9 +13,12 @@ import { itemOf } from "../bag/use.js";
 import { eggName } from "../shop/catalog-v3.js";
 import { zoneOf } from "../state/time-v3.js";
 import { natureName, petName, typeName } from "../main/text.js";
-import type { BagItemView, BoxView, EggView, PetView, SlotView, Snapshot } from "../shared/manage";
+import type { AchievementView, BagItemView, BoxView, EggView, PetView, SlotView, Snapshot } from "../shared/manage";
 import { nameOfItem, shopList } from "./lists.js";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
+
+// 보상 종류 → 화면 문구. 종류가 하나뿐이라 표로 둔다
+const REWARD_WORD: Record<string, string> = { "party-slot": "파티 칸 +1" };
 
 const sec = (ms: number): number => Math.round(ms / 1000);
 const min = (ms: number): number => Math.round(ms / 60_000);
@@ -91,6 +95,17 @@ export function snapshot(
     .map(([id, count]) => ({ id, name: itemOf(id)?.ko ?? nameOfItem(id), count }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  const achievements: AchievementView[] = defs().map(([id, def]) => {
+    const row = save.achievements[id];
+    return {
+      id,
+      name: def.ko,
+      desc: def.desc,
+      reward: REWARD_WORD[def.reward] ?? def.reward,
+      state: row?.claimedAt != null ? "claimed" : row?.achievedAt != null ? "achieved" : "locked",
+    };
+  });
+
   const claimed = Object.values(save.achievements);
   return {
     points: save.points.balance,
@@ -107,6 +122,15 @@ export function snapshot(
     achievements: {
       total: claimed.filter((a) => a.achievedAt != null).length,
       unclaimed: claimed.filter((a) => a.achievedAt != null && a.claimedAt == null).length,
+      list: achievements,
+    },
+    settings: {
+      language: save.settings.language,
+      startOnLogin: save.settings.startOnLogin,
+      sound: save.settings.sound,
+      sleepAfterMin: save.settings.sleepAfterMin,
+      playArea: save.settings.playArea.mode,
+      hasRegion: save.settings.playArea.rect != null,
     },
   };
 }

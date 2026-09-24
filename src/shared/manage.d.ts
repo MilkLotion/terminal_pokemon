@@ -88,6 +88,27 @@ export interface DexEntry {
   condition: string | null; // 발견한 알 행동 조건
 }
 
+// 달성 전 · 달성했고 보상이 남음 · 보상까지 받음
+export type AchievementState = "locked" | "achieved" | "claimed";
+
+export interface AchievementView {
+  id: string;
+  name: string;
+  desc: string;
+  reward: string; // 보상 설명. 화면이 그대로 보여 준다
+  state: AchievementState;
+}
+
+// 설정 모달이 읽는 값. 저장의 settings 와 같은 뜻이며 화면이 쓰기 좋은 모양이다
+export interface SettingsView {
+  language: string;
+  startOnLogin: boolean;
+  sound: boolean;
+  sleepAfterMin: number; // 0 이면 잠들지 않음
+  playArea: "full" | "region";
+  hasRegion: boolean; // 영역을 이미 그렸는가
+}
+
 export interface Snapshot {
   points: number;
   party: { slots: SlotView[]; shown: number; usable: number };
@@ -96,7 +117,29 @@ export interface Snapshot {
   bag: BagItemView[];
   dex: { unlocked: number; obtained: number; shiny: number };
   shop: ShopItemView[];
-  achievements: { total: number; unclaimed: number };
+  achievements: { total: number; unclaimed: number; list: AchievementView[] };
+  settings: SettingsView;
+}
+
+// ── CLI 연결 ───────────────────────────────────────────────────────────────────
+// 설정 모달의 연결 탭. 저장이 아니라 각 CLI 의 설정 파일을 본다. 그래서 스냅샷이 아니라 따로 읽는다
+export type AgentAction = "connect" | "disconnect" | "check";
+
+export interface AgentRow {
+  name: string;
+  label: string;
+  installed: boolean; // 그 CLI 를 쓰고 있는가
+  connected: boolean; // 우리 훅이 전부 등록돼 있는가
+  registered: number;
+  total: number;
+  usage: string; // transcript 이면 토큰을 읽는다. none 이면 작업 시간으로 적립한다
+  error?: string;
+}
+
+export interface AgentReply {
+  ok: boolean;
+  reason: string;
+  list: AgentRow[]; // 처리 뒤 다시 읽은 상태
 }
 
 // 화면이 보내는 요청 — 이름과 인자는 src/tx/bridge.ts 가 푼다.
@@ -114,11 +157,13 @@ export interface ManageReply {
   [key: string]: unknown;
 }
 
-// 도감은 1089종이라 스냅샷에 담지 않는다. 탭을 열 때만 따로 부른다
-export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex";
+// 도감은 종이 1000개를 넘어 스냅샷에 담지 않는다. 탭을 열 때만 따로 부른다.
+// CLI 연결은 저장 밖을 보므로 역시 따로 부른다
+export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:agents";
 
 export interface ManageBridge {
   snapshot: () => Promise<Snapshot | null>; // 저장이 없으면 null
   command: (req: ManageRequest) => Promise<ManageReply>;
   dex: () => Promise<DexEntry[]>;
+  agents: (req?: { name: string; action: AgentAction }) => Promise<AgentReply>; // 인자가 없으면 읽기만 한다
 }

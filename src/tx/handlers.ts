@@ -11,6 +11,7 @@ import { open } from "../egg/open.js";
 import { keep, place, swap } from "../party/placement.js";
 import { setHidden, shownCount } from "../party/visibility.js";
 import { feed, play } from "../state/care-v3.js";
+import { isSettingKey, setSetting } from "../state/settings-v3.js";
 import { buy } from "../shop/buy.js";
 import type { TxHandler } from "./executor";
 
@@ -211,3 +212,16 @@ const tutorialHandler = (kind: "skip" | "done"): TxHandler => (draft, args) => {
 HANDLERS["achievement.claim"] = claimHandler;
 HANDLERS["tutorial.skip"] = tutorialHandler("skip");
 HANDLERS["tutorial.done"] = tutorialHandler("done");
+
+// ── 설정 ───────────────────────────────────────────────────────────────────────
+
+// 설정 한 항목 바꾸기 — 허용 값은 src/state/settings-v3.ts 가 가진다
+const settingsHandler: TxHandler = (draft, args) => {
+  if (!isObj(args)) return { ok: false, reason: "bad-args" };
+  if (!isSettingKey(args.key)) return { ok: false, reason: "bad-args" };
+  const res = setSetting(draft, args.key, args.value);
+  if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  return { ok: true, result: { key: res.key, value: res.value } };
+};
+
+HANDLERS["settings.set"] = settingsHandler;

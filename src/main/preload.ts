@@ -14,6 +14,7 @@ type ManageRequest = import("../shared/manage").ManageRequest;
 type ManageReply = import("../shared/manage").ManageReply;
 type Snapshot = import("../shared/manage").Snapshot;
 type DexEntry = import("../shared/manage").DexEntry;
+type AgentReply = import("../shared/manage").AgentReply;
 
 const { contextBridge, ipcRenderer } = require("electron") as typeof import("electron");
 
@@ -47,17 +48,19 @@ const bridge: StageBridge = {
 
 contextBridge.exposeInMainWorld("pokebuddy", bridge);
 
-// 관리 창 — 스냅샷 읽기와 명령 보내기 둘뿐이다
+// 관리 창 — 스냅샷과 명령, 그리고 스냅샷에 담지 않는 도감과 CLI 연결
 const MANAGE = {
   snapshot: "manage:snapshot",
   command: "manage:command",
   dex: "manage:dex",
+  agents: "manage:agents",
 } satisfies Record<string, ManageChannel>;
 
 const manage: ManageBridge = {
   snapshot: () => ipcRenderer.invoke(MANAGE.snapshot) as Promise<Snapshot | null>,
   command: (req: ManageRequest) => ipcRenderer.invoke(MANAGE.command, req) as Promise<ManageReply>,
   dex: () => ipcRenderer.invoke(MANAGE.dex) as Promise<DexEntry[]>,
+  agents: (req) => ipcRenderer.invoke(MANAGE.agents, req) as Promise<AgentReply>,
 };
 
 contextBridge.exposeInMainWorld("pokebuddyManage", manage);

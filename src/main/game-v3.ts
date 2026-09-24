@@ -12,9 +12,10 @@ import { HANDLERS } from "../tx/handlers.js";
 import { argsOf, requestIdOf, toCommandResult } from "../tx/bridge.js";
 import { dexList } from "../tx/lists.js";
 import { snapshot } from "../tx/snapshot.js";
-import type { DexEntry, ManageReply, ManageRequest, Snapshot } from "../shared/manage";
+import { agentInfo, connect, disconnect, status } from "../agents/registry.js";
+import type { AgentAction, AgentReply, AgentRow, DexEntry, ManageReply, ManageRequest, Snapshot } from "../shared/manage";
 import type { SaveV3 } from "../shared/save-v3";
-import type { Command, CommandName, CommandSource } from "../shared/types";
+import type { AgentName, Command, CommandName, CommandSource } from "../shared/types";
 
 // v2 는 save.json 을 쓴다. v3 은 옆에 자기 파일을 둔다
 export const saveFileV3 = (): string => path.join(path.dirname(PATHS.save), "save-v3.json");
@@ -25,6 +26,7 @@ export interface GameV3 {
   tick: () => TickEvents | null; // 멈췄던 시간을 한 번에 적용한다
   view: () => Snapshot | null;
   dex: () => DexEntry[];
+  agents: (req?: { name: string; action: AgentAction }) => AgentReply;
   send: (req: ManageRequest, from: CommandSource) => ManageReply;
   executor: Executor;
 }
@@ -77,5 +79,14 @@ export function createGame({ file = saveFileV3(), now = Date.now, rand = Math.ra
     return save ? dexList(save) : [];
   };
 
-  return { file, read, tick, view, dex, send, executor };
+  // CLI 연결 — 저장이 아니라 각 CLI 의 설정 파일을 본다. 읽기만 하는 호출과 바꾸는 호출을 한 입구로 받는다
+  const agents = (req?: { name: string; action: AgentAction }): AgentReply => {
+    const list = (): AgentRow[] => status().map((a) => ({ ...a }));
+    if (!req || req.action === "check") return { ok: true, reason: "ok", list: list() };
+    if (!agentInfo(req.name)) return { ok: false, reason: "unknown-cli", list: list() };
+    const res = req.action === "connect" ? connect(req.name as AgentName) : disconnect(req.name as AgentName);
+    return { ok: res.ok, reason: res.reason, list: list() };
+  };
+
+  return { file, read, tick, view, dex, agents, send, executor };
 }

@@ -40,16 +40,59 @@
         overflow: hidden;
       }
 
-      /* 헤더 — 브랜드와 보유 포인트 */
+      /* 헤더 — 브랜드, 보유 포인트, 업적창·설정 아이콘.
+         제목 표시줄 자리를 이 헤더가 대신하므로 끌어서 창을 옮길 수 있어야 한다.
+         오른쪽은 OS 가 그리는 창 조작 단추의 폭만큼 비운다. 겹쳐 두면 아이콘을 누를 수 없다 */
       header {
         flex: none;
         height: 61px;
         display: flex;
         align-items: center;
         gap: 12px;
-        padding: 0 24px;
+        /* macOS 는 왼쪽에, Windows 는 오른쪽에 창 조작 단추가 앉는다. 양쪽 다 비워 둔다 */
+        padding-left: calc(env(titlebar-area-x, 0px) + 24px);
+        padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 16px);
         background: var(--surface);
         border-bottom: 1px solid var(--line);
+        -webkit-app-region: drag;
+      }
+      header button {
+        -webkit-app-region: no-drag;
+      }
+      /* 헤더 아이콘 — 선으로만 그린다. 채움이 없어 글자와 같은 무게로 보인다 */
+      .icon {
+        position: relative;
+        appearance: none;
+        border: 0;
+        background: none;
+        padding: 6px;
+        border-radius: 8px;
+        color: var(--muted);
+        cursor: pointer;
+        display: flex;
+      }
+      .icon:hover {
+        background: var(--accent-bg);
+        color: var(--ink);
+      }
+      .icon svg {
+        width: 20px;
+        height: 20px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      /* 미수령 보상 표시 — 테두리 강조 대신 점 하나 */
+      .icon .dot {
+        position: absolute;
+        right: 4px;
+        top: 4px;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--primary);
       }
       .brand {
         font-size: 15px;
@@ -581,6 +624,278 @@
         background: var(--accent-bg);
         margin: 4px auto;
       }
+
+      /* ── 모달 ─────────────────────────────────────────────────────────────── */
+      /* 넓은 모달 — 개체 고르기의 격자가 들어간다 */
+      .dialog.wide {
+        width: 560px;
+      }
+      /* 긴 모달 — 업적창·설정·가이드북. 안에서 스크롤한다 */
+      .dialog.tall {
+        width: 460px;
+        max-height: 78vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .dialog.tall .scroll {
+        overflow-y: auto;
+        margin: 0 -20px;
+        padding: 0 20px;
+      }
+      /* 모달 제목 줄 — 돌아가기와 제목을 한 줄에 둔다 */
+      .dialog .title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      .back {
+        appearance: none;
+        border: 0;
+        background: none;
+        font: inherit;
+        font-size: 12px;
+        color: var(--muted);
+        padding: 2px 6px 2px 0;
+        cursor: pointer;
+      }
+      .back:hover {
+        color: var(--primary);
+      }
+
+      /* 모달 안의 탭 — 설정의 일반 / 연결 */
+      .subtabs {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 12px;
+      }
+      .subtabs button {
+        appearance: none;
+        border: 0;
+        background: none;
+        color: var(--muted);
+        font: inherit;
+        font-size: 12px;
+        padding: 6px 10px 5px;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+      }
+      .subtabs button[aria-selected="true"] {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+        font-weight: 600;
+      }
+
+      /* 설정 한 줄 — 왼쪽에 이름과 설명, 오른쪽에 조작 */
+      .setting {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .setting:last-child {
+        border-bottom: 0;
+      }
+      .setting .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .setting .label {
+        font-weight: 600;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .setting .hint {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      /* 조작이 넓은 줄 — 이름 아래에 조작을 깐다 */
+      .setting.stack {
+        display: block;
+      }
+      .setting.stack .chips {
+        margin-top: 8px;
+        justify-content: flex-start;
+      }
+      .setting .chips {
+        margin: 0;
+        justify-content: flex-end;
+      }
+      /* 켬·끔 — 나란한 두 칸 하나. 막대 모양을 쓰지 않아 다른 칩과 높이가 같다 */
+      .toggle {
+        display: flex;
+        flex: none;
+      }
+      .toggle button {
+        appearance: none;
+        font: inherit;
+        font-size: 12px;
+        padding: 4px 12px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .toggle button:first-child {
+        border-radius: 999px 0 0 999px;
+      }
+      .toggle button:last-child {
+        border-radius: 0 999px 999px 0;
+        border-left: 0;
+      }
+      .toggle button[aria-pressed="true"] {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: var(--inverse);
+      }
+      /* 설정 안의 다른 화면으로 가는 줄 — 가이드북 */
+      .go {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        appearance: none;
+        font: inherit;
+        text-align: left;
+        color: inherit;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        background: none;
+        padding: 11px 0;
+        cursor: pointer;
+      }
+      .go .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .go .label {
+        font-weight: 600;
+      }
+      .go .arrow {
+        flex: none;
+        color: var(--muted);
+      }
+
+      /* 업적 한 줄 — 상태는 좌측 dot 로 나눈다 */
+      .achievement {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .achievement:last-child {
+        border-bottom: 0;
+      }
+      .achievement .state {
+        flex: none;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--subtle);
+      }
+      .achievement.achieved .state {
+        background: var(--primary);
+      }
+      .achievement.claimed .state {
+        background: var(--muted);
+      }
+      .achievement .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .achievement .label {
+        font-weight: 600;
+      }
+      .achievement.locked .label {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .achievement .hint {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .achievement .done {
+        flex: none;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      /* 구매 창 — 수량과 합계 */
+      .buy-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .buy-row:last-of-type {
+        border-bottom: 0;
+      }
+      .buy-row .value {
+        font-weight: 600;
+      }
+      .qty {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .qty button {
+        appearance: none;
+        font: inherit;
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        cursor: pointer;
+      }
+      .qty button:disabled {
+        color: var(--disabled);
+        cursor: default;
+      }
+      .qty .count {
+        min-width: 22px;
+        text-align: center;
+        font-weight: 600;
+      }
+
+      /* 개체 고르기 — 박스 개체와 파티 칸을 같은 격자로 본다 */
+      .pick-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .pick-grid .cell {
+        aspect-ratio: auto;
+        min-height: 78px;
+      }
+      .pick-grid .cell.on {
+        border-color: var(--primary);
+        background: var(--accent-bg);
+      }
+
+      /* 가이드북 한 꼭지 */
+      .topic {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .topic:last-child {
+        border-bottom: 0;
+      }
+      .topic h3 {
+        margin: 0 0 4px;
+        font-size: 13px;
+      }
+      .topic p {
+        margin: 0 0 4px;
+        color: var(--muted);
+      }
     </style>
   </head>
   <body>
@@ -589,19 +904,26 @@
       <span class="spacer"></span>
       <span class="points-label">보유 포인트</span>
       <span class="points" id="points">0 P</span>
+      <button type="button" class="icon" id="open-achievements" title="업적창">
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M6 3h8v4a4 4 0 0 1-8 0V3Z" />
+          <path d="M6 4H4v1a3 3 0 0 0 3 3M14 4h2v1a3 3 0 0 1-3 3" />
+          <path d="M10 11v3M7.5 16h5" />
+        </svg>
+        <span class="dot" id="achievements-dot" hidden></span>
+      </button>
+      <button type="button" class="icon" id="open-settings" title="설정">
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M3 6.5h8.5M15.5 6.5H17M3 13.5h1.5M8.5 13.5H17" />
+          <circle cx="13.5" cy="6.5" r="2" />
+          <circle cx="6.5" cy="13.5" r="2" />
+        </svg>
+      </button>
     </header>
     <nav id="tabs"></nav>
     <main id="body"></main>
 
-    <div class="scrim" id="scrim">
-      <div class="dialog">
-        <h2 id="d-name">이름</h2>
-        <div class="sub" id="d-sub">상태</div>
-        <div class="meters" id="d-meters"></div>
-        <div class="actions" id="d-actions"></div>
-        <div class="notice" id="d-notice"></div>
-      </div>
-    </div>
+    <div class="scrim" id="scrim"><div class="dialog" id="dialog"></div></div>
 
     <script type="module" src="../../dist/renderer/manage.js"></script>
   </body>

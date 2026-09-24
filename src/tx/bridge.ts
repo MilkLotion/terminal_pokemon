@@ -11,7 +11,9 @@ import type { Command, CommandName, CommandResult } from "../shared/types.js";
 import type { Dispatcher } from "../commands/dispatcher";
 import type { Executor, TxRequest } from "./executor";
 
-// 이 다리가 맡는 명령 — 나머지는 기존 모듈이 그대로 맡는다
+// 이 다리가 맡는 명령 — 나머지는 기존 모듈이 그대로 맡는다.
+// `settings.set` 은 넣지 않는다. 같은 이름을 기존 `src/main/commands.ts` 가 무대 창 표시 항목으로 이미 맡고 있다.
+// 관리 창은 다리를 거치지 않고 `src/main/game-v3.ts` 의 send 로 바로 실행기에 넣으므로 겹치지 않는다.
 export const V3_COMMANDS: readonly CommandName[] = [
   "party.show",
   "party.hide",
@@ -69,6 +71,8 @@ export function argsOf(command: Command): Record<string, unknown> {
     case "tutorial.skip":
     case "tutorial.done":
       return { id: target ?? str(a.id), steps: int(a.steps) };
+    case "settings.set":
+      return { key: target ?? str(a.key), value: a.value };
     default:
       return { ...a };
   }
