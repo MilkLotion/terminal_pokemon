@@ -2,6 +2,7 @@
 //
 // 저장을 그대로 넘기지 않는다. 화면이 바로 그릴 수 있는 값으로 바꿔서 넘긴다.
 //   슬러그 대신 한국어 이름, ms 대신 초·분 정수, 만복도 값 대신 구간 이름
+// 모양은 src/shared/manage.d.ts 가 가진다. 렌더러와 같은 타입을 본다.
 // 저장을 쓰지 않는다. 읽기만 한다.
 // 시간 표기는 반올림한다. 저장은 ms 정수로 두고 화면만 사람이 읽는 단위로 본다 (docs/specs/modules.md "저장 시점")
 import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
@@ -9,72 +10,10 @@ import { growthOf, progressTo } from "../dex/growth.js";
 import { profile } from "../dex/species.js";
 import { itemOf } from "../bag/use.js";
 import { eggName } from "../shop/catalog-v3.js";
-import { zoneOf, type FullnessZone } from "../state/time-v3.js";
+import { zoneOf } from "../state/time-v3.js";
 import { petName } from "../main/text.js";
+import type { BagItemView, BoxView, EggView, PetView, SlotView, Snapshot } from "../shared/manage";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
-
-export interface PetView {
-  id: string;
-  species: string;
-  name: string; // 화면에 보이는 종 이름
-  shiny: boolean;
-  level: number;
-  percentToNext: number; // 다음 레벨까지 백분율
-  types: string[];
-  nature: string;
-  affinity: number;
-  fullness: number;
-  zone: FullnessZone; // 만복도 구간 — 화면의 상태 표시
-  hidden: boolean;
-  feedReady: boolean; // 밥 주기 쿨타임이 끝났다
-  feedInSec: number; // 남은 쿨타임 초
-  playReady: boolean; // 놀아주기 쿨타임이 끝났다
-  playStreak: number; // 이어서 놀아준 횟수
-  longPlay: boolean; // 오래 놀아주기 상태다
-  buffs: { kind: string; remainMin: number }[];
-}
-
-export interface SlotView {
-  index: number;
-  state: "pokemon" | "empty" | "locked";
-  unlockBy?: "shop" | "achievement";
-  pet?: PetView;
-}
-
-export interface EggView {
-  id: string;
-  kind: string;
-  name: string; // 랜덤알 · 태고의돌
-  ready: boolean;
-  remainSec: number;
-  percent: number; // 준비 진행 백분율
-  careReady: boolean;
-  actions: { pat: number; song: number };
-}
-
-export interface BoxView {
-  id: string;
-  name: string;
-  used: number;
-  size: number;
-  slots: (PetView | null)[];
-}
-
-export interface BagItemView {
-  id: string;
-  name: string;
-  count: number;
-}
-
-export interface Snapshot {
-  points: number;
-  party: { slots: SlotView[]; shown: number; usable: number };
-  boxes: BoxView[];
-  eggs: { list: EggView[]; used: number; size: number };
-  bag: BagItemView[];
-  dex: { unlocked: number; obtained: number; shiny: number };
-  achievements: { total: number; unclaimed: number };
-}
 
 const sec = (ms: number): number => Math.round(ms / 1000);
 const min = (ms: number): number => Math.round(ms / 60_000);

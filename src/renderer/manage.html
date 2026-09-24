@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:" />
+    <title>pokebuddy</title>
+    <style>
+      /* 관리 창 — 값은 화면 스냅샷이 준다 (manage.ts). 색은 Figma `PB / Color` 변수와 같다 */
+      :root {
+        --canvas: #f1f2ee;
+        --surface: #ffffff;
+        --accent-bg: #ebf4f1;
+        --subtle: #dde1db;
+        --ink: #1a3330;
+        --muted: #4a6663;
+        --inverse: #ffffff;
+        --disabled: #9ca3af;
+        --line: #dde1db;
+        --primary: #0f766e;
+        --primary-hover: #0a5f56;
+        --warning: #f59e0b;
+        --danger: #dc2626;
+        --scrim: rgba(26, 51, 48, 0.45);
+        --radius: 12px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        background: var(--canvas);
+        color: var(--ink);
+        font: 13px/1.5 "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* 헤더 — 브랜드와 보유 포인트 */
+      header {
+        flex: none;
+        height: 61px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 24px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+      .brand {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .points-label {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .points {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      /* 탭 */
+      nav {
+        flex: none;
+        display: flex;
+        gap: 4px;
+        padding: 0 24px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+      nav button {
+        appearance: none;
+        border: 0;
+        background: none;
+        color: var(--muted);
+        font: inherit;
+        padding: 8px 14px 6px;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+      }
+      nav button[aria-selected="true"] {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+        font-weight: 600;
+      }
+
+      /* 본문 — 여기만 스크롤한다 */
+      main {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px;
+      }
+      .head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .head h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+      .head .sub {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      /* 파티 칸 */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+      .slot {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px;
+        min-height: 160px;
+        display: flex;
+        gap: 14px;
+        text-align: left;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+      }
+      .slot.blank {
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 6px;
+        color: var(--muted);
+        background: none;
+        border-style: dashed;
+      }
+      .slot.blank strong {
+        color: var(--ink);
+        font-size: 13px;
+      }
+      .slot.blank small {
+        font-size: 11px;
+      }
+      .slot.locked {
+        cursor: default;
+        color: var(--disabled);
+      }
+      .portrait {
+        position: relative;
+        flex: none;
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: var(--accent-bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .mark {
+        position: absolute;
+        right: -2px;
+        top: -2px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--ink);
+        color: var(--inverse);
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .info {
+        flex: 1;
+        min-width: 0;
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .name {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 2px 0 6px;
+      }
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 8px;
+      }
+      .tag {
+        font-size: 10px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: var(--subtle);
+        color: var(--ink);
+      }
+      .tag.nature {
+        background: none;
+        color: var(--muted);
+        padding-left: 0;
+      }
+      .meters {
+        display: flex;
+        gap: 10px;
+      }
+      .meter {
+        flex: 1;
+        min-width: 0;
+      }
+      .meter .row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .track {
+        height: 6px;
+        border-radius: 3px;
+        background: var(--subtle);
+        overflow: hidden;
+        margin-top: 3px;
+      }
+      .fill {
+        height: 100%;
+        background: var(--primary);
+      }
+      .fill.hungry {
+        background: var(--warning);
+      }
+      .fill.starving {
+        background: var(--danger);
+      }
+
+      /* 개체 상세 — 칸을 누르면 뜬다 */
+      .scrim {
+        position: fixed;
+        inset: 0;
+        background: var(--scrim);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .scrim.open {
+        display: flex;
+      }
+      .dialog {
+        width: 380px;
+        max-height: 100%;
+        overflow-y: auto;
+        background: var(--surface);
+        border-radius: var(--radius);
+        padding: 20px;
+      }
+      .dialog h2 {
+        margin: 0 0 4px;
+        font-size: 17px;
+      }
+      .dialog .sub {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 14px;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      button.act {
+        appearance: none;
+        font: inherit;
+        padding: 7px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--ink);
+        cursor: pointer;
+      }
+      button.act.primary {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: var(--inverse);
+      }
+      button.act.primary:hover:not(:disabled) {
+        background: var(--primary-hover);
+      }
+      button.act:disabled {
+        color: var(--disabled);
+        cursor: default;
+      }
+      .notice {
+        margin-top: 14px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: var(--accent-bg);
+        font-size: 12px;
+        min-height: 38px;
+      }
+      .notice.bad {
+        background: #fdecec;
+        color: var(--danger);
+      }
+      .empty-note {
+        color: var(--muted);
+        padding: 40px 0;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="brand">PokeBuddy</span>
+      <span class="spacer"></span>
+      <span class="points-label">보유 포인트</span>
+      <span class="points" id="points">0 P</span>
+    </header>
+    <nav id="tabs"></nav>
+    <main id="body"></main>
+
+    <div class="scrim" id="scrim">
+      <div class="dialog">
+        <h2 id="d-name">이름</h2>
+        <div class="sub" id="d-sub">상태</div>
+        <div class="meters" id="d-meters"></div>
+        <div class="actions" id="d-actions"></div>
+        <div class="notice" id="d-notice"></div>
+      </div>
+    </div>
+
+    <script type="module" src="../../dist/renderer/manage.js"></script>
+  </body>
+</html>

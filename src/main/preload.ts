@@ -8,6 +8,11 @@ type LookSheets = import("../shared/stage").LookSheets;
 type StageFrame = import("../shared/stage").StageFrame;
 type HoverQuery = import("../shared/stage").HoverQuery;
 type PickerPayload = import("../shared/stage").PickerPayload;
+type ManageBridge = import("../shared/manage").ManageBridge;
+type ManageChannel = import("../shared/manage").ManageChannel;
+type ManageRequest = import("../shared/manage").ManageRequest;
+type ManageReply = import("../shared/manage").ManageReply;
+type Snapshot = import("../shared/manage").Snapshot;
 
 const { contextBridge, ipcRenderer } = require("electron") as typeof import("electron");
 
@@ -40,3 +45,16 @@ const bridge: StageBridge = {
 };
 
 contextBridge.exposeInMainWorld("pokebuddy", bridge);
+
+// 관리 창 — 스냅샷 읽기와 명령 보내기 둘뿐이다
+const MANAGE = {
+  snapshot: "manage:snapshot",
+  command: "manage:command",
+} satisfies Record<string, ManageChannel>;
+
+const manage: ManageBridge = {
+  snapshot: () => ipcRenderer.invoke(MANAGE.snapshot) as Promise<Snapshot | null>,
+  command: (req: ManageRequest) => ipcRenderer.invoke(MANAGE.command, req) as Promise<ManageReply>,
+};
+
+contextBridge.exposeInMainWorld("pokebuddyManage", manage);

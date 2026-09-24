@@ -100,3 +100,10 @@ export const BAG_V3_RULES = {
   feedAffinity: 2, // 밥 주기로 오르는 친밀도
   playAffinity: 3, // 놀아주기로 오르는 친밀도
 };
+
+// 관리 창의 크기 — docs/specs/s5.md "관리 창". Figma 의 720 px 를 DIP 로 그대로 쓴다
+export const WINDOW_V3_RULES = {
+  width: 720, // 폭은 고정이다. 박스 6열과 도감 5열 격자가 이 폭에 맞춰져 있다
+  height: 780, // 기본 세로. Figma 화면의 창 끝과 같다
+  minHeight: 560, // 본문이 스크롤이라 이만큼까지 줄일 수 있다
+};
