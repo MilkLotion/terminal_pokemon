@@ -30,6 +30,7 @@ export interface PetView {
   percentToNext: number; // 다음 레벨까지 백분율
   types: string[]; // 화면에 보이는 타입 이름
   nature: string; // 화면에 보이는 성격 이름
+  natureId: string; // 성격 id — 성격 변경 창이 지금 성격을 막을 때 쓴다
   affinity: number;
   fullness: number;
   zone: ViewZone;
@@ -76,6 +77,15 @@ export interface BagItemView {
   name: string;
   count: number;
   evolution: boolean; // 진화용 도구 — 누르면 진화할 개체를 고른다
+  natures?: string[]; // 민트 — 바꿀 수 있는 성격 id. 성실 민트는 보정 없는 성격 5개
+}
+
+// 성격 변경 창의 선택지 하나. 자료 순서다
+export interface NatureOption {
+  id: string;
+  name: string; // 화면 이름
+  mint: string; // 그 성격으로 바꾸는 민트 id
+  mintName: string;
 }
 
 export type ShopCategory = "egg" | "pokemon" | "tool" | "evolution" | "slot";
@@ -132,6 +142,7 @@ export interface Snapshot {
   shop: ShopItemView[];
   achievements: { total: number; unclaimed: number; list: AchievementView[] };
   settings: SettingsView;
+  natures: NatureOption[];
 }
 
 // ── CLI 연결 ───────────────────────────────────────────────────────────────────

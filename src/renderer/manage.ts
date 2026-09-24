@@ -65,7 +65,6 @@ const BUY_MAX = 10;
 const MULTI_BUY = new Set(["tool", "evolution"]);
 
 // 성격을 골라야 하는 도구 — 고르는 화면이 아직 없어 여기서 막는다
-const NEEDS_NATURE = new Set(["mint"]);
 
 // 가이드북 — 구성은 docs/specs/s5.md "튜토리얼과 가이드북" 의 다섯 주제다.
 // 숫자는 적지 않는다. 밸런스 값이 바뀌어도 이 문구가 어긋나지 않게 한다
@@ -135,6 +134,8 @@ type Dialog =
   | { kind: "use"; itemId: string }
   | { kind: "evolve"; petId: string; to?: string; itemId?: string } // 진화 확인 — to 는 고른 후보, itemId 는 가방의 돌로 왔을 때
   | { kind: "evo-target"; itemId: string } // 가방의 진화용 도구 — 진화할 개체를 고른다
+  | { kind: "nature"; petId: string; pick?: string; itemId?: string; listOpen?: boolean } // 성격 변경 — pick 은 고른 성격, itemId 는 가방의 민트로 왔을 때
+  | { kind: "nature-target"; itemId: string } // 가방의 민트 — 성격을 바꿀 개체를 고른다
   | { kind: "buy"; productId: string; qty: number }
   | { kind: "pick-box"; slotIndex: number } // 칸이 정해졌고 넣을 박스 개체를 고른다
   | { kind: "pick-slot"; petId: string } // 개체가 정해졌고 넣을 파티 칸을 고른다
@@ -416,12 +417,12 @@ function drawShop(v: Snapshot): void {
 
 function bagRow(item: BagItemView): HTMLElement {
   const card = button("row-card");
-  const blocked = NEEDS_NATURE.has(item.id);
   const body = el("div", "body");
-  body.append(el("div", "title", item.name), el("div", "note", blocked ? "성격을 고르는 화면이 아직 없습니다" : item.evolution ? "눌러서 진화할 포켓몬 고르기" : "눌러서 사용"));
+  const note = item.evolution ? "눌러서 진화할 포켓몬 고르기" : item.natures ? "눌러서 성격을 바꿀 포켓몬 고르기" : "눌러서 사용";
+  body.append(el("div", "title", item.name), el("div", "note", note));
   card.append(body, el("div", "count", `×${item.count}`));
-  card.disabled = blocked;
-  card.addEventListener("click", () => open(item.evolution ? { kind: "evo-target", itemId: item.id } : { kind: "use", itemId: item.id }));
+  const next: Dialog = item.evolution ? { kind: "evo-target", itemId: item.id } : item.natures ? { kind: "nature-target", itemId: item.id } : { kind: "use", itemId: item.id };
+  card.addEventListener("click", () => open(next));
   return card;
 }
 
@@ -536,6 +537,7 @@ function drawPet(petId: string): void {
         : actionButton("교체", true, false, () => open({ kind: "pick-slot", petId: pet.id })),
     ];
     if (pet.evolutions.length) boxButtons.push(actionButton("진화", false, false, () => open({ kind: "evolve", petId: pet.id })));
+    boxButtons.push(actionButton("성격 변경", false, false, () => open({ kind: "nature", petId: pet.id })));
     boxButtons.push(closeButton());
     dialogEl.appendChild(actions(...boxButtons));
     return;
@@ -549,6 +551,7 @@ function drawPet(petId: string): void {
   // 최종 단계는 진화할 곳이 없다 — 버튼을 두지 않는다
   if (pet.evolutions.length) buttons.push(actionButton("진화", false, false, () => open({ kind: "evolve", petId: pet.id })));
   buttons.push(
+    actionButton("성격 변경", false, false, () => open({ kind: "nature", petId: pet.id })),
     actionButton("교체", false, false, () => open({ kind: "pick-box", slotIndex: slot })),
     actionButton("박스에 보관", false, false, () => void send("party.keep", pet.id)),
     closeButton(),
@@ -609,6 +612,93 @@ function drawEvoTarget(itemId: string): void {
   const pets = [...partyPets(), ...boxPets()].filter((p) => p.evolutions.some((c) => c.item === itemId && c.ready));
   dialogEl.append(...dialogHead(item ? item.name : itemId, pets.length ? "누구를 진화시킬까요?" : "이 도구로 지금 진화할 수 있는 포켓몬이 없어요."));
   const acts = pets.map((p) => actionButton(`${p.name} (Lv.${p.level})`, false, false, () => open({ kind: "evolve", petId: p.id, itemId })));
+  dialogEl.appendChild(actions(...acts, closeButton()));
+}
+
+// ── 모달 · 성격 변경 ───────────────────────────────────────────────────────────
+// 왼쪽은 지금, 오른쪽은 바꾼 후다. 오른쪽에서 성격을 고르면 필요한 민트가 가운데에 보인다 (Figma Detail / Nature Change).
+// 보정 없는 성격은 모두 성실 민트다. 가방의 민트로 왔으면 그 민트가 바꿀 수 있는 성격만 고른다.
+// `취소` 는 아무것도 바꾸지 않는다
+
+function drawNature(petId: string, pick: string | undefined, itemId: string | undefined, listOpen: boolean): void {
+  const pet = petOf(petId);
+  if (!pet || !view) {
+    close();
+    return;
+  }
+  const item = itemId ? view.bag.find((b) => b.id === itemId) : undefined;
+  const options = view.natures.filter((n) => !item?.natures || item.natures.includes(n.id));
+  // 민트 하나로 성격이 정해지면 고른 채로 연다
+  const only = options.length === 1 ? options[0] : undefined;
+  const chosen = pick ?? (only && only.id !== pet.natureId ? only.id : undefined);
+  const picked = options.find((n) => n.id === chosen && n.id !== pet.natureId);
+  const back: { label: string; to: Dialog } = itemId ? { label: "대상", to: { kind: "nature-target", itemId } } : { label: pet.name, to: { kind: "pet", petId } };
+  const slot = slotOfPet(petId);
+  dialogEl.append(...dialogHead("성격을 바꿀까요?", `${pet.name} Lv.${pet.level} · ${slot != null ? `파티 ${slot + 1}번` : "박스"}`, back));
+  const redraw = (next: { pick?: string; listOpen?: boolean }): void => open({ kind: "nature", petId, ...(itemId ? { itemId } : {}), ...(chosen ? { pick: chosen } : {}), listOpen: false, ...next });
+
+  const before = el("div", "nat-card");
+  before.append(el("div", "portrait"), el("div", "name", pet.name), el("div", "note", pet.nature), el("div", "note", "지금"));
+
+  const mid = el("div", "mint-mid");
+  mid.append(el("div", undefined, picked ? picked.mintName : "민트"), el("div", undefined, "→"));
+
+  const select = el("div", "select");
+  const trigger = button("select-btn");
+  trigger.append(el("span", undefined, picked ? picked.name : "성격 고르기"), el("span", "chev", listOpen ? "▴" : "▾"));
+  trigger.setAttribute("aria-expanded", String(listOpen));
+  trigger.addEventListener("click", () => redraw({ listOpen: !listOpen }));
+  select.appendChild(trigger);
+  if (listOpen) {
+    const list = el("div", "select-list");
+    for (const n of options) {
+      const opt = button("select-opt");
+      const current = n.id === pet.natureId;
+      opt.append(el("span", undefined, n.name), el("span", "hint", current ? "지금" : n.mintName));
+      opt.disabled = current;
+      opt.setAttribute("aria-pressed", String(n.id === picked?.id));
+      opt.addEventListener("click", () => redraw({ pick: n.id }));
+      list.appendChild(opt);
+    }
+    select.appendChild(list);
+  }
+  const after = el("div", "nat-card");
+  after.append(el("div", "portrait"), el("div", "name", pet.name), select, el("div", "note", "바꾼 후"));
+
+  const row = el("div", "compare");
+  row.append(before, mid, after);
+  dialogEl.appendChild(row);
+
+  const have = picked ? (view.bag.find((b) => b.id === picked.mint)?.count ?? 0) : 0;
+  if (picked) {
+    const info = el("div", "info-box");
+    if (have > 0) info.append(el("div", undefined, `${picked.mintName} 1개를 씁니다`), el("div", "note", `가방에 ${have}개 있어요 · 성격만 바뀌고 레벨·친밀도는 그대로`));
+    else {
+      const price = view.shop.find((p) => p.id === picked.mint)?.price;
+      info.append(el("div", undefined, `${picked.mintName}가 없어요`), el("div", "note", price != null ? `상점 도구 분류에서 ${price}P 에 살 수 있어요` : "상점에서 살 수 있어요"));
+    }
+    dialogEl.appendChild(info);
+  }
+
+  const change = actionButton("바꾸기", true, !picked || have === 0, () => {
+    if (!picked) return;
+    void send("bag.use", picked.mint, { petId, nature: picked.id }).then((ok) => {
+      if (ok) open({ kind: "pet", petId });
+    });
+  });
+  dialogEl.appendChild(actions(change, actionButton("취소", false, false, () => open(back.to))));
+}
+
+// 가방의 민트 — 성격을 바꿀 개체를 고른다. 파티와 박스 개체 모두 대상이다. 이미 그 성격이면 고를 수 없다
+function drawNatureTarget(itemId: string): void {
+  const item = view?.bag.find((b) => b.id === itemId);
+  const allowed = item?.natures ?? [];
+  const pets = [...partyPets(), ...boxPets()];
+  dialogEl.append(...dialogHead(item ? item.name : itemId, pets.length ? "누구의 성격을 바꿀까요?" : "성격을 바꿀 포켓몬이 없어요."));
+  const acts = pets.map((p) => {
+    const same = allowed.length === 1 && allowed[0] === p.natureId;
+    return actionButton(`${p.name} (${p.nature})`, false, same, () => open({ kind: "nature", petId: p.id, itemId }));
+  });
   dialogEl.appendChild(actions(...acts, closeButton()));
 }
 
@@ -879,6 +969,8 @@ const SHAPE: Record<Dialog["kind"], string> = {
   use: "dialog",
   evolve: "dialog",
   "evo-target": "dialog",
+  nature: "dialog",
+  "nature-target": "dialog",
   buy: "dialog",
   "pick-box": "dialog wide",
   "pick-slot": "dialog wide",
@@ -900,6 +992,8 @@ function drawDialog(): void {
   else if (dialog.kind === "use") drawUse(dialog.itemId);
   else if (dialog.kind === "evolve") drawEvolve(dialog.petId, dialog.to, dialog.itemId);
   else if (dialog.kind === "evo-target") drawEvoTarget(dialog.itemId);
+  else if (dialog.kind === "nature") drawNature(dialog.petId, dialog.pick, dialog.itemId, dialog.listOpen === true);
+  else if (dialog.kind === "nature-target") drawNatureTarget(dialog.itemId);
   else if (dialog.kind === "buy") drawBuy(dialog.productId, dialog.qty);
   else if (dialog.kind === "pick-box") drawPickBox(dialog.slotIndex);
   else if (dialog.kind === "pick-slot") drawPickSlot(dialog.petId);

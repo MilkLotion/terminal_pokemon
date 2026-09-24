@@ -9,11 +9,12 @@ import { defs } from "../achievement/core.js";
 import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
 import { growthOf, progressTo } from "../dex/growth.js";
 import { profile } from "../dex/species.js";
-import { itemOf } from "../bag/use.js";
+import { itemOf, mintFor } from "../bag/use.js";
+import { natures as natureTable } from "../dex/natures.js";
 import { eggName } from "../shop/catalog.js";
 import { zoneOf } from "../state/time.js";
 import { moodWord, natureName, petName, typeName } from "../main/text.js";
-import type { AchievementView, BagItemView, BoxView, EggView, EvolutionView, PetView, SlotView, Snapshot } from "../shared/manage";
+import type { AchievementView, BagItemView, BoxView, EggView, EvolutionView, NatureOption, PetView, SlotView, Snapshot } from "../shared/manage";
 import { candidates, dayPartOf } from "../dex/evolve.js";
 import type { DayPart } from "../shared/types";
 import { isEvoItem, nameOfItem, shopList } from "./lists.js";
@@ -63,6 +64,7 @@ export function petView(save: SaveV3, pet: PetV3, hidden: boolean, dayPart: DayP
     percentToNext: percent,
     types: profile(pet.species).types.map((t) => typeName(t)),
     nature: natureName(pet.nature),
+    natureId: pet.nature,
     affinity: pet.affinity,
     fullness: pet.fullness,
     zone: zoneOf(pet.fullness),
@@ -121,7 +123,10 @@ export function snapshot(
 
   const bag: BagItemView[] = Object.entries(save.bag)
     .filter(([, n]) => n > 0)
-    .map(([id, count]) => ({ id, name: itemOf(id)?.ko ?? nameOfItem(id), count, evolution: isEvoItem(id) }))
+    .map(([id, count]) => {
+      const natures = itemOf(id)?.natures;
+      return { id, name: itemOf(id)?.ko ?? nameOfItem(id), count, evolution: isEvoItem(id), ...(natures ? { natures: [...natures] } : {}) };
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const achievements: AchievementView[] = defs().map(([id, def]) => {
@@ -161,5 +166,14 @@ export function snapshot(
       playArea: save.settings.playArea.mode,
       hasRegion: save.settings.playArea.rect != null,
     },
+    natures: natureOptions(),
   };
+}
+
+// 성격 변경 창의 선택지 — 성격마다 바꾸는 민트를 붙인다. 보정 없는 성격은 모두 성실 민트다
+function natureOptions(): NatureOption[] {
+  return natureTable().map((n) => {
+    const mint = mintFor(n.id) ?? "";
+    return { id: n.id, name: natureName(n.id), mint, mintName: itemOf(mint)?.ko ?? mint };
+  });
 }
