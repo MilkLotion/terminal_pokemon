@@ -13,6 +13,7 @@ import { eggName } from "../shop/catalog-v3.js";
 import { zoneOf } from "../state/time-v3.js";
 import { natureName, petName, typeName } from "../main/text.js";
 import type { BagItemView, BoxView, EggView, PetView, SlotView, Snapshot } from "../shared/manage";
+import { nameOfItem, shopList } from "./lists.js";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
 
 const sec = (ms: number): number => Math.round(ms / 1000);
@@ -87,7 +88,7 @@ export function snapshot(
 
   const bag: BagItemView[] = Object.entries(save.bag)
     .filter(([, n]) => n > 0)
-    .map(([id, count]) => ({ id, name: itemOf(id)?.ko ?? id, count }))
+    .map(([id, count]) => ({ id, name: itemOf(id)?.ko ?? nameOfItem(id), count }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const claimed = Object.values(save.achievements);
@@ -102,6 +103,7 @@ export function snapshot(
     eggs: { list: eggs, used: eggs.length, size: maxEggs },
     bag,
     dex: { unlocked: save.dex.unlocked.length, obtained: save.dex.obtained.length, shiny: save.dex.shinyObtained.length },
+    shop: shopList(save),
     achievements: {
       total: claimed.filter((a) => a.achievedAt != null).length,
       unclaimed: claimed.filter((a) => a.achievedAt != null && a.claimedAt == null).length,

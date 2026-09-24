@@ -3,6 +3,9 @@
 // 앱 전체를 띄우지 않는다. 임시 폴더에 보기용 저장을 만들고 관리 창 하나만 연다.
 // 사용자의 저장(~/.claude/pokebuddy)은 건드리지 않는다.
 // `--shot <파일>` 을 주면 창을 그려 PNG 로 저장하고 끝낸다. 화면을 눈으로 확인할 때 쓴다.
+// `--tab <파티|박스|도감|상점|가방>` 을 주면 그 탭을 눌러 놓고 찍는다.
+// `--detail` 을 주면 첫 칸을 눌러 개체 상세까지 찍는다.
+// `--click <선택자>` 를 주면 그 요소를 한 번 눌러 놓고 찍는다.
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -15,10 +18,14 @@ const { preloadFile, rendererFile } = require(path.join(root, "dist/main/paths.j
 const storeV3 = require(path.join(root, "dist/save/store-v3.js"));
 const { empty } = require(path.join(root, "dist/save/v3.js"));
 
-const shotAt = process.argv.indexOf("--shot");
-const shotFile = shotAt >= 0 ? process.argv[shotAt + 1] : null;
+const argAfter = (flag) => {
+  const at = process.argv.indexOf(flag);
+  return at >= 0 ? process.argv[at + 1] : null;
+};
+const shotFile = argAfter("--shot");
+const tabLabel = argAfter("--tab");
 
-// 보기용 저장 — 꺼낸 마리, 숨긴 마리, 빈 칸, 잠긴 칸이 한 화면에 다 나오게 만든다
+// 보기용 저장 — 꺼낸 마리, 숨긴 마리, 빈 칸, 잠긴 칸, 박스, 알, 가방이 한 번에 보이게 만든다
 function seed(now) {
   const save = empty(now);
   save.points.balance = 1240;
@@ -52,7 +59,45 @@ function seed(now) {
   save.starterPetId = "p1";
   save.party.slots[0] = { state: "pokemon", petId: "p1", hidden: false };
   save.party.slots[1] = { state: "pokemon", petId: "p2", hidden: true };
-  save.dex = { unlocked: ["pikachu", "charmander"], obtained: ["pikachu", "charmander"], shinyObtained: [], discovered: {} };
+
+  // 박스 — 앞의 몇 칸을 채워 격자와 쪽 넘김을 본다
+  const kept = [
+    ["p3", "bulbasaur", 9],
+    ["p4", "squirtle", 14],
+    ["p5", "eevee", 7],
+    ["p6", "machop", 21],
+  ];
+  kept.forEach(([id, species, level], i) => {
+    save.pets.push(pet(id, species, { level, shiny: id === "p5" }));
+    save.boxes[0].slots[i] = id;
+  });
+
+  // 알 — 하나는 준비 완료, 하나는 진행 중
+  save.eggs.push({
+    id: "e1",
+    kind: "random",
+    boughtAt: now,
+    remainMs: 0,
+    ready: true,
+    candidates: ["pikachu", "eevee"],
+    careCooldownMs: 0,
+    actions: { pat: 3, song: 1 },
+  });
+  save.eggs.push({
+    id: "e2",
+    kind: "ancient-stone",
+    boughtAt: now,
+    remainMs: 180_000,
+    ready: false,
+    candidates: ["omanyte", "kabuto"],
+    careCooldownMs: 0,
+    actions: { pat: 0, song: 2 },
+  });
+
+  save.bag = { "premium-food": 3, toy: 2, "rare-candy": 1, "fire-stone": 1, mint: 1 };
+
+  const seen = ["pikachu", "charmander", "bulbasaur", "squirtle", "eevee", "machop"];
+  save.dex = { unlocked: seen, obtained: seen, shinyObtained: ["eevee"], discovered: { eevee: "pat-3" } };
   return save;
 }
 
@@ -64,16 +109,20 @@ app.whenReady().then(async () => {
   const win = openManage({ preload: preloadFile(), html: rendererFile("manage.html"), game: createGame({ file }) });
   if (!shotFile) return;
 
+  // 탭 전환과 개체 상세는 그려진 뒤에야 누를 수 있다. 누른 뒤에도 다시 그릴 틈을 준다
+  const click = (js) => win.webContents.executeJavaScript(js).then(() => new Promise((r) => setTimeout(r, 800)));
+
   win.webContents.once("did-finish-load", () => {
-    // 첫 스냅샷을 받아 그릴 시간을 준 뒤 찍는다
     setTimeout(() => {
-      // --detail 이면 첫 칸을 눌러 개체 상세까지 찍는다
-      const open = process.argv.includes("--detail")
-        ? win.webContents
-            .executeJavaScript("document.querySelector('.slot:not(.blank)').click(); true")
-            .then(() => new Promise((r) => setTimeout(r, 800)))
-        : Promise.resolve();
-      open
+      let step = Promise.resolve();
+      if (tabLabel) {
+        const js = `[...document.querySelectorAll('#tabs button')].find((b) => b.textContent === ${JSON.stringify(tabLabel)}).click(); true`;
+        step = step.then(() => click(js));
+      }
+      if (process.argv.includes("--detail")) step = step.then(() => click("document.querySelector('.slot:not(.blank)').click(); true"));
+      const pick = argAfter("--click");
+      if (pick) step = step.then(() => click(`document.querySelector(${JSON.stringify(pick)}).click(); true`));
+      step
         .then(() => win.webContents.capturePage())
         .then((img) => {
           fs.writeFileSync(shotFile, img.toPNG());

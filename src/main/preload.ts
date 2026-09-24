@@ -13,6 +13,7 @@ type ManageChannel = import("../shared/manage").ManageChannel;
 type ManageRequest = import("../shared/manage").ManageRequest;
 type ManageReply = import("../shared/manage").ManageReply;
 type Snapshot = import("../shared/manage").Snapshot;
+type DexEntry = import("../shared/manage").DexEntry;
 
 const { contextBridge, ipcRenderer } = require("electron") as typeof import("electron");
 
@@ -50,11 +51,13 @@ contextBridge.exposeInMainWorld("pokebuddy", bridge);
 const MANAGE = {
   snapshot: "manage:snapshot",
   command: "manage:command",
+  dex: "manage:dex",
 } satisfies Record<string, ManageChannel>;
 
 const manage: ManageBridge = {
   snapshot: () => ipcRenderer.invoke(MANAGE.snapshot) as Promise<Snapshot | null>,
   command: (req: ManageRequest) => ipcRenderer.invoke(MANAGE.command, req) as Promise<ManageReply>,
+  dex: () => ipcRenderer.invoke(MANAGE.dex) as Promise<DexEntry[]>,
 };
 
 contextBridge.exposeInMainWorld("pokebuddyManage", manage);

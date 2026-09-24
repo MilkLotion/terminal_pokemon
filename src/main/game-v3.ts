@@ -10,8 +10,9 @@ import { applyTime, type TickEvents } from "../state/time-v3.js";
 import { createExecutor, type Executor, type TxResult } from "../tx/executor.js";
 import { HANDLERS } from "../tx/handlers.js";
 import { argsOf, requestIdOf, toCommandResult } from "../tx/bridge.js";
+import { dexList } from "../tx/lists.js";
 import { snapshot } from "../tx/snapshot.js";
-import type { ManageReply, ManageRequest, Snapshot } from "../shared/manage";
+import type { DexEntry, ManageReply, ManageRequest, Snapshot } from "../shared/manage";
 import type { SaveV3 } from "../shared/save-v3";
 import type { Command, CommandName, CommandSource } from "../shared/types";
 
@@ -23,6 +24,7 @@ export interface GameV3 {
   read: () => SaveV3 | null;
   tick: () => TickEvents | null; // 멈췄던 시간을 한 번에 적용한다
   view: () => Snapshot | null;
+  dex: () => DexEntry[];
   send: (req: ManageRequest, from: CommandSource) => ManageReply;
   executor: Executor;
 }
@@ -70,5 +72,10 @@ export function createGame({ file = saveFileV3(), now = Date.now, rand = Math.ra
     return toCommandResult(res) as ManageReply;
   };
 
-  return { file, read, tick, view, send, executor };
+  const dex = (): DexEntry[] => {
+    const save = read();
+    return save ? dexList(save) : [];
+  };
+
+  return { file, read, tick, view, dex, send, executor };
 }

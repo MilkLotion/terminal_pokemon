@@ -12,6 +12,7 @@ import { windowIcon } from "./paths.js";
 const CH = {
   snapshot: "manage:snapshot",
   command: "manage:command",
+  dex: "manage:dex",
 } satisfies Record<string, ManageChannel>;
 
 export interface ManageOptions {
@@ -34,6 +35,7 @@ function wire(game: GameV3): void {
     game.tick(); // 본 값이 지금 값이 되도록 먼저 시간을 적용한다
     return game.view();
   });
+  ipcMain.handle(CH.dex, () => game.dex());
   ipcMain.handle(CH.command, (_e, req: unknown): ManageReply => {
     if (!isRequest(req)) return { ok: false, reason: "bad-request" };
     game.tick();

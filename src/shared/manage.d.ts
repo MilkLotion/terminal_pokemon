@@ -65,6 +65,29 @@ export interface BagItemView {
   count: number;
 }
 
+export type ShopCategory = "egg" | "pokemon" | "tool" | "evolution" | "slot";
+
+export interface ShopItemView {
+  id: string;
+  name: string;
+  note: string;
+  price: number;
+  category: ShopCategory;
+  affordable: boolean; // 지금 포인트로 살 수 있다
+  blocked?: string; // 살 수 없는 다른 이유 — 화면이 그대로 보여 준다
+}
+
+export type DexState = "obtained" | "unlocked" | "locked";
+
+export interface DexEntry {
+  slug: string;
+  dex: number;
+  name: string;
+  state: DexState;
+  shiny: boolean;
+  condition: string | null; // 발견한 알 행동 조건
+}
+
 export interface Snapshot {
   points: number;
   party: { slots: SlotView[]; shown: number; usable: number };
@@ -72,6 +95,7 @@ export interface Snapshot {
   eggs: { list: EggView[]; used: number; size: number };
   bag: BagItemView[];
   dex: { unlocked: number; obtained: number; shiny: number };
+  shop: ShopItemView[];
   achievements: { total: number; unclaimed: number };
 }
 
@@ -90,9 +114,11 @@ export interface ManageReply {
   [key: string]: unknown;
 }
 
-export type ManageChannel = "manage:snapshot" | "manage:command";
+// 도감은 1089종이라 스냅샷에 담지 않는다. 탭을 열 때만 따로 부른다
+export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex";
 
 export interface ManageBridge {
   snapshot: () => Promise<Snapshot | null>; // 저장이 없으면 null
   command: (req: ManageRequest) => Promise<ManageReply>;
+  dex: () => Promise<DexEntry[]>;
 }

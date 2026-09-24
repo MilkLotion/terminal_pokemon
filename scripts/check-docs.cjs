@@ -15,8 +15,9 @@ function walk(directory) {
   });
 }
 
+// \uC904\uBC14\uAFC8\uC744 LF \uB85C \uB9DE\uCDB0 \uC77D\uB294\uB2E4. Windows \uB294 core.autocrlf \uB85C CRLF \uB97C \uBC1B\uC544 \uC808 \uAC80\uC0AC\uAC00 \uC5B4\uAE0B\uB09C\uB2E4
 function read(file) {
-  return fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
+  return fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
 }
 
 function display(file) {

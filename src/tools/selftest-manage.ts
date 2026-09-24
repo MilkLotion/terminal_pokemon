@@ -32,6 +32,8 @@ function seed(): SaveV3 {
   });
   s.starterPetId = "p1";
   s.party.slots[0] = { state: "pokemon", petId: "p1", hidden: true };
+  s.dex.unlocked = ["pikachu"];
+  s.dex.obtained = ["pikachu"];
   return s;
 }
 
@@ -143,7 +145,41 @@ try {
     process.stdout.write("(9) 모르는 명령  ok\n");
   }
 
-  process.stdout.write("selftest-manage: 통과 (스냅샷·명령·틱·실패)\n");
+  // (10) 상점 목록은 스냅샷에 실려 온다. 살 수 없으면 이유가 붙는다
+  {
+    const shop = game.view()?.shop ?? [];
+    const egg = shop.find((i) => i.id === "random");
+    assert.ok(egg, "랜덤알이 있다");
+    assert.equal(egg.category, "egg");
+    assert.equal(egg.name, "랜덤알", "슬러그가 아니라 이름");
+    const slot = shop.find((i) => i.id === "party-slot");
+    assert.ok(slot, "파티 칸이 있다");
+    assert.equal(slot.category, "slot");
+    // 포인트가 모자란 상품은 affordable 이 false 다. 화면이 그것으로 비활성을 정한다
+    const dear = shop.find((i) => i.price > (game.view()?.points ?? 0));
+    assert.equal(dear?.affordable, false, "비싼 상품은 살 수 없다");
+    process.stdout.write("(10) 상점 목록  ok\n");
+  }
+
+  // (11) 도감은 따로 부른다. 도감 번호 순이며 상태가 세 가지다
+  {
+    const rows = game.dex();
+    assert.equal(rows.length, 1004, "폼을 뺀 기본 종 수");
+    assert.equal(rows[0]?.slug, "bulbasaur", "1번은 이상해씨");
+    let prev = 0;
+    for (const row of rows) {
+      assert.ok(row.dex > prev, `도감 번호가 늘어난다 (${row.slug})`);
+      prev = row.dex;
+    }
+    const pika = rows.find((r) => r.slug === "pikachu");
+    assert.equal(pika?.name, "피카츄");
+    assert.equal(pika?.state, "obtained", "가지고 있는 종");
+    const locked = rows.find((r) => r.slug === "mewtwo");
+    assert.equal(locked?.state, "locked");
+    process.stdout.write("(11) 도감 목록  ok\n");
+  }
+
+  process.stdout.write("selftest-manage: 통과 (스냅샷·명령·틱·실패·목록)\n");
 } finally {
   try {
     fs.rmSync(root, { recursive: true, force: true });

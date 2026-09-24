@@ -343,6 +343,244 @@
         padding: 40px 0;
         text-align: center;
       }
+      /* 곁들이는 한 줄 — 알·박스 칸에서 쓴다 */
+      .note {
+        color: var(--muted);
+      }
+
+      /* 분류 칩 — 도감·상점의 거르개 */
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 14px;
+      }
+      .chip {
+        appearance: none;
+        font: inherit;
+        font-size: 12px;
+        padding: 4px 11px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .chip[aria-pressed="true"] {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: var(--inverse);
+      }
+
+      /* 목록 행 — 상점 상품과 가방 도구 */
+      .rows {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      }
+      .row-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        text-align: left;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+      }
+      .row-card:disabled {
+        color: var(--disabled);
+        cursor: default;
+      }
+      .row-card .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .row-card .title {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .row-card .note {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .row-card .price {
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .row-card .count {
+        font-size: 13px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      /* 돌보미집 */
+      .daycare {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+        margin-bottom: 16px;
+      }
+      .daycare .title {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .daycare .title strong {
+        font-size: 14px;
+      }
+      .daycare .title span {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .eggs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .egg {
+        width: 128px;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        text-align: center;
+        font-size: 11px;
+      }
+      .egg .shell {
+        width: 30px;
+        height: 38px;
+        margin: 0 auto 6px;
+        border-radius: 50% 50% 46% 46%;
+        background: var(--accent-bg);
+        border: 1px solid var(--line);
+      }
+      .egg .acts {
+        display: flex;
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .egg .acts button {
+        flex: 1;
+        appearance: none;
+        font: inherit;
+        font-size: 10px;
+        padding: 3px 0;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        cursor: pointer;
+      }
+      .egg .acts button:disabled {
+        color: var(--disabled);
+        cursor: default;
+      }
+      .egg .acts button.primary {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: var(--inverse);
+      }
+
+      /* 박스 */
+      .pager {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .pager button {
+        appearance: none;
+        font: inherit;
+        padding: 3px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        cursor: pointer;
+      }
+      .pager button:disabled {
+        color: var(--disabled);
+        cursor: default;
+      }
+      .pager .label {
+        font-weight: 600;
+      }
+      .pager .used {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .box-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 6px;
+      }
+      .cell {
+        appearance: none;
+        font: inherit;
+        aspect-ratio: 1 / 1;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        font-size: 10px;
+        cursor: pointer;
+        padding: 2px;
+      }
+      .cell.blank {
+        background: none;
+        border-style: dashed;
+        cursor: default;
+      }
+      .cell .dot {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--accent-bg);
+      }
+      .cell .who {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* 도감 */
+      .dex-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+      }
+      .dex-cell {
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        padding: 10px 6px;
+        text-align: center;
+        font-size: 11px;
+      }
+      .dex-cell.locked {
+        background: var(--subtle);
+        color: var(--muted);
+      }
+      .dex-cell .no {
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .dex-cell .dot {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--accent-bg);
+        margin: 4px auto;
+      }
     </style>
   </head>
   <body>
