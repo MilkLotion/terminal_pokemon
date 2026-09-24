@@ -31,6 +31,9 @@ export interface PetV3 {
   fullnessProgressMs: number; // 다음 만복도 1 감소까지의 부분 진행
   mood: number; // 0~100
   feedCooldownMs: number; // 밥 주기 남은 쿨타임
+  playCooldownMs: number; // 놀아주기 남은 쿨타임
+  playWindowMs: number; // 놀아주기 상태의 남은 시간. 이 안에 또 놀아주면 중첩이 오른다
+  playStreak: number; // 이어서 놀아준 횟수. 정해진 수에 닿으면 오래 놀아주기 버프가 붙는다
   buffs: BuffV3[];
   home: { dx: number; dy: number };
   since: number;

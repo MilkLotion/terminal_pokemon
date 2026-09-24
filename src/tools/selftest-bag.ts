@@ -9,13 +9,21 @@ import { expForLevel, growthOf, levelFor, MAX_LEVEL, progressTo } from "../dex/g
 import { BAG_V3_RULES, SAVE_V3_RULES } from "../save/rules";
 import { empty } from "../save/v3";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
+import { feed, play } from "../state/care-v3";
+import { applyTime } from "../state/time-v3";
+
+// 놀아주기 상태가 끝날 만큼 시간을 흘린다. 개체가 파티에 있어야 시간이 흐른다
+function applyTimeForTest(s: SaveV3): void {
+  s.party.slots[0] = { state: "pokemon", petId: "p1", hidden: false };
+  applyTime(s, SAVE_V3_RULES.playWindowMs, T0 + SAVE_V3_RULES.playWindowMs);
+}
 
 const T0 = new Date(2026, 8, 24, 10, 0, 0).getTime();
 
 const pet = (over: Partial<PetV3> = {}): PetV3 => ({
   id: "p1", species: "charmander", shiny: false, nature: "hardy", size: 2,
   level: 1, exp: 0, affinity: 0, affinityProgressMs: 0, fullness: 100, fullnessProgressMs: 0,
-  mood: 60, feedCooldownMs: 0, buffs: [], home: { dx: -24, dy: -60 }, since: T0, stage: 0, evolved: [],
+  mood: 60, feedCooldownMs: 0, playCooldownMs: 0, playWindowMs: 0, playStreak: 0, buffs: [], home: { dx: -24, dy: -60 }, since: T0, stage: 0, evolved: [],
   daily: { date: "2026-09-24", gained: 0, feeds: 0, plays: 0, pokes: 0, presence: 0, work: 0, turns: 0 },
   ...over,
 });
@@ -183,3 +191,101 @@ function seed(over: Partial<PetV3> = {}, bag: Record<string, number> = {}): Save
 }
 
 process.stdout.write("selftest-bag: 통과 (곡선·먹이·버프·사탕·민트·약)\n");
+
+// ── 돌봄 ───────────────────────────────────────────────────────────────────────
+
+// (15) 밥 주기는 기본먹이와 같은 길로 간다
+{
+  const s = seed({ fullness: 50 });
+  const res = feed(s, "p1");
+  assert.equal(res.ok, true);
+  assert.equal(s.pets[0]?.fullness, 70);
+  assert.equal(s.pets[0]?.feedCooldownMs, SAVE_V3_RULES.feedCooldownMs);
+  assert.equal(feed(s, "p1").reason, "cooldown");
+  assert.equal(feed(s, "없는개체").reason, "no-pet");
+  process.stdout.write("(15) 밥 주기 · 기본먹이와 같은 길  ok\n");
+}
+
+// (16) 놀아주기는 쿨타임마다 한 번 친밀도를 올린다
+{
+  const s = seed({ affinity: 10 });
+  const res = play(s, "p1");
+  assert.equal(res.ok, true);
+  assert.equal(s.pets[0]?.affinity, 10 + BAG_V3_RULES.playAffinity);
+  assert.equal(s.pets[0]?.playCooldownMs, SAVE_V3_RULES.playCooldownMs);
+  assert.equal(s.pets[0]?.daily.plays, 1);
+  assert.equal(play(s, "p1").reason, "cooldown", "쿨타임 중에는 거절");
+  assert.equal(s.pets[0]?.affinity, 13, "친밀도도 오르지 않는다");
+  assert.equal(play(s, "없는개체").reason, "no-pet");
+  process.stdout.write("(16) 놀아주기 · 쿨타임마다 한 번  ok\n");
+}
+
+// (17) 밥 주기와 놀아주기의 쿨타임은 따로 간다
+{
+  const s = seed({ fullness: 50 });
+  assert.equal(feed(s, "p1").ok, true);
+  assert.equal(play(s, "p1").ok, true, "밥을 줬어도 놀아줄 수 있다");
+  process.stdout.write("(17) 두 쿨타임은 따로  ok\n");
+}
+
+// (18) 친밀도는 100 을 넘지 않는다
+{
+  const s = seed({ affinity: 99 });
+  play(s, "p1");
+  assert.equal(s.pets[0]?.affinity, 100);
+  process.stdout.write("(18) 친밀도 상한  ok\n");
+}
+
+process.stdout.write("selftest-bag: 돌봄 통과 (밥·놀이·쿨타임)\n");
+
+// (19) 놀아주기 3중첩이면 오래 놀아주기 상태가 된다
+{
+  const s = seed();
+  const pet0 = s.pets[0];
+  assert.ok(pet0);
+  const first = play(s, "p1");
+  assert.equal(first.streak, 1);
+  assert.equal(first.longPlay, false, "한 번은 아직 아니다");
+  assert.equal(pet0.playWindowMs, SAVE_V3_RULES.playWindowMs, "20분 상태가 붙는다");
+  assert.equal(pet0.buffs.length, 0, "그 자체로는 효과가 없다");
+
+  // 쿨타임 10분이 지나고 상태는 10분 남았다
+  pet0.playCooldownMs = 0;
+  pet0.playWindowMs = SAVE_V3_RULES.playWindowMs - SAVE_V3_RULES.playCooldownMs;
+  const second = play(s, "p1");
+  assert.equal(second.streak, 2);
+  assert.equal(second.longPlay, false);
+
+  pet0.playCooldownMs = 0;
+  pet0.playWindowMs = SAVE_V3_RULES.playWindowMs - SAVE_V3_RULES.playCooldownMs;
+  const third = play(s, "p1");
+  assert.equal(third.streak, 3);
+  assert.equal(third.longPlay, true, "세 번이면 오래 놀아주기");
+  assert.equal(pet0.buffs[0]?.kind, "long-play");
+  assert.equal(pet0.buffs[0]?.remainMs, BAG_V3_RULES.buffMs["long-play"]);
+  process.stdout.write("(19) 놀아주기 3중첩 · 오래 놀아주기  ok\n");
+}
+
+// (20) 상태가 끊기면 처음부터 다시 센다
+{
+  const s = seed();
+  const pet0 = s.pets[0];
+  assert.ok(pet0);
+  assert.equal(play(s, "p1").streak, 1);
+  pet0.playCooldownMs = 0;
+  pet0.playWindowMs = 0; // 20분이 다 지났다
+  assert.equal(play(s, "p1").streak, 1, "끊기면 처음부터");
+  process.stdout.write("(20) 상태가 끊기면 다시 1부터  ok\n");
+}
+
+// (21) 시간이 흘러 상태가 끝나면 중첩이 풀린다
+{
+  const s = seed();
+  play(s, "p1");
+  applyTimeForTest(s);
+  assert.equal(s.pets[0]?.playWindowMs, 0);
+  assert.equal(s.pets[0]?.playStreak, 0, "창이 닫히면 중첩도 0");
+  process.stdout.write("(21) 창이 닫히면 중첩이 풀린다  ok\n");
+}
+
+process.stdout.write("selftest-bag: 놀아주기 중첩 통과\n");

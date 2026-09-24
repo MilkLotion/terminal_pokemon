@@ -60,7 +60,7 @@ export function open(save: SaveV3, eggId: string, now: number, rand: Rand, opts?
     fullness: SAVE_V3_RULES.pet.fullness,
     fullnessProgressMs: 0,
     mood: SAVE_V3_RULES.pet.mood,
-    feedCooldownMs: 0,
+    feedCooldownMs: 0, playCooldownMs: 0, playWindowMs: 0, playStreak: 0,
     buffs: [],
     home: { dx: -24, dy: -60 },
     since: now,

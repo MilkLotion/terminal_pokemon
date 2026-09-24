@@ -107,6 +107,9 @@ export function applyTime(save: SaveV3, elapsedMs: number, now: number): TickEve
     }
 
     pet.feedCooldownMs = countDown(pet.feedCooldownMs, elapsed);
+    pet.playCooldownMs = countDown(pet.playCooldownMs, elapsed);
+    pet.playWindowMs = countDown(pet.playWindowMs, elapsed);
+    if (pet.playWindowMs === 0) pet.playStreak = 0; // 창이 닫히면 처음부터 다시 센다
     tickBuffs(pet, elapsed);
 
     const after = zoneOf(pet.fullness);

@@ -23,6 +23,8 @@ export const V3_COMMANDS: readonly CommandName[] = [
   "bag.use",
   "shop.buy",
   "evolve",
+  "feed",
+  "play",
 ];
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
@@ -56,6 +58,9 @@ export function argsOf(command: Command): Record<string, unknown> {
       return { productId: target ?? str(a.productId) };
     case "evolve":
       return { petId: target ?? str(a.petId), to: str(a.to) };
+    case "feed":
+    case "play":
+      return { petId: target ?? str(a.petId) };
     default:
       return { ...a };
   }

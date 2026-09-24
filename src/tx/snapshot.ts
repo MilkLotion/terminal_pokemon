@@ -28,6 +28,9 @@ export interface PetView {
   hidden: boolean;
   feedReady: boolean; // 밥 주기 쿨타임이 끝났다
   feedInSec: number; // 남은 쿨타임 초
+  playReady: boolean; // 놀아주기 쿨타임이 끝났다
+  playStreak: number; // 이어서 놀아준 횟수
+  longPlay: boolean; // 오래 놀아주기 상태다
   buffs: { kind: string; remainMin: number }[];
 }
 
@@ -98,6 +101,9 @@ export function petView(pet: PetV3, hidden: boolean): PetView {
     hidden,
     feedReady: pet.feedCooldownMs <= 0,
     feedInSec: sec(pet.feedCooldownMs),
+    playReady: pet.playCooldownMs <= 0,
+    playStreak: pet.playStreak,
+    longPlay: pet.buffs.some((b) => b.kind === "long-play" && b.remainMs > 0),
     buffs: pet.buffs.map((b) => ({ kind: b.kind, remainMin: min(b.remainMs) })),
   };
 }

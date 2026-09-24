@@ -27,8 +27,10 @@ const SHINY_RIGHT = "shiny:"; // v2 inventory 의 이로치 권리 기록. 도�
 
 // v2 의 마리 → v3 의 개체. 배고픔을 만복도로 뒤집고 쿨타임은 남은 시간으로 바꾼다
 export function convertPet(pet: Pet, now: number, date: string): PetV3 {
+  const left = (at: number | null, span: number): number => (at == null ? 0 : Math.max(0, span - (now - at)));
   const fedAt = typeof pet.fedAt === "number" ? pet.fedAt : null;
-  const remain = fedAt == null ? 0 : Math.max(0, SAVE_V3_RULES.feedCooldownMs - (now - fedAt));
+  const playedAt = typeof pet.playedAt === "number" ? pet.playedAt : null;
+  const remain = left(fedAt, SAVE_V3_RULES.feedCooldownMs);
   return {
     id: pet.id,
     species: pet.species,
@@ -43,6 +45,9 @@ export function convertPet(pet: Pet, now: number, date: string): PetV3 {
     fullnessProgressMs: 0,
     mood: Math.min(100, Math.max(0, Math.round(pet.mood))),
     feedCooldownMs: Math.round(remain),
+    playCooldownMs: Math.round(left(playedAt, SAVE_V3_RULES.playCooldownMs)),
+    playWindowMs: 0,
+    playStreak: 0,
     buffs: [],
     home: { dx: pet.home.dx, dy: pet.home.dy },
     since: pet.since,

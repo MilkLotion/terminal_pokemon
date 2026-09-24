@@ -57,6 +57,9 @@ export const SAVE_V3_RULES = {
     mood: 60,
   },
   feedCooldownMs: 10 * 60_000, // 밥 주기 쿨타임 10분. 기본먹이와 프리미엄먹이가 함께 쓴다
+  playCooldownMs: 10 * 60_000, // 놀아주기 쿨타임 10분
+  playWindowMs: 20 * 60_000, // 놀아주기 상태가 남아 있는 시간 20분. 이 안에 또 놀아주면 중첩이 오른다
+  longPlayAt: 3, // 이만큼 이어서 놀아주면 오래 놀아주기 상태가 된다
   eggCareCooldownMs: 60_000, // 알 돌봄 인정 간격 1분
   tx: { keep: 200, ttlMs: 24 * 60 * 60_000 }, // 최근 200건 또는 24시간 중 큰 쪽을 남긴다
   saveEveryMs: 30_000, // 시간에 따른 값의 주기 저장

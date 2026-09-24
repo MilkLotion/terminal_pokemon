@@ -8,6 +8,7 @@ import { care, isCareAction } from "../egg/care.js";
 import { open } from "../egg/open.js";
 import { keep, place, swap } from "../party/placement.js";
 import { setHidden, shownCount } from "../party/visibility.js";
+import { feed, play } from "../state/care-v3.js";
 import { buy } from "../shop/buy.js";
 import type { TxHandler } from "./executor";
 
@@ -155,3 +156,26 @@ const evolveHandler: TxHandler = (draft, args, ctx) => {
 };
 
 HANDLERS["evolve"] = evolveHandler;
+
+// ── 돌봄 ───────────────────────────────────────────────────────────────────────
+
+// 밥 주기 — 기본먹이를 쓰는 것과 같다. 무료이며 쿨타임을 함께 쓴다
+const feedHandler: TxHandler = (draft, args) => {
+  const petId = petIdOf(args);
+  if (!petId) return { ok: false, reason: "bad-args" };
+  const res = feed(draft, petId);
+  if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  return { ok: true, result: { petId, fullness: res.fullness } };
+};
+
+// 놀아주기 — 쿨타임마다 한 번 친밀도를 올린다
+const playHandler: TxHandler = (draft, args) => {
+  const petId = petIdOf(args);
+  if (!petId) return { ok: false, reason: "bad-args" };
+  const res = play(draft, petId);
+  if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  return { ok: true, result: { petId, affinity: res.affinity, streak: res.streak, longPlay: res.longPlay } };
+};
+
+HANDLERS["feed"] = feedHandler;
+HANDLERS["play"] = playHandler;
