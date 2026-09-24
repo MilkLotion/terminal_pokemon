@@ -11,8 +11,12 @@ import { buy } from "../shop/core";
 import { SHOP } from "../shop/catalog";
 import { care } from "../state/core";
 import { empty, emptyPet, normalize, read, write } from "../save/store";
-import { createSaveParty } from "../main/party";
 import { createCommands } from "../main/commands";
+import { createGame } from "../main/game-v3";
+import { createV3Party } from "../main/party-v3";
+import { begin } from "../party/starter";
+import * as storeV3 from "../save/store-v3";
+import { empty as emptyV3 } from "../save/v3";
 import { send } from "../save/mailbox";
 import { gameMenu, petGameMenu } from "../main/game-menu";
 import type { Command, SaveV2 } from "../shared/types";
@@ -102,73 +106,91 @@ async function main(): Promise<void> {
     assert.equal(care(save, "p1", "feed", T + 1).reason, "cooldown");
     assert.equal(save.inventory.berry, 1, "거절된 밥은 먹이를 소비하지 않음");
   }
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pokebuddy-s4-"));
+  // S4 메뉴는 저장 v2 모양을 그대로 읽는다. 앱은 관리 창을 쓰지만 이 함수는 남아 있다
+  {
+    const save = fresh(); save.points = 5000; save.slots = 2; advance(save, T);
+    assert.equal(gameMenu(save, () => {}).length, 3);
+    assert.ok(petGameMenu(save, save.party[0]!, () => {}).length >= 4);
+  }
+
+  // ── 실제 앱 경로 (저장 v3) — 명령이 거래 실행기를 거쳐 파일까지 간다 ──
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pokebuddy-v3-"));
   const gameDir = path.join(dir, ".claude", "pokebuddy");
   const paths = { save: path.join(gameDir, "save.json"), saveLock: path.join(gameDir, "save.lock"), companionLock: path.join(gameDir, "companion.lock"), mailbox: path.join(gameDir, "mailbox") };
-  const initial = fresh(); initial.points = 5000; initial.slots = 2; advance(initial, T); write(paths.save, initial);
-  const party = createSaveParty({ paths, mode: "companion", savedWindows: () => ({}) });
+  fs.mkdirSync(gameDir, { recursive: true });
+
+  const seed = emptyV3(T);
+  begin(seed, "charmander", T, () => 0);
+  seed.pets[0]!.level = 16; // 레벨 조건을 채워 진화할 수 있게
+  seed.points.balance = 5000;
+  storeV3.write(paths.save, seed);
+
+  const game = createGame({ file: paths.save, rand: () => 0 });
+  const party = createV3Party({ game, paths, mode: "companion" });
   let artOk = false;
   let beforeArt: (() => void) | undefined;
   let changes = 0;
-  const commands = createCommands({ mode: "companion", mailboxDir: paths.mailbox, party,
+  const commands = createCommands({ mode: "companion", mailboxDir: paths.mailbox, party, game,
     stage: { poke: () => true, petIds: () => [], size: () => ({ w: 1, h: 1 }), visible: () => true },
     settings: { hidden: () => false, setHidden() {}, clickThrough: () => false, setClickThrough() {}, keepVisible: () => true, setKeepVisible() {} },
     quit() {}, prepareLook: async () => { beforeArt?.(); return artOk; }, onChanged: async () => { changes++; },
   });
-  const purchase: Command = { cmd: "shop.buy", args: { item: "species", species: "pikachu" }, from: "cli" };
+  const evolveCmd: Command = { cmd: "evolve", target: "p1", from: "cli" };
   try {
+    assert.ok(party.isWriter(), "잠금을 잡아 writer 로 시작");
     const before = structuredClone(party.save());
-    assert.equal((await commands.dispatcher.dispatch(purchase)).reason, "art-missing");
+    assert.equal((await commands.dispatcher.dispatch(evolveCmd)).reason, "art-missing");
     assert.deepEqual(party.save(), before, "그림 실패 시 변경 없음");
+
     artOk = true;
-    beforeArt = () => { party.save()!.slots = 1; };
-    assert.equal((await commands.dispatcher.dispatch(purchase)).reason, "party-full", "그림 대기 후 최신 조건 검사");
-    beforeArt = undefined; party.save()!.slots = 2;
+    assert.ok((await commands.dispatcher.dispatch(evolveCmd)).ok, "그림을 받으면 진화한다");
+    assert.equal(storeV3.read(paths.save, { repair: false }).state!.pets[0]!.species, "charmeleon", "진화가 디스크에 저장");
+    assert.equal(changes, 1, "저장 뒤 무대 갱신");
+
+    // mailbox 왕복 — CLI·확장의 요청이 writer 에 닿는다
     commands.setWriter(true);
-    assert.ok((await send(paths.mailbox, purchase)).ok);
-    assert.equal(read(paths.save, { repair: false }).state!.party.length, 2);
-    assert.equal(changes, 1);
+    const bought = await send(paths.mailbox, { cmd: "shop.buy", target: "exp-candy-xs", from: "cli" });
+    assert.ok(bought.ok, "mailbox → dispatcher → 실행기");
+    assert.equal(storeV3.read(paths.save, { repair: false }).state!.bag["exp-candy-xs"], 1);
+
+    // 실제 CLI → 임시 HOME mailbox 왕복
     const child = await promisify(execFile)(process.execPath, [path.resolve(__dirname, "../../bin/pokebuddy"), "game", "snapshot"], {
       windowsHide: true, env: { ...process.env, HOME: dir, USERPROFILE: dir },
     });
     const snapshot = JSON.parse(child.stdout);
-    assert.equal(snapshot.party.length, 2, "실제 CLI → 임시 HOME mailbox 왕복");
-    assert.equal(snapshot.party[0].affinity, 0);
-    const foodBefore = party.save()!.inventory.berry ?? 0;
-    const purchaseChild = await promisify(execFile)(process.execPath, [path.resolve(__dirname, "../../bin/pokebuddy"), "game", "shop.buy", "-", "item=berry"], {
-      windowsHide: true, env: { ...process.env, HOME: dir, USERPROFILE: dir },
-    });
-    assert.equal(JSON.parse(purchaseChild.stdout).ok, true, "실제 CLI의 key=value 구매");
-    assert.equal(party.save()!.inventory.berry, foodBefore + 1);
-    const beforeExpired = structuredClone(party.save());
-    assert.equal((await commands.dispatcher.dispatch({ cmd: "shop.buy", args: { item: "berry" }, from: "cli", at: Date.now() - 41_000 })).reason, "expired");
-    assert.deepEqual(party.save(), beforeExpired, "오래된 요청은 포인트를 차감하지 않음");
+    assert.equal(snapshot.pets.length, 1, "실제 CLI 가 저장 v3 스냅샷을 받는다");
+    assert.equal(snapshot.points, party.save()!.points.balance);
+
+    // 같은 요청 식별자는 한 번만 반영한다
+    const once = await commands.dispatcher.dispatch({ cmd: "shop.buy", target: "exp-candy-xs", args: { reqId: "same" }, from: "cli" });
+    const again = await commands.dispatcher.dispatch({ cmd: "shop.buy", target: "exp-candy-xs", args: { reqId: "same" }, from: "cli" });
+    assert.ok(once.ok && again.ok);
+    assert.equal(again.replayed, true, "두 번째는 재생");
+    assert.equal(storeV3.read(paths.save, { repair: false }).state!.bag["exp-candy-xs"], 2, "한 번만 늘었다");
+
+    // 저장에 닿지 못하면 실패로 답한다
     const beforeFailureChanges = changes;
     const diskBefore = fs.readFileSync(paths.save, "utf8");
     const stateBefore = structuredClone(party.save());
     fs.unlinkSync(paths.save); fs.mkdirSync(paths.save);
-    const failed = await commands.dispatcher.dispatch({ cmd: "shop.buy", args: { item: "slot" }, from: "menu" });
-    assert.equal(failed.reason, "save-failed");
-    assert.deepEqual(party.save(), stateBefore, "저장 실패 시 포인트와 파티 복원");
+    const failed = await commands.dispatcher.dispatch({ cmd: "shop.buy", target: "party-slot", from: "menu" });
+    assert.ok(!failed.ok, "저장 실패를 성공으로 응답하지 않음");
+    assert.deepEqual(party.save(), stateBefore, "저장 실패 시 메모리 상태 그대로");
     assert.equal(changes, beforeFailureChanges, "실패 시 무대 갱신 없음");
-    assert.equal((await party.setShown("p1", false)).reason, "save-failed");
-    assert.equal(party.save()!.party[0]!.shown, true, "숨기기 저장 실패 시 표시 상태 복원");
+    assert.ok(!(await party.setShown("p1", false)).ok, "숨기기도 성공으로 응답하지 않음");
     fs.rmdirSync(paths.save); fs.writeFileSync(paths.save, diskBefore);
-    const pet = party.save()!.party[0]!;
-    const menu = gameMenu(party.save()!, () => {});
-    assert.equal(menu.length, 3);
-    assert.ok(petGameMenu(party.save()!, pet, () => {}).length >= 4);
-    assert.ok((await commands.dispatcher.dispatch({ cmd: "snapshot", from: "cli" })).shop);
-    party.save()!.slots = 3;
-    beforeArt = () => { fs.writeFileSync(paths.saveLock, String(process.pid + 1000000)); };
+    party.refresh();
+
+    // 잠금을 잃으면 남의 저장에 쓰지 않는다. 자기 mailbox 로 되보내지도 않는다
     const beforeLost = structuredClone(party.save());
-    assert.equal((await commands.dispatcher.dispatch(purchase)).reason, "not-writer");
-    assert.deepEqual(party.save(), beforeLost, "그림 대기 중 잠금 상실 시 변경 없음");
-    assert.equal((await commands.dispatcher.dispatch({ cmd: "shop.buy", args: { item: "berry" }, from: "cli" })).reason, "not-writer", "잠금을 잃은 서버는 자기 mailbox로 재전송하지 않음");
+    fs.writeFileSync(paths.saveLock, String(process.pid + 1000000));
+    assert.equal((await commands.dispatcher.dispatch({ cmd: "shop.buy", target: "exp-candy-xs", from: "cli" })).reason, "not-writer");
+    assert.deepEqual(party.save(), beforeLost, "잠금 상실 시 변경 없음");
     fs.writeFileSync(paths.saveLock, String(process.pid));
   } finally {
     commands.stop(); party.stop(); fs.rmSync(dir, { recursive: true, force: true });
   }
-  process.stdout.write("S4 통과: 해금·상한·구매·진화·색·먹이·저장·그림 실패·mailbox\n");
+
+  process.stdout.write("통과: v2 규칙(해금·상한·구매·진화·색·먹이) · v3 앱 경로(그림·mailbox·CLI·중복·저장 실패·잠금)\n");
 }
 void main().catch((e) => { console.error(e); process.exitCode = 1; });

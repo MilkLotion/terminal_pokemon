@@ -11,9 +11,9 @@ import type { Command, CommandName, CommandResult } from "../shared/types.js";
 import type { Dispatcher } from "../commands/dispatcher";
 import type { Executor, TxRequest } from "./executor";
 
-// 이 다리가 맡는 명령 — 나머지는 기존 모듈이 그대로 맡는다.
-// `settings.set` 은 넣지 않는다. 같은 이름을 기존 `src/main/commands.ts` 가 무대 창 표시 항목으로 이미 맡고 있다.
-// 관리 창은 다리를 거치지 않고 `src/main/game-v3.ts` 의 send 로 바로 실행기에 넣으므로 겹치지 않는다.
+// 이 다리가 맡을 수 있는 명령 — 인자를 푸는 규칙(`argsOf`)이 여기 있다.
+// 실제 배선은 `src/main/commands.ts` 가 한다. 무대 반응이나 그림 준비가 필요한 명령은 그쪽이 감싸서 등록한다.
+// `settings.set` 은 넣지 않는다. 같은 이름을 `src/main/commands.ts` 가 창 표시 항목으로 먼저 맡는다.
 export const V3_COMMANDS: readonly CommandName[] = [
   "party.show",
   "party.hide",
@@ -30,6 +30,8 @@ export const V3_COMMANDS: readonly CommandName[] = [
   "achievement.claim",
   "tutorial.skip",
   "tutorial.done",
+  "starter.pick",
+  "pet.set",
 ];
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
@@ -73,6 +75,10 @@ export function argsOf(command: Command): Record<string, unknown> {
       return { id: target ?? str(a.id), steps: int(a.steps) };
     case "settings.set":
       return { key: target ?? str(a.key), value: a.value };
+    case "starter.pick":
+      return { species: target ?? str(a.species) };
+    case "pet.set":
+      return { petId: target ?? str(a.petId), home: a.home };
     default:
       return { ...a };
   }

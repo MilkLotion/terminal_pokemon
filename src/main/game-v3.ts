@@ -1,11 +1,13 @@
 // 저장 v3 을 다루는 메인 쪽 입구 — 파일 읽기·쓰기, 거래 실행기, 시간 적용, 화면이 읽는 스냅샷을 한 곳에 모은다.
 //
 // 저장을 쓰는 곳은 거래 실행기 하나다 (docs/specs/modules.md "경계 원칙").
-// 시간은 앱이 깨어 있는 동안만 흐른다. 창을 열거나 명령을 받을 때 그동안 멈췄던 시간을 한 번에 적용한다.
-// 기존 v2 경로와 같은 파일을 쓰지 않는다. v3 은 자기 파일을 따로 둔다 — 두 경로가 함께 돌아도 서로를 덮지 않는다.
-import path from "node:path";
+// 시간은 앱이 깨어 있는 동안만 흐른다. 앱은 15초마다, 관리 창은 열거나 명령을 받을 때 흐른 시간을 적용한다.
+// 상한(`TIME_V3_RULES.maxTickMs`)을 넘는 틈은 앱 종료·절전·잠금으로 보고 버린다.
+// 저장은 하나다. 기존 `save.json` 을 그대로 쓴다 — 처음 읽을 때 v2 를 v3 으로 옮기고 원본을 `save.json.v2.bak` 에 남긴다.
+// 쓰기는 잠금을 잡은 프로세스만 한다. `canWrite` 를 주지 않으면 늘 쓴다 (자체 검사와 개발용 실행기).
 import { PATHS } from "./paths.js";
 import * as storeV3 from "../save/store-v3.js";
+import { TIME_V3_RULES } from "../save/rules.js";
 import { applyTime, type TickEvents } from "../state/time-v3.js";
 import { createExecutor, type Executor, type TxResult } from "../tx/executor.js";
 import { HANDLERS } from "../tx/handlers.js";
@@ -17,13 +19,13 @@ import type { AgentAction, AgentReply, AgentRow, DexEntry, ManageReply, ManageRe
 import type { SaveV3 } from "../shared/save-v3";
 import type { AgentName, Command, CommandName, CommandSource } from "../shared/types";
 
-// v2 는 save.json 을 쓴다. v3 은 옆에 자기 파일을 둔다
-export const saveFileV3 = (): string => path.join(path.dirname(PATHS.save), "save-v3.json");
+// 저장 파일 — v2 와 같은 자리다. 파일을 처음 읽을 때 v3 으로 옮긴다 (src/save/store-v3.ts)
+export const saveFileV3 = (): string => PATHS.save;
 
 export interface GameV3 {
   file: string;
   read: () => SaveV3 | null;
-  tick: () => TickEvents | null; // 멈췄던 시간을 한 번에 적용한다
+  tick: () => TickEvents | null; // 마지막 틱 뒤로 흐른 시간을 적용한다. 상한을 넘는 틈은 버린다
   view: () => Snapshot | null;
   dex: () => DexEntry[];
   agents: (req?: { name: string; action: AgentAction }) => AgentReply;
@@ -35,30 +37,25 @@ export interface GameV3Options {
   file?: string;
   now?: () => number;
   rand?: () => number;
+  canWrite?: () => boolean; // 잠금을 잡은 프로세스만 쓴다. 없으면 늘 쓴다 (자체 검사·개발용 실행기)
 }
 
-export function createGame({ file = saveFileV3(), now = Date.now, rand = Math.random }: GameV3Options = {}): GameV3 {
-  const read = (): SaveV3 | null => storeV3.read(file, { repair: true }).state;
+export function createGame({ file = saveFileV3(), now = Date.now, rand = Math.random, canWrite }: GameV3Options = {}): GameV3 {
+  // 파손 격리와 v2 이전 파일 교체는 쓰는 프로세스만 한다
+  const read = (): SaveV3 | null => storeV3.read(file, { repair: canWrite ? canWrite() : true }).state;
+  const write = (s: SaveV3): boolean => (canWrite && !canWrite() ? false : storeV3.write(file, s));
 
-  const executor = createExecutor(
-    {
-      read,
-      write: (s) => storeV3.write(file, s),
-      now,
-      rand,
-    },
-    HANDLERS,
-  );
+  const executor = createExecutor({ read, write, now, rand }, HANDLERS);
 
-  // 멈췄던 시간을 한 번에 적용한다. 흐른 시간은 마지막 틱과 지금의 차이다
+  // 마지막 틱 뒤로 흐른 시간을 적용한다. 앱이 꺼져 있던 틈은 세지 않는다 — 상한을 넘는 몫은 버린다
   const tick = (): TickEvents | null => {
     const save = read();
     if (!save) return null;
     const at = now();
-    const elapsed = Math.max(0, at - save.lastTickAt);
+    const elapsed = Math.min(TIME_V3_RULES.maxTickMs, Math.max(0, at - save.lastTickAt));
     const events = applyTime(save, elapsed, at);
     save.savedAt = at;
-    storeV3.write(file, save);
+    if (!write(save)) return null; // 쓰지 못했으면 시간도 흐르지 않은 것으로 본다
     return events;
   };
 

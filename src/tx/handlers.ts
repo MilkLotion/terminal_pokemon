@@ -12,6 +12,8 @@ import { keep, place, swap } from "../party/placement.js";
 import { setHidden, shownCount } from "../party/visibility.js";
 import { feed, play } from "../state/care-v3.js";
 import { isSettingKey, setSetting } from "../state/settings-v3.js";
+import { setHome } from "../party/home.js";
+import { begin } from "../party/starter.js";
 import { buy } from "../shop/buy.js";
 import type { TxHandler } from "./executor";
 
@@ -225,3 +227,27 @@ const settingsHandler: TxHandler = (draft, args) => {
 };
 
 HANDLERS["settings.set"] = settingsHandler;
+
+// ── 첫 선택과 자리 ─────────────────────────────────────────────────────────────
+
+// 첫 선택 — 저장이 비었을 때 한 번. 고른 종으로 개체 하나를 만들어 꺼내 놓는다
+const starterHandler: TxHandler = (draft, args, ctx) => {
+  if (!isObj(args)) return { ok: false, reason: "bad-args" };
+  const species = typeof args.species === "string" ? args.species : "";
+  if (!species) return { ok: false, reason: "bad-args" };
+  const res = begin(draft, species, ctx.now, ctx.rand);
+  if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  return { ok: true, result: { petId: res.petId, species: res.species, slotIndex: res.slotIndex } };
+};
+
+// 놓아 둔 자리 — 사용자가 마리를 끌어다 놓으면 그 자리를 기억한다
+const homeHandler: TxHandler = (draft, args) => {
+  const petId = petIdOf(args);
+  if (!petId) return { ok: false, reason: "bad-args" };
+  const res = setHome(draft, petId, isObj(args) ? args.home : null);
+  if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  return { ok: true, result: { petId, home: res.home } };
+};
+
+HANDLERS["starter.pick"] = starterHandler;
+HANDLERS["pet.set"] = homeHandler;

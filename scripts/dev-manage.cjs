@@ -1,7 +1,7 @@
 // 관리 창만 띄워 보는 개발용 실행기 — npm run build 뒤 `npx electron scripts/dev-manage.cjs`
 //
 // 앱 전체를 띄우지 않는다. 임시 폴더에 보기용 저장을 만들고 관리 창 하나만 연다.
-// 사용자의 저장(~/.claude/pokebuddy)은 건드리지 않는다.
+// 사용자의 저장(~/.claude/pokebuddy)과 CLI 설정은 건드리지 않는다. HOME 도 임시 폴더로 바꾼다 — 설정의 "연결" 이 훅을 쓰기 때문이다.
 // `--shot <파일>` 을 주면 창을 그려 PNG 로 저장하고 끝낸다. 화면을 눈으로 확인할 때 쓴다.
 // `--tab <파티|박스|도감|상점|가방>` 을 주면 그 탭을 눌러 놓고 찍는다.
 // `--detail` 을 주면 첫 칸을 눌러 개체 상세까지 찍는다.
@@ -12,11 +12,21 @@ const path = require("node:path");
 const { app } = require("electron");
 
 const root = path.join(__dirname, "..");
-const { createGame } = require(path.join(root, "dist/main/game-v3.js"));
-const { openManage } = require(path.join(root, "dist/main/manage-window.js"));
-const { preloadFile, rendererFile } = require(path.join(root, "dist/main/paths.js"));
-const storeV3 = require(path.join(root, "dist/save/store-v3.js"));
-const { empty } = require(path.join(root, "dist/save/v3.js"));
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pokebuddy-dev-manage-"));
+
+// 앱 모듈은 HOME 을 바꾼 뒤에 읽는다. 경로를 읽을 때 HOME 을 보기 때문이다 (src/tools/selftest-agents.ts 와 같은 방식).
+// Electron 이 준비되기 전에 HOME 을 바꾸면 Electron 이 뜨지 않는다. 그래서 준비된 뒤에 바꾼다
+function loadApp() {
+  process.env.HOME = dir;
+  process.env.USERPROFILE = dir;
+  return {
+    createGame: require(path.join(root, "dist/main/game-v3.js")).createGame,
+    openManage: require(path.join(root, "dist/main/manage-window.js")).openManage,
+    paths: require(path.join(root, "dist/main/paths.js")),
+    storeV3: require(path.join(root, "dist/save/store-v3.js")),
+    empty: require(path.join(root, "dist/save/v3.js")).empty,
+  };
+}
 
 const argAfter = (flag) => {
   const at = process.argv.indexOf(flag);
@@ -28,7 +38,7 @@ const shotFile = argAfter("--shot");
 const tabLabel = argAfter("--tab");
 
 // 보기용 저장 — 꺼낸 마리, 숨긴 마리, 빈 칸, 잠긴 칸, 박스, 알, 가방이 한 번에 보이게 만든다
-function seed(now) {
+function seed(empty, now) {
   const save = empty(now);
   save.points.balance = 1240;
   const pet = (id, species, over) => ({
@@ -108,11 +118,11 @@ function seed(now) {
 }
 
 app.whenReady().then(async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pokebuddy-dev-manage-"));
   const file = path.join(dir, "save-v3.json");
-  storeV3.write(file, seed(Date.now()));
+  const { createGame, openManage, paths, storeV3, empty } = loadApp();
+  storeV3.write(file, seed(empty, Date.now()));
 
-  const win = openManage({ preload: preloadFile(), html: rendererFile("manage.html"), game: createGame({ file }) });
+  const win = openManage({ preload: paths.preloadFile(), html: paths.rendererFile("manage.html"), game: createGame({ file }) });
   if (!shotFile) return;
 
   // 탭 전환과 개체 상세는 그려진 뒤에야 누를 수 있다. 누른 뒤에도 다시 그릴 틈을 준다

@@ -15,26 +15,25 @@ import { createCommands, type Commands } from "./commands";
 import { STAGE_RULES, stageOf, toLocal, type Rect } from "./layout";
 import { clearFailure, createLifetime, petFileOf, reportFailure, type Lifetime } from "./lifetime";
 import { petMenu, trayMenu } from "./menus";
-import { createSandboxParty, createSaveParty, type PartyPet, type PartySource } from "./party";
+import { createSandboxParty, type PartyPet, type PartySource } from "./party";
+import { createV3Party, type V3Party } from "./party-v3";
+import { createGame, type GameV3 } from "./game-v3";
+import { careItem, petStatus } from "./status-v3";
 import { openManage } from "./manage-window";
-import { PATHS, loadConfig, logoFile, preloadFile, readSavedWindows, rendererFile, saveConfig } from "./paths";
+import { PATHS, loadConfig, logoFile, preloadFile, rendererFile, saveConfig } from "./paths";
 import { pickStarter } from "./picker-window";
 import { createShortcuts, type Shortcuts } from "./shortcuts";
 import { createStage, type Stage } from "./stage";
 import { createStageWindow, type StageWindow } from "./stage-window";
 import { langOf, natureName, petLabel, setLang, t } from "./text";
 import { createTray, type TrayHandle } from "./tray";
-import { readSessionUsages } from "../agents/usage";
-import { careAvailable, createStateEngine } from "../state/core";
-import { stateLine } from "./text";
 import { STATE_RULES } from "../state/rules";
-import { advance } from "../dex/progress";
-import { gameMenu, petGameMenu } from "./game-menu";
 import { petName } from "./text";
+import { defOf } from "../achievement/core";
+import type { TickEvents } from "../state/time-v3";
 import type { Command } from "../shared/types";
 
-const stateEngine = createStateEngine();
-let lastStateSave = 0;
+let lastTick = 0;
 let lastMenuPoints = -1;
 
 // POKEBUDDY_LOG 가 있으면 출력(console·stderr)을 그 파일에 이어 쓴다 — pokebuddy 는 펫에 출력 핸들을 넘기지 않는다
@@ -93,7 +92,10 @@ let bootReady = false; // 그림·명령·수명 잠금 준비 후에만 CLI에 
 let userHidden = false; // Cmd+Alt+H · 우클릭 · 트레이로 직접 숨김
 const intervals: NodeJS.Timeout[] = [];
 
-let party: PartySource | null = null;
+// 저장을 쓰는 곳은 하나다 — 거래 실행기. 무대·메뉴·관리 창이 모두 이 하나를 본다
+let game: GameV3 | null = null;
+let party: PartySource | V3Party | null = null;
+const v3 = (): V3Party | null => (party?.kind === "v3" ? party : null);
 let lifetime: Lifetime | null = null;
 let stageWin: StageWindow | null = null;
 let stage: Stage | null = null;
@@ -203,11 +205,25 @@ const displayName = (): string => {
   return p ? petLabel(p) : party?.pets()[0]?.species ?? config.slug;
 };
 
+// 관리 창의 명령도 커맨드 처리기를 거친다. reader 면 mailbox 로 writer 에 보내고,
+// 진화 그림 준비와 무대 반응도 다른 표면과 같은 길로 간다
+const openManageWindow = (): void => {
+  if (!game) return;
+  openManage({
+    preload: preloadFile(),
+    html: rendererFile("manage.html"),
+    game,
+    send: async (req) => {
+      if (!commands) return { ok: false, reason: "not-ready" };
+      return commands.dispatcher.dispatch({ cmd: req.cmd as Command["cmd"], target: req.target, args: req.args, from: "settings" });
+    },
+  });
+};
+
+// 상점·도감·가방은 관리 창이 맡는다. 트레이에는 창을 여는 자리만 둔다 (docs/specs/s5.md "화면 구조")
 const trayTemplate = () => [
-  // 관리 창 — 파티·박스·도감·상점·가방. 저장 v3 을 읽는다 (src/main/manage-window.ts)
-  { label: "관리 창 열기", click: () => void openManage({ preload: preloadFile(), html: rendererFile("manage.html") }) },
+  { label: "관리 창 열기", click: openManageWindow },
   { type: "separator" as const },
-  ...(party?.save() ? gameMenu(party.save()!, runGameCommand) : []),
   ...trayMenu(
     { name: displayName(), hidden: userHidden, ghost: !!config.clickThrough },
     {
@@ -226,9 +242,14 @@ function notifyGame(body: string): void {
   } catch (e) { log?.({ notification: "failed", message: String(e) }); }
 }
 
-function notifyUnlocked(species: string[]): void {
-  if (species.length) notifyGame(t("game.unlocked", { names: species.slice(0, 3).map((s) => petName(s)).join(", "), n: species.length }));
+// 시간이 흐르며 생긴 일을 알린다. 배너 화면이 생기기 전까지는 OS 알림으로 보인다
+// (docs/specs/s5.md "알림 배너" — 같은 순간이면 부화 → 진화 → 업적 순서다)
+function notifyTick(events: TickEvents): void {
+  if (events.hatchReady.length) notifyGame(t("game.hatchReady"));
+  for (const id of events.achieved) notifyGame(t("game.achieved", { name: achievementName(id) }));
 }
+
+const achievementName = (id: string): string => defOf(id)?.ko ?? id;
 
 function runGameCommand(command: Command): void {
   void commands?.dispatcher.dispatch(command).then((result) => {
@@ -237,25 +258,21 @@ function runGameCommand(command: Command): void {
   });
 }
 
+// 포켓몬 위 우클릭 — 이름·상태 / 밥 주기·놀아주기 / 설정. 나머지 조작은 관리 창이 맡는다
 function showPetMenu(id: string): void {
   const p = stage?.petOf(id);
   if (!p || !stageWin) return;
   const model = { name: petLabel(p), nature: p.nature ? natureName(p.nature) : null, hidden: userHidden };
-  const pet = party?.save()?.party.find((pet) => pet.id === id);
-  const availability = (action: "feed" | "play") => {
-    const result = careAvailable(pet!, action, Date.now());
-    return { enabled: result.ok, reason: result.ok ? undefined : t(`care.${result.reason}`, { n: result.seconds }) };
-  };
-  const status = pet ? stateLine(pet) : undefined;
-  const items = petMenu({ ...model, ...(pet ? { status, feed: availability("feed"), play: availability("play") } : {}) }, {
+  const pet = v3()?.save()?.pets.find((row) => row.id === id) ?? null;
+  const care = pet ? { status: petStatus(pet), feed: careItem(pet, "feed"), play: careItem(pet, "play") } : {};
+  const items = petMenu({ ...model, ...care }, {
     toggleHidden, quit: () => app.quit(),
     feed: () => runGameCommand({ cmd: "feed", target: id, from: "menu" }),
     play: () => runGameCommand({ cmd: "play", target: id, from: "menu" }),
   });
-  if (pet && party?.save()) items.splice(items.length - 2, 0,
+  if (pet) items.splice(items.length - 2, 0,
     { type: "separator" as const },
-    ...petGameMenu(party.save()!, pet, runGameCommand),
-    ...gameMenu(party.save()!, runGameCommand),
+    { label: "관리 창 열기", click: openManageWindow },
   );
   stageWin.popup(items);
 }
@@ -268,28 +285,29 @@ async function refreshParty(): Promise<void> {
   tray?.refresh();
 }
 
+// 게임 시간 — 흐른 만큼 한 번에 적용한다. 쓰기는 거래 실행기 하나가 하므로 writer 일 때만 부른다.
+// 주기는 저장 주기와 같다. 주기보다 크게 벌어진 틈(앱 종료·절전)은 `game.tick` 이 버린다
+// (docs/specs/s5.md "복귀할 때 중단 기간을 소급 진행하지 않는다")
 function stateTick(): void {
   if (!anchor || !stage) return;
-  const { state, promptAt, tokenWork } = anchor.currentInfo();
+  const { state, promptAt } = anchor.currentInfo();
   stage.setState(state, promptAt);
-  const save = party?.save();
-  if (save && party?.isWriter()) {
+
+  const worker = v3();
+  if (worker?.isWriter() && game) {
     const now = Date.now();
-    stateEngine.tick(save, { now, shown: stageWin?.isVisible() ? stage.petIds() : [], agent: state, tokenWork: !!tokenWork, usages: readSessionUsages(PATHS.state) });
-    const draft = structuredClone(save);
-    const unlocked = advance(draft, now);
-    if (draft.points !== save.points || draft.unlocked.length !== save.unlocked.length) {
-      const previous = structuredClone(save);
-      Object.assign(save, draft);
-      if (party.persist()) { notifyUnlocked(unlocked); tray?.refresh(); }
-      else Object.assign(save, previous);
+    if (now - lastTick >= STATE_RULES.saveMs) {
+      lastTick = now;
+      const events = game.tick();
+      worker.refresh();
+      if (events) notifyTick(events);
+      const points = Math.floor(worker.save()?.points.balance ?? 0);
+      if (points !== lastMenuPoints) {
+        lastMenuPoints = points;
+        tray?.refresh();
+      }
     }
-    if (now - lastStateSave >= STATE_RULES.saveMs && party.persist()) lastStateSave = now;
-    if (Math.floor(save.points) !== lastMenuPoints) {
-      lastMenuPoints = Math.floor(save.points);
-      tray?.refresh();
-    }
-  } else stateEngine.reset();
+  }
   if (state !== lastState) {
     lastState = state;
     log?.({ state });
@@ -305,10 +323,13 @@ async function main(): Promise<void> {
     app.dock?.hide();
   }
 
-  party =
-    mode === "session"
-      ? createSandboxParty({ config, saveConfig })
-      : createSaveParty({ paths: PATHS, mode, savedWindows: () => readSavedWindows(), log });
+  if (mode === "session") {
+    party = createSandboxParty({ config, saveConfig });
+  } else {
+    // 저장을 쓰는 것은 잠금을 잡은 프로세스 하나다. 실행기에 그 조건을 걸어 reader 는 쓰지 못하게 한다
+    game = createGame({ file: PATHS.save, canWrite: () => v3()?.isWriter() ?? false });
+    party = createV3Party({ game, paths: PATHS, mode, log });
+  }
 
   // 수명 감시는 첫 실행 선택 창보다 먼저 — 고르는 동안 companion stop(lock 삭제)·확장 호스트 종료가 와도 끝나야 한다
   lifetime = createLifetime({
@@ -422,12 +443,12 @@ async function main(): Promise<void> {
     mode,
     mailboxDir: PATHS.mailbox,
     party,
+    game,
     prepareLook: async (look) => !!await art.loadLook(look),
     onChanged: async (evolvedId) => {
       await refreshParty();
       if (evolvedId) stage?.celebrate(evolvedId);
     },
-    onUnlocked: notifyUnlocked,
     stage: {
       poke: (id) => !!stage?.poke(id),
       care: (id, action) => stage?.care(id, action),

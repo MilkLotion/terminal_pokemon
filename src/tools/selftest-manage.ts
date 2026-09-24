@@ -95,16 +95,26 @@ try {
     process.stdout.write("(4) 실패 이유와 중복 방지  ok\n");
   }
 
-  // (5) 틱은 멈췄던 시간을 한 번에 적용한다
+  // (5) 앱이 꺼져 있던 틈은 소급하지 않는다. 켜 둔 시간만 흐른다
   {
-    now = T0 + 2 * HOUR;
-    const events = game.tick();
-    assert.ok(events);
+    now = T0 + 24 * HOUR;
+    assert.ok(game.tick());
+    assert.equal(game.view()?.party.slots[0]?.pet?.fullness, 55, "하루 꺼 둔 틈에는 만복도가 줄지 않는다");
+
+    // 앱처럼 짧은 간격으로 2시간을 흘린다
+    const step = 30_000;
+    let hungry = 0;
+    for (let n = 0; n < (2 * HOUR) / step; n++) {
+      now += step;
+      const events = game.tick();
+      assert.ok(events);
+      hungry += events.hungerEnter.length;
+    }
     const v = game.view();
-    assert.equal(v?.party.slots[0]?.pet?.fullness, 55 - 60 < 0 ? 0 : 55 - 60, "2시간에 60 감소, 0 에서 멈춘다");
+    assert.equal(v?.party.slots[0]?.pet?.fullness, 0, "2시간에 60 감소, 0 에서 멈춘다");
     assert.ok(v && v.points > 340, "포인트가 쌓였다");
-    assert.ok(events.hungerEnter.length >= 1, "배고픔 구간 진입을 알린다");
-    process.stdout.write("(5) 틱 · 멈췄던 시간 적용  ok\n");
+    assert.ok(hungry >= 1, "배고픔 구간 진입을 알린다");
+    process.stdout.write("(5) 틱 · 꺼 둔 틈은 버리고 켜 둔 시간만 적용  ok\n");
   }
 
   // (6) 밥을 주면 만복도가 오르고 쿨타임이 화면 값으로 온다

@@ -1,0 +1,33 @@
+// 개체가 앉는 자리 — 따라가는 창의 오른쪽 아래를 기준으로 한 어긋남이다 (docs/specs/s5.md "놀이공간")
+//
+// 사용자가 마리를 끌어다 놓으면 그 자리를 기억한다. 파티 칸이나 박스와는 상관이 없다.
+// 박스에 있는 개체의 자리도 그대로 둔다 — 다시 꺼내면 놓아 둔 자리로 돌아간다.
+import type { SaveV3 } from "../shared/save-v3";
+
+export interface HomePoint {
+  dx: number;
+  dy: number;
+}
+
+export type HomeFailure = "no-pet" | "bad-value";
+
+export interface HomeResult {
+  ok: boolean;
+  reason?: HomeFailure;
+  petId?: string;
+  home?: HomePoint;
+}
+
+const isFinitePoint = (v: unknown): v is HomePoint => {
+  if (v == null || typeof v !== "object") return false;
+  const { dx, dy } = v as { dx?: unknown; dy?: unknown };
+  return typeof dx === "number" && typeof dy === "number" && Number.isFinite(dx) && Number.isFinite(dy);
+};
+
+export function setHome(save: SaveV3, petId: string, home: unknown): HomeResult {
+  if (!isFinitePoint(home)) return { ok: false, reason: "bad-value" };
+  const pet = save.pets.find((p) => p.id === petId);
+  if (!pet) return { ok: false, reason: "no-pet" };
+  pet.home = { dx: home.dx, dy: home.dy };
+  return { ok: true, petId, home: { ...pet.home } };
+}

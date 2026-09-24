@@ -895,6 +895,9 @@ const REASON: Record<string, string> = {
   "not-achieved": "아직 달성하지 않았어요.",
   "already-claimed": "이미 받았어요.",
   "save-failed": "저장하지 못했어요. 잠시 뒤 다시 해 주세요.",
+  "art-missing": "바뀔 모습의 그림을 받지 못했어요. 잠시 뒤 다시 해 주세요.",
+  "not-writer": "다른 창이 저장을 맡고 있어요. 잠시 뒤 다시 해 주세요.",
+  timeout: "응답이 없어요. 잠시 뒤 다시 해 주세요.",
 };
 
 // 대상이 사라지거나 일이 끝나는 조작 — 결과를 보여 줄 곳이 없으므로 모달을 닫는다
@@ -908,12 +911,23 @@ const TOUCHES_DEX = new Set(["egg.open", "shop.buy", "evolve", "bag.use"]);
 let seq = 0;
 const nextReqId = (cmd: string, target: string): string => `ui:${Date.now()}:${++seq}:${cmd}:${target}`;
 
+// 답을 기다리는 조작이 있으면 새 조작을 받지 않는다. 빠른 두 번 클릭이 두 번 사거나 두 번 쓰지 않게 한다.
+// 여러 개 사기는 앞 조작의 답을 받은 뒤 다음을 보내므로 막히지 않는다
+let busy = false;
+
 // 성공하면 true. 여러 번 보내는 쪽이 중간에 멈출 수 있게 돌려준다
 async function send(cmd: string, target: string, extra: Record<string, unknown> = {}, opts: { keepOpen?: boolean } = {}): Promise<boolean> {
-  const args = { ...extra, reqId: nextReqId(cmd, target) };
-  const reply: ManageReply = await window.pokebuddyManage.command({ cmd, target, args });
-  if (reply.ok && TOUCHES_DEX.has(cmd)) dexRows = null;
-  await refresh();
+  if (busy) return false;
+  busy = true;
+  let reply: ManageReply;
+  try {
+    const args = { ...extra, reqId: nextReqId(cmd, target) };
+    reply = await window.pokebuddyManage.command({ cmd, target, args });
+    if (reply.ok && TOUCHES_DEX.has(cmd)) dexRows = null;
+    await refresh();
+  } finally {
+    busy = false;
+  }
 
   if (!reply.ok) {
     notice = REASON[reply.reason] ?? reply.reason;

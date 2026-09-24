@@ -25,6 +25,10 @@ export interface CheckResult {
 
 const SHINY_RIGHT = "shiny:"; // v2 inventory 의 이로치 권리 기록. 도구가 아니라서 legacy 로 보존한다
 
+// v2 도구 이름 → v3 도구 이름. 이름이 다르면 가방에 남아도 쓸 수 없다.
+// `berry` 는 프리미엄먹이의 옛 이름이다 (data/items.json 의 premium-food)
+const ITEM_RENAME: Record<string, string> = { berry: "premium-food" };
+
 // v2 의 마리 → v3 의 개체. 배고픔을 만복도로 뒤집고 쿨타임은 남은 시간으로 바꾼다
 export function convertPet(pet: Pet, now: number, date: string): PetV3 {
   const left = (at: number | null, span: number): number => (at == null ? 0 : Math.max(0, span - (now - at)));
@@ -85,7 +89,9 @@ export function migrate(v2: SaveV2, now: number): MigrateResult {
       out.legacy[k] = v;
       continue;
     }
-    if (typeof v === "number" && v > 0) out.bag[k] = Math.round(v);
+    if (typeof v !== "number" || v <= 0) continue;
+    const id = ITEM_RENAME[k] ?? k;
+    out.bag[id] = (out.bag[id] ?? 0) + Math.round(v);
   }
 
   out.points.balance = Math.max(0, Math.round(v2.points));

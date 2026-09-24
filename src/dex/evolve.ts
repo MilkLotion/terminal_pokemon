@@ -100,6 +100,13 @@ export function evolve(save: SaveV3, petId: string, dayPart: DayPart, choice?: s
   pet.evolved.push(from);
   pet.species = picked.to;
   pet.stage += 1;
+  // v2 에서 고른 모습은 legacy 의 `look:<id>` 에 있고 무대가 그것을 그린다. 두면 진화 뒤에도 옛 모습으로 보인다.
+  // v2 진화도 고른 모습을 풀었다. legacy 는 지우지 않으므로 다른 키로 옮겨 보존한다
+  const lookKey = `look:${pet.id}`;
+  if (lookKey in save.legacy) {
+    save.legacy[`look-before-evolve:${pet.id}`] = save.legacy[lookKey];
+    delete save.legacy[lookKey];
+  }
 
   if (!save.dex.unlocked.includes(picked.to)) save.dex.unlocked.push(picked.to);
   if (!save.dex.obtained.includes(picked.to)) save.dex.obtained.push(picked.to);

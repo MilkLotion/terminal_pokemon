@@ -55,6 +55,8 @@ export const SAVE_V3_RULES = {
     affinity: 0,
     fullness: 100, // 새 개체는 배부른 상태로 시작한다
     mood: 60,
+    size: 2, // 도트 배율 — SAVE_RULES.pet.size 와 같은 값이다
+    home: { dx: -24, dy: -60 }, // 따라가는 창 오른쪽 아래 기준 — SAVE_RULES.pet.home 과 같은 값이다
   },
   feedCooldownMs: 10 * 60_000, // 밥 주기 쿨타임 10분. 기본먹이와 프리미엄먹이가 함께 쓴다
   playCooldownMs: 10 * 60_000, // 놀아주기 쿨타임 10분
@@ -71,6 +73,9 @@ export const TIME_V3_RULES = {
   fullnessDropMs: 120_000, // 만복도 1 감소에 걸리는 시간. 시간당 30 이므로 2분에 1
   affinityGainMs: 600_000, // 친밀도 1 획득에 걸리는 가중 시간. 10분에 1
   pointGainMs: 120_000, // 포인트 1 획득에 걸리는 가중 시간. 개체 1마리당 2분에 1
+  // 한 번에 흘릴 수 있는 최대 시간. 앱은 15초마다 시간을 적용한다. 그보다 크게 벌어진 틈은 앱 종료·절전·잠금으로 본다.
+  // 틈은 소급하지 않는다 (docs/specs/s5.md "PC 잠금·절전·앱 종료 중에는 … 소급 진행하지 않는다")
+  maxTickMs: 30_000,
   // 만복도 구간 — 아래 경계값 이상이면 그 구간이다
   zone: { full: 60, normal: 40, hungry: 15 },
   // 구간별 친밀도 증가 배율(백분율). 배고픔 −30%, 매우 배고픔 −60%

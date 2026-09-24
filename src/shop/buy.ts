@@ -9,7 +9,7 @@
 import { putPet } from "../box/slots.js";
 import type { DexOptions } from "../dex/data";
 import { randomNature } from "../dex/natures.js";
-import { nextPetId } from "../egg/open.js";
+import { newPet, nextPetId, recordDex } from "../party/create.js";
 import type { Rand } from "../egg/hatch";
 import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
 import { localDate } from "../shared/clock.js";
@@ -102,29 +102,9 @@ export function buy(save: SaveV3, productId: string, now: number, rand: Rand, op
 
   // 종 지정 구매 — 새 개체를 만든다
   const id = nextPetId(save);
-  const pet: PetV3 = {
-    id,
-    species: product?.ref ?? productId,
-    shiny: false,
-    nature: randomNature(rand, opts).id,
-    size: 2,
-    level: SAVE_V3_RULES.pet.level,
-    exp: SAVE_V3_RULES.pet.exp,
-    affinity: SAVE_V3_RULES.pet.affinity,
-    affinityProgressMs: 0,
-    fullness: SAVE_V3_RULES.pet.fullness,
-    fullnessProgressMs: 0,
-    mood: SAVE_V3_RULES.pet.mood,
-    feedCooldownMs: 0, playCooldownMs: 0, playWindowMs: 0, playStreak: 0,
-    buffs: [],
-    home: { dx: -24, dy: -60 },
-    since: now,
-    stage: 0,
-    evolved: [],
-    daily: { date: localDate(now), gained: 0, feeds: 0, plays: 0, pokes: 0, presence: 0, work: 0, turns: 0 },
-  };
+  const pet = newPet({ id, species: product?.ref ?? productId, shiny: false, nature: randomNature(rand, opts).id, now });
   save.pets.push(pet);
-  if (!save.dex.obtained.includes(pet.species)) save.dex.obtained.push(pet.species);
+  recordDex(save, pet.species, pet.shiny);
   const where = placeNew(save, id);
   return { ...done, petId: id, ...where };
 }

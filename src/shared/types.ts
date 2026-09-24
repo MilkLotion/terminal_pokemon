@@ -173,6 +173,7 @@ export type CommandName =
   | "achievement.claim"
   | "tutorial.skip" | "tutorial.done"
   | "pet.set" | "pet.look"
+  | "starter.pick"
   | "agent.connect" | "agent.disconnect"
   | "settings.set"
   | "shop.buy"

@@ -49,11 +49,14 @@ async function until(test, label, ms = 20000) {
   throw new Error(`대기 실패: ${label}`);
 }
 async function game(...args) {
-  const result = await cli(['game', ...args]).done;
-  assert.equal(result.code, 0, result.stderr || result.stdout);
-  const value = JSON.parse(result.stdout);
-  assert.equal(value.ok, true);
+  const value = await gameRaw(...args);
+  assert.equal(value.ok, true, JSON.stringify(value));
   return value;
+}
+// 규칙에 걸리는 명령도 확인한다 — 실패 이유가 CLI 까지 그대로 와야 한다
+async function gameRaw(...args) {
+  const result = await cli(['game', ...args]).done;
+  return JSON.parse(result.stdout);
 }
 async function run() {
   console.log(`E2E 임시 데이터: ${dir}`);
@@ -68,9 +71,12 @@ async function run() {
     assert.equal(firstResult.code, 0, firstResult.stderr);
     assert.match(firstResult.stdout, /동반자를 띄움/);
     const saved = JSON.parse(fs.readFileSync(saveFile, 'utf8'));
-    assert.equal(saved.party.length, 1);
-    assert.equal(saved.party[0].species, 'eevee');
-    const id = saved.party[0].id;
+    assert.equal(saved.v, 3, '저장은 v3 으로 쓴다');
+    assert.equal(saved.pets.length, 1);
+    assert.equal(saved.pets[0].species, 'eevee');
+    assert.equal(saved.starterPetId, saved.pets[0].id, '첫 개체를 기억한다');
+    assert.equal(saved.party.slots[0].petId, saved.pets[0].id, '첫 파티 칸에 꺼내 놓는다');
+    const id = saved.pets[0].id;
     checks.push('선택창에서 이브이 선택 후 실제 앱 준비와 저장');
     const beforeLock = fs.readFileSync(lock, 'utf8');
     const duplicate = await cli(['companion']).done;
@@ -80,14 +86,17 @@ async function run() {
     checks.push('중복 실행은 기존 프로세스와 저장 유지. 실제 mailbox 조회');
     const sizeResult = await cli(['game', 'pet.set', id, 'size=3']).done;
     assert.equal(JSON.parse(sizeResult.stdout).reason, 'not-yet');
-    assert.equal(JSON.parse(fs.readFileSync(saveFile, 'utf8')).party[0].size, saved.party[0].size);
+    assert.equal(JSON.parse(fs.readFileSync(saveFile, 'utf8')).pets[0].size, saved.pets[0].size);
     checks.push('크기 변경 명령은 미구현으로 확인. 저장 크기는 변경되지 않음');
     await game('pet.set', id, JSON.stringify({ home: { dx: -40, dy: -70 } }));
     await game('party.hide', id);
-    assert.equal(JSON.parse(fs.readFileSync(saveFile, 'utf8')).party[0].shown, false);
+    assert.equal(JSON.parse(fs.readFileSync(saveFile, 'utf8')).party.slots[0].hidden, true);
     await game('party.show', id);
-    await game('feed', id);
-    checks.push('위치·숨기기·다시 표시·돌봄을 CLI에서 앱으로 전달');
+    // 새 개체는 만복도가 가득 차 있어 밥을 받지 않는다. 규칙 실패가 CLI 까지 온다
+    assert.equal((await gameRaw('feed', id)).reason, 'full');
+    await game('play', id);
+    assert.equal((await gameRaw('play', id)).reason, 'cooldown', '쿨타임도 그대로 전달');
+    checks.push('위치·숨기기·다시 표시·돌봄과 규칙 실패를 CLI에서 앱으로 전달');
     const stopped = await cli(['companion', 'stop']).done;
     assert.equal(stopped.code, 0, stopped.stderr);
     await until(() => !fs.existsSync(lock), '종료 잠금 해제');
@@ -96,15 +105,17 @@ async function run() {
     assert.equal(restored.code, 0, restored.stderr);
     assert.equal(events().filter((e) => e.event === 'picker-ready').length, selectedCount);
     const restoredSave = JSON.parse(fs.readFileSync(saveFile, 'utf8'));
-    assert.equal(restoredSave.party[0].id, id);
-    assert.equal(restoredSave.party[0].size, saved.party[0].size);
-    assert.deepEqual(restoredSave.party[0].home, { dx: -40, dy: -70 });
-    assert.equal(restoredSave.party[0].shown, true);
+    assert.equal(restoredSave.pets[0].id, id);
+    assert.equal(restoredSave.pets[0].size, saved.pets[0].size);
+    assert.deepEqual(restoredSave.pets[0].home, { dx: -40, dy: -70 });
+    assert.equal(restoredSave.party.slots[0].hidden, false);
     checks.push('종료 후 재실행에서 선택창 없이 같은 파티·크기 복원');
     await cli(['companion', 'stop']).done;
     await until(() => !fs.existsSync(lock), '복원 검사 후 종료');
     const emptySave = JSON.parse(fs.readFileSync(saveFile, 'utf8'));
-    emptySave.party = [];
+    emptySave.pets = [];
+    emptySave.starterPetId = null;
+    emptySave.party.slots = emptySave.party.slots.map((slot) => (slot.state === 'pokemon' ? { state: 'empty' } : slot));
     fs.writeFileSync(saveFile, JSON.stringify(emptySave));
     const cancelled = cli(['companion']);
     await until(() => events().filter((e) => e.event === 'picker-ready').length === selectedCount + 1, '빈 파티의 선택창');

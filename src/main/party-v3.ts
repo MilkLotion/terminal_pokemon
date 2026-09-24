@@ -1,0 +1,268 @@
+// 마리 목록의 출처 (저장 v3) — 무대는 이것 하나만 본다. v2 의 `createSaveParty` 와 같은 자리를 맡는다.
+//
+// v2 와 다른 점
+//   저장을 직접 고치지 않는다. 모든 변경은 거래 실행기(`src/main/game-v3.ts`)를 거친다.
+//   그래서 여기는 세 가지만 한다 — 잠금 잡기, 파일 다시 읽기, 무대가 읽을 모양으로 바꾸기.
+//
+// 잠금은 v2 와 같은 파일(`save.lock`)을 쓴다. 기기에서 저장을 쓰는 프로세스는 하나다
+// (docs/specs/modules.md "창이 여러 개여도 저장 쓰기는 주 프로세스 하나가 한다").
+//   writer  잠금을 잡았다. 명령을 직접 실행한다
+//   reader  못 잡았다. 명령을 mailbox 로 보내고, 파일이 바뀌면 다시 읽는다. 10초마다 다시 잡아 본다
+// 창 펫(window)은 독립 펫(companion)이 살아 있으면 자리를 내준다 — v2 와 같은 우선순위다.
+//
+// 파일 감시는 두 역할 모두 건다. 자기가 쓴 것도 감시로 돌아와 읽으므로 메모리와 파일이 갈라지지 않는다.
+import fs from "node:fs";
+import path from "node:path";
+import * as mailbox from "../save/mailbox.js";
+import * as storeV3 from "../save/store-v3.js";
+import { empty } from "../save/v3.js";
+import * as writer from "../save/writer.js";
+import type { CommandResult, Mode } from "../shared/types";
+import type { SaveV3 } from "../shared/save-v3";
+import type { GameV3 } from "./game-v3";
+import type { Home } from "./layout";
+import type { PartyPet } from "./party";
+import type { Paths } from "./paths";
+
+export const PARTY_V3_RULES = {
+  reclaimMs: 10_000, // reader 가 writer 자리를 다시 잡아 보는 간격 — v2 PARTY_RULES.reclaimMs 와 같다
+};
+
+export interface V3PartyOptions {
+  game: GameV3;
+  paths: Pick<Paths, "save" | "saveLock" | "mailbox" | "companionLock">;
+  mode: Mode;
+  now?: () => number;
+  pid?: number;
+  log?: ((o: Record<string, unknown>) => void) | null;
+}
+
+export interface V3Party {
+  kind: "v3";
+  pets(): PartyPet[]; // 무대에 나올 마리 — 꺼내 놓은 것만
+  all(): PartyPet[]; // 파티 칸에 있는 마리 전부 — 숨긴 것도
+  isWriter(): boolean;
+  needsStarter(): boolean;
+  begin(species: string): boolean;
+  setHome(id: string, home: Home): Promise<CommandResult>; // 저장하지 못하면 그 이유를 돌려준다
+  setShown(id: string, shown: boolean): Promise<CommandResult>;
+  save(): SaveV3 | null;
+  refresh(): void; // 명령을 보낸 뒤 바로 다시 읽는다 — 감시를 기다리지 않는다
+  onChange(cb: () => void): () => void;
+  onRole(cb: (isWriter: boolean) => void): () => void;
+  stop(): void;
+}
+
+// v2 에서 옮겨온 별명과 모습은 `legacy` 에 남아 있다 (src/save/migrate-v3.ts)
+const legacyText = (save: SaveV3, key: string): string | null => {
+  const v = save.legacy[key];
+  return typeof v === "string" && v ? v : null;
+};
+
+export function createV3Party(opts: V3PartyOptions): V3Party {
+  const { game, paths, mode } = opts;
+  const now = opts.now ?? Date.now;
+  const pid = opts.pid ?? process.pid;
+  const log = opts.log ?? null;
+
+  let state: SaveV3 | null = null;
+  let amWriter = false;
+  let closed = false;
+  let cacheKey: string | null = null; // mtime·크기가 같으면 다시 파싱하지 않는다
+  let watcher: fs.FSWatcher | null = null;
+  let timer: NodeJS.Timeout | null = null;
+  const changeCbs = new Set<() => void>();
+  const roleCbs = new Set<(w: boolean) => void>();
+
+  const emitChange = (): void => {
+    for (const cb of changeCbs) cb();
+  };
+  const emitRole = (): void => {
+    for (const cb of roleCbs) cb(amWriter);
+  };
+
+  const petView = (save: SaveV3, petId: string, hidden: boolean): PartyPet | null => {
+    const pet = save.pets.find((p) => p.id === petId);
+    if (!pet) return null;
+    const look = legacyText(save, `look:${pet.id}`) ?? pet.species;
+    return {
+      id: pet.id,
+      species: pet.species,
+      look: `${look}${pet.shiny ? ":shiny" : ""}`,
+      size: pet.size,
+      nature: pet.nature,
+      nick: legacyText(save, `nick:${pet.id}`),
+      home: { ...pet.home },
+      shown: !hidden,
+    };
+  };
+
+  const slotPets = (onlyShown: boolean): PartyPet[] => {
+    if (!state) return [];
+    const out: PartyPet[] = [];
+    for (const slot of state.party.slots) {
+      if (slot.state !== "pokemon" || !slot.petId) continue;
+      if (onlyShown && slot.hidden === true) continue;
+      const view = petView(state, slot.petId, slot.hidden === true);
+      if (view) out.push(view);
+    }
+    return out;
+  };
+
+  // 파일을 다시 읽는다. 바뀐 것이 없으면 아무것도 하지 않는다
+  function reload(force = false): void {
+    let key: string | null = null;
+    try {
+      const st = fs.statSync(paths.save);
+      key = `${st.mtimeMs}:${st.size}`;
+    } catch {
+      key = null;
+    }
+    if (!force && key === cacheKey) return;
+    if (key == null) {
+      cacheKey = null;
+      if (state) {
+        state = null;
+        emitChange();
+      }
+      return;
+    }
+    // 읽기 전용은 파손 파일을 옮기지 않는다 — writer 의 일이다
+    const r = storeV3.read(paths.save, { repair: amWriter });
+    if (r.reason === "unreadable") return; // 잠깐 잠겼다 — 지난 값을 그대로 쓴다
+    if (r.migrated) log?.({ party: "migrated-v3", backup: storeV3.backupName(paths.save) });
+    if (r.corrupted) log?.({ party: "save-corrupted", movedTo: `${paths.save}.bak` });
+    cacheKey = key;
+    state = r.state;
+    emitChange();
+  }
+
+  // 폴더를 본다. 파일을 직접 보면 원자적 쓰기(rename) 뒤에 감시가 끊긴다
+  function watch(): void {
+    if (watcher) return;
+    const dir = path.dirname(paths.save);
+    const base = path.basename(paths.save);
+    let pending = false;
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      watcher = fs.watch(dir, (_event, filename) => {
+        if (pending || closed) return;
+        if (filename && filename !== base) return;
+        pending = true;
+        setImmediate(() => {
+          pending = false;
+          if (!closed) reload();
+        });
+      });
+      watcher.on("error", () => {
+        // 폴더가 사라졌다 — 10초 재확인이 받쳐 준다
+      });
+    } catch {
+      watcher = null;
+    }
+  }
+
+  // 독립 펫이 살아 있나 — 창 펫이 저장 잠금을 내줄지 정할 때. 자기 자신은 빼고 본다
+  function companionAlive(): boolean {
+    try {
+      const other = Number(fs.readFileSync(paths.companionLock, "utf8").split("\n")[0]);
+      return other > 0 && other !== pid && writer.pidAlive(other);
+    } catch {
+      return false;
+    }
+  }
+
+  function claim(): boolean {
+    if (closed) return false;
+    if (amWriter && writer.isMine(paths.saveLock, pid)) return true;
+    const r = writer.claim(paths.saveLock, pid);
+    if (!r.ok) {
+      if (amWriter) resign();
+      return false;
+    }
+    if (amWriter) return true; // 잠금 파일만 사라졌던 것 — 다시 적었다
+    amWriter = true;
+    reload(true); // writer 가 되면 파일을 진실로 다시 읽는다 (이전이 필요하면 여기서 일어난다)
+    log?.({ party: "writer", pets: state?.pets.length ?? 0 });
+    emitRole();
+    return true;
+  }
+
+  function resign(): void {
+    if (amWriter) writer.release(paths.saveLock, pid);
+    amWriter = false;
+    cacheKey = null;
+    log?.({ party: "reader" });
+    emitRole();
+  }
+
+  function tick(): void {
+    if (closed) return;
+    if (mode === "window" && amWriter && companionAlive()) {
+      resign(); // 독립 펫이 우선
+      return;
+    }
+    if (!amWriter) claim();
+  }
+
+  // reader 의 요청 — writer 가 처리해 파일에 쓰면 감시가 읽어 온다
+  const ask = (cmd: "pet.set" | "party.show" | "party.hide", target: string, args?: Record<string, unknown>): Promise<CommandResult> =>
+    mailbox.send(paths.mailbox, { cmd, target, ...(args ? { args } : {}), from: "pet" });
+
+  // 처음 한 번 — 잡아 보고 파일을 읽는다
+  claim();
+  reload(true);
+  watch();
+  timer = setInterval(tick, PARTY_V3_RULES.reclaimMs);
+
+  return {
+    kind: "v3",
+    pets: () => slotPets(true),
+    all: () => slotPets(false),
+    isWriter: () => amWriter && writer.isMine(paths.saveLock, pid),
+    needsStarter: () => amWriter && (!state || state.pets.length === 0),
+    begin(species) {
+      if (!amWriter) return false;
+      // 저장이 아직 없으면 빈 저장을 먼저 만든다. 실행기는 읽을 것이 있어야 돈다
+      if (!state && !storeV3.write(paths.save, empty(now()))) return false;
+      const r = game.send({ cmd: "starter.pick", target: species, args: { reqId: `starter:${species}:${now()}` } }, "menu");
+      reload(true);
+      return r.ok;
+    },
+    async setHome(id, home) {
+      if (!amWriter) return ask("pet.set", id, { home });
+      const r = game.send({ cmd: "pet.set", target: id, args: { home, reqId: `home:${id}:${now()}` } }, "pet");
+      reload(true);
+      return r;
+    },
+    async setShown(id, shown) {
+      if (!amWriter) return ask(shown ? "party.show" : "party.hide", id);
+      const r = game.send({ cmd: shown ? "party.show" : "party.hide", target: id, args: { reqId: `shown:${id}:${now()}` } }, "menu");
+      reload(true);
+      return r;
+    },
+    save: () => state,
+    refresh: () => reload(true),
+    onChange(cb) {
+      changeCbs.add(cb);
+      return () => changeCbs.delete(cb);
+    },
+    onRole(cb) {
+      roleCbs.add(cb);
+      return () => roleCbs.delete(cb);
+    },
+    stop() {
+      closed = true;
+      if (timer) clearInterval(timer);
+      timer = null;
+      try {
+        watcher?.close();
+      } catch {
+        // 이미 닫혔다
+      }
+      watcher = null;
+      if (amWriter) writer.release(paths.saveLock, pid);
+      amWriter = false;
+    },
+  };
+}

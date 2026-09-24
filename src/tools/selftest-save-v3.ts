@@ -93,7 +93,8 @@ const v2Save = (over: Partial<SaveV2> = {}): SaveV2 => ({
 {
   const { save } = migrate(v2Save(), T0);
   assert.ok(save);
-  assert.equal(save.bag.berry, 3);
+  assert.equal(save.bag.berry, undefined, "v2 이름 그대로 남기지 않는다");
+  assert.equal(save.bag["premium-food"], 3, "berry 는 프리미엄먹이의 옛 이름이다");
   assert.equal(save.bag["shiny:p1"], undefined, "이로치 권리는 도구가 아니다");
   assert.equal(save.legacy["shiny:p1"], 1, "legacy 에 보존한다");
   process.stdout.write("(3) 이전 · 이로치 권리 보존  ok\n");
@@ -235,6 +236,18 @@ process.stdout.write("selftest-save-v3: 통과 (빈 저장·이전·검사·정�
       assert.ok(fs.existsSync(file), "원본이 남아 있다");
       assert.equal(fs.existsSync(`${file}.bak`), false);
       process.stdout.write("(13) 읽기 전용은 격리하지 않는다  ok\n");
+    }
+
+    // (14) 읽기 전용은 v2 파일을 바꾸지 않는다. 옮긴 값만 돌려준다
+    {
+      const file = path.join(root, "v2-reader.json");
+      assert.equal(store.write(file, v2Save()), true);
+      const before = fs.readFileSync(file, "utf8");
+      const res = storeV3.read(file, { repair: false });
+      assert.equal(res.state?.v, 3, "옮긴 값을 돌려준다");
+      assert.equal(fs.readFileSync(file, "utf8"), before, "파일은 v2 그대로");
+      assert.equal(fs.existsSync(storeV3.backupName(file)), false, "백업도 만들지 않는다");
+      process.stdout.write("(14) 읽기 전용은 v2 를 교체하지 않는다  ok\n");
     }
   } finally {
     try {

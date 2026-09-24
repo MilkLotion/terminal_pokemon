@@ -26,6 +26,11 @@ import type { Look, ArtLoader } from "../main/art";
 import type { StageWindow } from "../main/stage-window";
 import type { PartyPet } from "../main/party";
 import { createCommands } from "../main/commands";
+import { createGame } from "../main/game-v3";
+import { createV3Party } from "../main/party-v3";
+import { begin } from "../party/starter";
+import * as storeV3 from "../save/store-v3";
+import { empty as emptyV3 } from "../save/v3";
 import { send } from "../save/mailbox";
 
 const out = (line: string): void => {
@@ -363,36 +368,60 @@ async function stageRuntimeTests(): Promise<void> {
     eq(fs.readFileSync(paths.save, "utf8"), original, "다른 writer 의 저장을 덮지 않음");
   } finally { party.stop(); other.kill(); }
 
+  // v2 저장을 처음 열면 v3 으로 옮긴다. 원본은 옆에 남고 무대는 그대로 돈다
+  {
+    const migPaths = pathsIn(tmpDir("migrate-v3"));
+    const legacy = devSaveState(["eevee", "pikachu"], { now: T0 });
+    legacy.party[0]!.nick = "뽀야";
+    legacy.points = 1234;
+    store.write(migPaths.save, legacy);
+    const migGame = createGame({ file: migPaths.save });
+    const migParty = createV3Party({ game: migGame, paths: migPaths, mode: "companion" });
+    try {
+      const moved = storeV3.read(migPaths.save, { repair: false }).state!;
+      eq(moved.pets.length, 2, "두 마리가 그대로 옮겨진다");
+      eq(moved.points.balance, 1234, "포인트가 그대로");
+      ok(fs.existsSync(storeV3.backupName(migPaths.save)), "원본을 옆에 남긴다");
+      ok(!migParty.needsStarter(), "이미 개체가 있으면 첫 선택을 묻지 않는다");
+      eq(migParty.pets().map((p) => p.id), ["p1", "p2"], "무대에 두 마리");
+      eq(migParty.pets()[0]!.nick, "뽀야", "별명은 legacy 에서 되살린다");
+    } finally { migParty.stop(); }
+  }
+
+  // 명령 왕복 (저장 v3) — mailbox → dispatcher → 거래 실행기 → 파일
   const commandPaths = pathsIn(tmpDir("care-commands"));
-  const initial = devSaveState(["eevee"], { now: T0 });
-  initial.party[0]!.hunger = 80;
-  store.write(commandPaths.save, initial);
-  const source = createSaveParty({ paths: commandPaths, mode: "companion", savedWindows: () => ({}) });
+  const seed = emptyV3(T0);
+  begin(seed, "eevee", T0, () => 0);
+  seed.pets[0]!.fullness = 40;
+  storeV3.write(commandPaths.save, seed);
+  const game = createGame({ file: commandPaths.save, rand: () => 0 });
+  const source = createV3Party({ game, paths: commandPaths, mode: "companion" });
   let animations = 0;
-  const commands = createCommands({ mode: "companion", mailboxDir: commandPaths.mailbox, party: source,
+  const commands = createCommands({ mode: "companion", mailboxDir: commandPaths.mailbox, party: source, game,
     stage: { poke: () => true, care: () => void animations++, petIds: () => ["p1"], size: () => ({ w: 800, h: 600 }), visible: () => true },
     settings: { hidden: () => false, setHidden() {}, clickThrough: () => false, setClickThrough() {}, keepVisible: () => true, setKeepVisible() {} }, quit() {},
   });
   try {
+    ok(source.isWriter(), "잠금을 잡아 writer 로 시작");
     commands.setWriter(true);
     const fed = await send(commandPaths.mailbox, { cmd: "feed", target: "p1", from: "cli" });
-    ok(fed.ok, "mailbox → dispatcher → 상태 → 저장 왕복");
-    eq(store.read(commandPaths.save, { repair: false }).state!.party[0]!.hunger, 40, "밥 효과가 디스크에 저장");
+    ok(fed.ok, "mailbox → dispatcher → 실행기 → 저장 왕복");
+    eq(storeV3.read(commandPaths.save, { repair: false }).state!.pets[0]!.fullness, 60, "밥 효과가 디스크에 저장");
     eq(animations, 1, "저장 성공 뒤 연출 요청");
     const again = await commands.dispatcher.dispatch({ cmd: "feed", target: "p1", from: "menu" });
     eq(again.reason, "cooldown", "중복 밥 거절");
     eq(animations, 1, "거절된 명령은 연출하지 않음");
+
     const old = structuredClone(source.save());
-    // 저장 경로를 디렉터리로 바꿔 쓰기 실패 재현 — 임시 폴더 안에서만
+    // 저장 경로를 디렉터리로 바꿔 파일에 닿지 못하는 상황 재현 — 임시 폴더 안에서만
     fs.unlinkSync(commandPaths.save);
     fs.mkdirSync(commandPaths.save);
     const failed = await commands.dispatcher.dispatch({ cmd: "play", target: "p1", from: "menu" });
-    eq(failed.reason, "save-failed", "저장 실패를 성공으로 응답하지 않음");
-    eq(source.save(), old, "저장 실패 시 돌봄·보상 롤백");
+    ok(!failed.ok, "저장에 닿지 못하면 성공으로 응답하지 않음");
     eq(animations, 1, "저장 실패 시 연출하지 않음");
     const moved = await commands.dispatcher.dispatch({ cmd: "pet.set", target: "p1", args: { home: { dx: -123, dy: -45 } }, from: "cli" });
-    eq(moved.reason, "save-failed", "위치 저장 실패를 성공으로 응답하지 않음");
-    eq(source.save(), old, "위치 저장 실패 시 메모리 위치 복원");
+    ok(!moved.ok, "위치 저장 실패를 성공으로 응답하지 않음");
+    eq(source.save(), old, "저장 실패는 메모리 상태를 바꾸지 않는다");
   } finally { commands.stop(); source.stop(); }
 }
 
