@@ -169,23 +169,27 @@ function status(petArg) {
   else if (cliInfo.electron && fs.existsSync(cliInfo.electron)) say(`실행 경로 기록: ${PATHS.cli} (v${cliInfo.version})`);
   else say(`실행 경로 기록: Electron 경로가 없음 — pokebuddy setup 을 다시 (${cliInfo.electron || "null"})`);
 
-  // 게임 진행 — 저장 v2 를 읽기 전용으로 본다 (쓰는 쪽은 떠 있는 동반자·창 펫). repair:false — 파손 파일을 옮기는 것은 writer 의 일.
-  // 세션 펫은 저장을 모른다
+  // 게임 진행 — 저장 v3 를 읽기 전용으로 본다 (쓰는 쪽은 떠 있는 동반자·창 펫). repair:false — 파손 파일을 옮기는 것은 writer 의 일.
+  // 옛 v2 파일이면 읽는 값만 v3 로 옮겨 보인다. 세션 펫은 저장을 모른다
   try {
-    const { state: save, corrupted, reason } = require("../dist/save/store.js").read(PATHS.save, { repair: false });
+    const { state: save, corrupted, reason } = require("../dist/save/store-v3.js").read(PATHS.save, { repair: false });
     const { nature } = require("../dist/dex/natures.js");
     const lang = i18n.langOf(config);
     if (corrupted) say(`\n게임: 저장이 깨짐 — 펫이 다음에 열 때 save.json.bak 으로 옮기고 새로 시작한다 (${PATHS.save})`);
     else if (reason === "unreadable") say(`\n게임: 저장을 읽지 못함 — 잠김·권한. 잠시 뒤 다시 (${PATHS.save})`);
     else if (!save) say(`\n게임: 저장 없음 — 처음 띄울 때 스타터를 고른다 (${PATHS.save})`);
     else {
-      say(`\n게임: 칸 ${save.slots} · 포인트 ${save.points} · 파티 ${save.party.length}마리 (${PATHS.save})`);
-      // 마리마다 이름(별명 우선) · 성격(표의 이름, 모르면 id) · 보임 · 친밀도
-      const pets = save.party.map((p) => {
+      const open = save.party.slots.filter((s) => s.state !== "locked").length;
+      const inParty = save.party.slots.filter((s) => s.state === "pokemon" && s.petId);
+      say(`\n게임: 파티 칸 ${open} · 포인트 ${save.points.balance} · 파티 ${inParty.length}마리 · 전체 ${save.pets.length}마리 · 알 ${save.eggs.length}개 (${PATHS.save})`);
+      // 파티의 마리마다 종 이름 · 성격(표의 이름, 모르면 id) · 보임 · 레벨 · 친밀도 · 만복도 · 기분
+      const pets = inParty.map((slot) => {
+        const p = save.pets.find((x) => x.id === slot.petId);
+        if (!p) return null;
         const n = nature(p.nature);
         const natureLabel = (n && (n.name[lang] || n.name.ko)) || p.nature;
-        return `${p.nick ?? petName(p.species, lang)}(${natureLabel} · ${p.shown ? "보임" : "숨김"} · 친밀도 ${Math.floor(p.affinity)} · ${i18n.t("state.hunger", { n: Math.round(p.hunger) })} · ${i18n.t("state.mood", { mood: i18n.moodWord(p.mood) })})`;
-      });
+        return `${petName(p.species, lang)}(${natureLabel} · ${slot.hidden ? "숨김" : "보임"} · Lv.${p.level} · 친밀도 ${Math.floor(p.affinity)} · 만복도 ${Math.round(p.fullness)} · ${i18n.t("state.mood", { mood: i18n.moodWord(p.mood) })})`;
+      }).filter(Boolean);
       if (pets.length) say(`  ${pets.join(", ")}`);
     }
   } catch (e) {

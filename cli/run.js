@@ -329,8 +329,9 @@ async function companion(opts = {}) {
   delete env.POKEBUDDY_SLUG;
   delete env.POKEBUDDY_DOT_SIZE;
   delete env.POKEBUDDY_KEEP_VISIBLE;
-  const { state: saved } = require("../dist/save/store.js").read(PATHS.save, { repair: false });
-  const firstRun = !saved || saved.party.length === 0;
+  // 저장은 v3 이다. 옛 v2 파일이면 읽는 값만 v3 로 옮겨 본다 — 파일을 옮기는 것은 펫(writer)의 일 (repair:false)
+  const { state: saved } = require("../dist/save/store-v3.js").read(PATHS.save, { repair: false });
+  const firstRun = !saved || saved.pets.length === 0;
   if (firstRun) say("첫 실행 — 포켓몬 선택 창에서 고르면 뜬다 (닫으면 시작하지 않는다)");
   if (debug) {
     env.POKEBUDDY_LOG = path.join(PATHS.pets, "debug-companion.log");
@@ -365,13 +366,14 @@ async function companion(opts = {}) {
   }
 }
 
-// 저장된 파티에서 보이는 첫 마리의 그림 종(look, 없으면 species) — 펫이 저장을 쓰는 중이라 읽기 전용으로 본다.
-// repair:false — 파손 파일을 .bak 으로 옮기는 것은 writer 의 일. 저장이 없거나 보이는 마리가 없으면 null
+// 파티에서 꺼내 놓은 첫 마리의 종 — 펫이 저장을 쓰는 중이라 읽기 전용으로 본다 (저장 v3).
+// repair:false — 파손 파일을 .bak 으로 옮기는 것은 writer 의 일. 저장이 없거나 꺼낸 마리가 없으면 null
 function savedSpecies() {
   try {
-    const { state: save } = require("../dist/save/store.js").read(PATHS.save, { repair: false });
-    const pet = save ? save.party.find((p) => p.shown) : null;
-    return pet ? (pet.look ?? pet.species) : null;
+    const { state: save } = require("../dist/save/store-v3.js").read(PATHS.save, { repair: false });
+    const slot = save ? save.party.slots.find((s) => s.state === "pokemon" && s.petId && !s.hidden) : null;
+    const pet = slot ? save.pets.find((p) => p.id === slot.petId) : null;
+    return pet ? pet.species : null;
   } catch {
     return null;
   }

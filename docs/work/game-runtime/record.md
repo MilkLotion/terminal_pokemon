@@ -8,6 +8,7 @@ S5 새 게임 규칙을 실제 앱에 붙이는 구현 작업의 기록이다. �
 |---|---|---|
 | 실제 앱을 저장 v3 으로 (검수·수정 포함) | 2026-09-24 | `65db4f8` |
 | 끊긴 기능 세 가지 | 2026-09-24 | `c58da23` |
+| 옛 v2 코드 정리 | 2026-09-25 | 진행 |
 
 ## 설계
 
@@ -62,6 +63,41 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 - v3 에는 기분이 바뀌는 규칙이 없다. 우클릭 메뉴의 기분이 늘 같다.
 - `docs/design.md` 와 `docs/terms.md` 의 오래 놀아주기 설명(10초 안에 이어 누르며 약 30초)이 구현된 3중첩 규칙과 다르다.
 
+### 옛 v2 코드 정리의 설계
+
+날짜: 2026-09-25. 상태: 커밋 1 작업·검수 완료. 커밋 2 미시작. 사용자 지시: "진행" ([작업 후보](../../progress.md#작업-후보) 2번). 설계 승인: "진행".
+
+**관측** (제품 진입점에서 import 를 따라간 결과. 진입점은 `src/main/app.ts`, `preload.ts`, 렌더러, `src/cli/game.ts`, 훅, `cli/*.js` 가 부르는 `dist/` 모듈이다)
+- 앱과 CLI 가 쓰지 않는 모듈 5개: `src/dex/progress.ts`, `src/main/game-menu.ts`, `src/shop/catalog.ts`, `src/shop/core.ts`, `src/state/core.ts`. 검사 `selftest-shop`·`selftest-state`·`smoke-renderer` 만 쓴다.
+- 쓰는 모듈 안의 v2 전용 코드: `src/main/party.ts` 의 `createSaveParty` 와 도움 함수, `src/main/paths.ts` 의 `readSavedWindows`, `src/main/text.ts` 의 `stateLine`, `src/main/commands.ts` 의 `PartySource | V3Party` 갈래.
+- **결함**: `cli/run.js` 와 `cli/status.js` 가 저장을 v2 읽기(`dist/save/store.js`)로 읽는다. v3 저장을 v2 로 읽으면 "파손"이 된다(임시 v3 파일로 확인). 그래서 2026-09-24 전환 뒤 `pokebuddy status` 는 늘 "저장이 깨짐"을 보이고, `pokebuddy companion` 은 늘 "첫 실행" 안내를 보인다. 저장 파일은 바뀌지 않는다(`repair: false`).
+- `selftest-stage` 의 저장 잠금·reader·writer 검사 대부분이 `createSaveParty`(v2)를 본다. `createV3Party` 는 같은 일을 하지만 검사가 적다.
+
+**목표**
+1. CLI 가 v3 저장을 바르게 읽는다.
+2. 앱이 쓰지 않는 v2 코드를 걷는다. v1·v2 저장을 v3 로 옮기는 길은 남긴다. 옛 저장을 가진 사용자의 진행을 지키기 위해서다.
+3. "새 코드"를 뜻하던 `-v3` 꼬리표를 파일·함수 이름에서 뗀다. 저장 형식 자체를 가리키는 이름(`SaveV3`, `PetV3`, `SAVE_V3_RULES`, `save/v3.ts` 의 뜻)은 남긴다. [번호 체계](../../terms.md#번호-체계)와 맞춘다.
+
+**범위** — 커밋 두 개로 나눈다.
+- 커밋 1 (동작): CLI 수정, 죽은 모듈 5개와 v2 전용 함수 제거, 관련 검사 정리. `selftest-stage` 의 v2 잠금 검사는 `createV3Party` 로 옮겨 같은 성질(reader 는 쓰지 않는다, 창 펫은 독립 펫에 자리를 내준다, 잠금을 다시 잡는다)을 본다. `smoke-renderer` 는 v2 메뉴 부분을 뺀다.
+- 커밋 2 (이름): 파일 이름 변경. 안: `main/game-v3.ts`→`main/game.ts`, `main/party-v3.ts`→`main/save-party.ts`, `main/status-v3.ts`→`main/status.ts`, `state/time-v3.ts`→`state/time.ts`, `state/care-v3.ts`→`state/care.ts`, `state/settings-v3.ts`→`state/settings.ts`, `shop/catalog-v3.ts`→`shop/catalog.ts`, `save/store.ts`→`save/legacy.ts`(v1·v2 읽기), `save/store-v3.ts`→`save/store.ts`, 검사 `selftest-*-v3` 도 같게. 함수 `createV3Party`·`V3Party`·`saveFileV3` 도 뗀다. 문서의 경로 링크를 함께 고친다.
+
+**범위 밖** — 타입과 규칙표 이름(`SaveV3` 등), 데이터 파일, `lib/i18n` 의 쓰지 않게 된 문구 키(따로 정리).
+
+**위험**
+- 잠금 검사를 옮기다 빠뜨리면 여러 창의 저장 충돌을 못 잡는다. 옮기기 전 검사 이름 목록을 적고 옮긴 뒤 대조한다.
+- 이름 변경이 문서 링크 수십 개를 바꾼다. `check-docs` 와 앵커 확인으로 잡는다.
+- `cli/*.js` 는 타입 검사를 받지 않는다. 임시 HOME 으로 `pokebuddy status` 를 실제로 돌려 확인한다.
+
+**수용 검사**
+1. 임시 HOME 의 v3 저장으로 `pokebuddy status` 가 포인트·파티를 보이고 "깨짐"을 보이지 않는다. 저장이 없으면 "저장 없음"이다.
+2. `pokebuddy companion` 의 첫 실행 판정이 v3 저장을 본다 (E2E 로 확인).
+3. 진입점에서 닿지 않는 모듈이 `src/tools` 밖에 없다 (같은 import 추적).
+4. v1·v2 저장을 여는 검사(`selftest-save`, `selftest-save-v3`, `selftest-stage` 이전 검사)가 통과한다.
+5. 옮긴 잠금 검사가 옛 검사의 성질을 모두 본다.
+6. `npm run build`, `npm run selftest`, `node scripts/e2e-companion.cjs`, `node scripts/check-docs.cjs` 통과.
+7. 커밋 2 뒤 `src` 파일 이름에 `-v3` 가 없다.
+
 ## 작업
 
 ### 저장 v3 전환의 작업
@@ -97,6 +133,22 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 - 모습: `src/main/party-v3.ts` 가 `legacy` 를 읽지 않는다. `pet.look` 은 `removed` 다. `src/dex/evolve.ts` 의 legacy 모습 옮기기와 `selftest-evolve` (11)을 되돌렸다.
 - `daily.work` 는 저장이 정수만 받으므로 가중 ms 로 둔다. 친밀도로 보일 때는 `affinityGainMs` 로 나눈다.
 - 문서: `balance.md` 에 에이전트 작업 보너스 행, `s5.md` 의 `[스펙 미확정]` 문장을 결정으로, `design.md` 의 적립 표를 v2 규칙으로 표시, `terms.md` 의 작업 시간을 고쳤다.
+
+### 옛 v2 코드 정리의 작업 — 커밋 1
+
+- CLI: `cli/run.js` 의 첫 실행 판정과 꺼낸 첫 마리, `cli/status.js` 의 게임 줄이 `dist/save/store-v3.js` 로 읽는다. 옛 v2 파일이면 읽는 값만 v3 로 옮겨 보이고 파일은 바꾸지 않는다. `status` 는 파티 칸·포인트·파티·전체 마리·알 수와 마리별 레벨·친밀도·만복도·기분을 보인다.
+- 지운 모듈: `src/dex/progress.ts`, `src/main/game-menu.ts`, `src/shop/catalog.ts`, `src/shop/core.ts`, `src/state/core.ts`, 검사 `src/tools/selftest-state.ts`.
+- 지운 함수: `src/main/party.ts` 의 `createSaveParty`·`shownOf`·`migrateHomes`·`nextPetId`·`starterInto`·`backupV1`·`PARTY_RULES`, `src/main/paths.ts` 의 `readSavedWindows`, `src/main/text.ts` 의 `stateLine`, `src/state/types.ts` 의 `StateInput`. `party.ts` 는 세션 펫 샌드박스와 `PartyPet` 만 남았다.
+- `src/state/rules.ts` 는 앱이 쓰는 `maxTickMs`·`saveMs` 만 남겼다. 나머지는 v2 육성 수치였다.
+- `src/tools/dev-save.ts` 가 저장 v3 를 만든다. 앞에서부터 파티 칸에 꺼내 놓는다.
+- 검사: `selftest-stage` 의 v2 파티 검사를 저장 v3 파티로 옮겼다(아래 대조). `selftest-shop` 은 앱 명령 경로 검사만 남겼다. `smoke-renderer` 는 v2 메뉴 부분을 뺐다. `package.json` 의 `selftest` 에서 `selftest-state` 를 뺐다.
+- 곁가지: 이번 변경과 어제 전환으로 쓰지 않게 된 import 를 지웠다(`app.ts` 의 `petName`, `shop/buy.ts` 의 `localDate`·`PetV3`).
+- 문서: `design.md` 의 모듈 표·육성 절·옛 상점 문장을 고쳤다. 지운 파일로 가던 옛 기록의 링크 4개는 경로와 "2026-09-25 삭제" 표시로 바꿨다. 본문은 바꾸지 않았다.
+
+**남긴 것과 이유**
+- `src/save/store.ts`: v1·v2 파일을 읽어 v3 로 옮기는 데 쓴다. 커밋 2 에서 `save/legacy.ts` 로 이름을 바꾼다.
+- `src/agents/usage.ts`: 지금은 앱이 부르지 않는다. 계약의 연결 화면이 "사용량 감지 상태"를 보이게 되어 있어 남긴다(`docs/specs/s5.md` 설정과 연결). v2 전용 코드가 아니다.
+- `data/shop.json`: 코드가 읽지 않는다. 설계에서 데이터 파일은 범위 밖으로 두었다.
 
 ## 검수
 
@@ -138,6 +190,29 @@ SSOT: `docs/specs/s5.md` 의 종료와 재개, `docs/specs/modules.md` 의 저�
 자동 검사가 없는 것: 실제 에이전트 상태로 쌓이는 작업 시간은 코드로만 확인했다. 무대 클릭이 놀이 연출을 보이는 것은 명령 단위 검사로만 확인했다.
 변경 문장은 쓰기 점검표로 검토했다. 사용자 결정은 원문과 선택지를 적었다.
 
+### 옛 v2 코드 정리의 검수 — 커밋 1
+
+- `npm run selftest`: 전체 통과. 무대 검사는 127건 → 118건이다. v2 순수 함수 검사(상한·집 이전·번호·스타터·config 읽기)를 지웠고 v3 파티 검사를 더했다.
+- `node scripts/e2e-companion.cjs`: 9개 흐름 통과. 지운 모듈의 옛 `dist/` 파일을 먼저 지우고 돌렸다. `tsc` 는 옛 산출물을 지우지 않아 빠진 모듈이 가려질 수 있기 때문이다.
+- 임시 HOME 으로 `node bin/pokebuddy status` 를 돌렸다. 저장 없음 → "저장 없음". v3 저장 → "파티 칸 2 · 포인트 321 · 파티 1마리 …". v2 저장 → 옮긴 값을 보이고 파일 해시와 폴더 목록이 그대로다.
+- import 추적을 다시 돌렸다. `src/tools` 밖에서 닿지 않는 모듈은 `src/agents/usage.ts` 하나다(위 "남긴 것").
+- `tsc --noUnusedLocals`: 이번 범위의 파일에 쓰지 않는 선언이 없다. `src/main/stage.ts` 의 `SpriteSheet`, `selftest-egg` 의 `MIN` 두 개는 이 작업 전부터 있었다.
+- `node scripts/check-docs.cjs`, `git diff --check` 통과.
+
+**잠금 검사 대조** — 옛 `createSaveParty` 검사의 성질과 옮긴 곳
+
+| 성질 | 옮긴 검사 |
+|---|---|
+| writer 가 파일을 읽고 성격이 실린다. 파티가 있으면 첫 실행이 아니다 | writer 블록 |
+| 자리·숨김이 파일에 내려간다. 다른 마리의 집은 그대로다. 숨긴 마리는 무대에서 빠진다 | writer 블록 (실행기를 거친다) |
+| stop 이 잠금을 놓는다 | writer 블록 |
+| v1 원본 사본은 한 번만 남는다 | 옛 저장 v1 블록 (사본 이름은 `save.json.v2.bak`) |
+| reader 는 파일을 읽고 첫 실행을 맡지 않고 파일을 쓰지 않는다 | reader 블록. 자리 요청은 mailbox 로 간다. 실행기와 틱도 쓰지 않는다 |
+| reader 가 파일 변화를 감시로 읽는다. 남의 잠금을 건드리지 않는다 | reader 블록 |
+| 파일이 없으면 writer 이고 첫 실행이다. begin 은 한 번만 된다 | 첫 실행 블록 |
+| 잠금을 잃으면 곧바로 알고 쓰지 않는다 | 잠금 상실 블록 |
+| 1판 config.json 의 집을 옮긴다(`migrateHomes`) | 옮기지 않았다. 아래 피드백 1 |
+
 ## 피드백과 수정
 
 ### 저장 v3 전환의 피드백과 수정
@@ -158,6 +233,12 @@ SSOT: `docs/specs/s5.md` 의 종료와 재개, `docs/specs/modules.md` 의 저�
 
 **검사를 바꾼 것** — `selftest-manage` (5)는 2시간을 한 번에 흘리는 것을 기대했다. 지금은 하루의 틈이 만복도를 바꾸지 않는 것과 30초 틱 240번이 2시간을 흘리는 것을 본다.
 `selftest-save-v3` (14)를 더했다.
+
+### 옛 v2 코드 정리의 피드백 — 커밋 1
+
+1. 1판(v1 이전) 사용자가 `config.json` 에 남긴 마리 자리는 v3 로 옮겨지지 않는다. 2026-09-24 전환 때부터 v3 경로에 이 이전이 없었다. v1 저장을 가진 사용자만 해당한다. 자리는 기본값으로 시작한다. 고치지 않았다. 필요하면 따로 결정한다.
+2. 창 펫이 독립 펫에 자리를 내주는 동작은 자동 검사가 없다. 옛 검사에도 없었다. 10초 주기 타이머를 기다려야 해서 이번에도 더하지 않았다.
+3. `lib/i18n` 에 옛 육성 문구 키(`state.hungry`, `state.evolution`, `game.unlocked` 등)가 남아 있다. 설계에서 범위 밖으로 두었다.
 
 ### 끊긴 기능 세 가지의 피드백과 수정
 

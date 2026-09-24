@@ -28,7 +28,6 @@ import { createStageWindow, type StageWindow } from "./stage-window";
 import { langOf, natureName, petLabel, setLang, t } from "./text";
 import { createTray, type TrayHandle } from "./tray";
 import { STATE_RULES } from "../state/rules";
-import { petName } from "./text";
 import { defOf } from "../achievement/core";
 import type { TickEvents } from "../state/time-v3";
 import type { Command } from "../shared/types";

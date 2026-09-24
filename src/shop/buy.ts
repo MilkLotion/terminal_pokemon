@@ -12,8 +12,7 @@ import { randomNature } from "../dex/natures.js";
 import { newPet, nextPetId, recordDex } from "../party/create.js";
 import type { Rand } from "../egg/hatch";
 import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
-import { localDate } from "../shared/clock.js";
-import type { EggV3, PetV3, SaveV3 } from "../shared/save-v3";
+import type { EggV3, SaveV3 } from "../shared/save-v3";
 import { eggPool, find, slotPrice } from "./catalog-v3.js";
 
 export type BuyFailure =

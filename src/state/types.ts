@@ -1,12 +1,2 @@
-import type { SessionUsage } from "../agents/usage";
-import type { AgentState } from "../shared/types";
-
-// 시각·파일 읽기·화면 상태는 호출자가 주입
-export interface StateInput {
-  now: number;
-  shown: readonly string[];
-  agent: AgentState;
-  tokenWork: boolean;
-  usages: SessionUsage[];
-}
+// 무대가 보이는 돌봄 연출의 종류 — poke 는 클릭 반응만 한다
 export type CareAction = "feed" | "play" | "poke";

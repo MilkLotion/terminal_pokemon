@@ -1,13 +1,10 @@
 // Electron 화면 검사 — 숨긴 창·임시 사용자 폴더·로컬 mock 시트만 사용
 // npm run build 뒤 electron dist/tools/smoke-renderer.js
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow } from "electron";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { gameMenu } from "../main/game-menu";
-import { empty, emptyPet } from "../save/store";
-import { advance } from "../dex/progress";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pokebuddy-renderer-"));
 const preload = path.join(dir, "fixture.cjs");
@@ -77,13 +74,6 @@ void app.whenReady().then(async () => {
     const overlapShot = path.join(dir, "overlap.png");
     fs.writeFileSync(overlapShot, (await win.webContents.capturePage()).toPNG());
     process.stdout.write(`겹침 화면 통과: 픽셀·투명 부분·히트·우클릭 · ${overlapShot}\n`);
-    const save = empty(Date.now());
-    save.party = [emptyPet({ id: "p1", species: "eevee", now: Date.now() })];
-    save.party[0]!.affinity = 500;
-    save.points = 1000;
-    advance(save, Date.now());
-    const menu = Menu.buildFromTemplate(gameMenu(save, () => {}));
-    assert.equal(menu.items.length, 3, "Electron의 실제 상점·파티·도감 메뉴 생성");
     if (process.env.POKEBUDDY_SMOKE_ART) {
       const artDir = process.env.POKEBUDDY_SMOKE_ART;
       const sheets = ["eevee", "eevee-shiny", "umbreon"].map((name) => JSON.parse(fs.readFileSync(path.join(artDir, `${name}.json`), "utf8")));

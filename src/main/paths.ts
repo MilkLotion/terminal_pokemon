@@ -97,23 +97,3 @@ export function logoFile(size: 256 | 512): string | null {
 }
 // BrowserWindow 의 icon 옵션 — Windows 만 (mac 은 Dock 아이콘이 따로, 창 아이콘은 없다)
 export const windowIcon = (): string | undefined => (process.platform === "win32" ? (logoFile(256) ?? undefined) : undefined);
-
-// config.json 의 마리별 집 전부 — 1판이 windows["<키>"] 에 저장한 값. v1→v2 이전 마리의 집 1회 이전(party.migrateHomes)에 쓴다.
-// config.js load 는 지금 키 하나(config.window)만 주므로 파일을 직접 읽는다. 없거나 파손이면 빈 표
-export function readSavedWindows(file: string = PATHS.config): Record<string, Home> {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(fs.readFileSync(file, "utf8").replace(/^﻿/, ""));
-  } catch {
-    return {};
-  }
-  const windows = raw != null && typeof raw === "object" ? (raw as { windows?: unknown }).windows : null;
-  if (windows == null || typeof windows !== "object" || Array.isArray(windows)) return {};
-  const out: Record<string, Home> = {};
-  for (const [key, v] of Object.entries(windows as Record<string, unknown>)) {
-    if (v == null || typeof v !== "object") continue;
-    const { dx, dy } = v as { dx?: unknown; dy?: unknown };
-    if (typeof dx === "number" && Number.isFinite(dx) && typeof dy === "number" && Number.isFinite(dy)) out[key] = { dx, dy };
-  }
-  return out;
-}

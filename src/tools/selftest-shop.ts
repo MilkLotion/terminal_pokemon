@@ -1,16 +1,11 @@
-// S4 거래와 진행 검사. 실제 사용자 저장 접근 없음
+// 앱 명령 경로 검사 (저장 v3) — 명령이 커맨드 처리기와 거래 실행기를 거쳐 파일까지 간다. 실제 사용자 저장 접근 없음
+// 그림 준비 실패·mailbox·실제 CLI·같은 요청 식별자·저장 실패·잠금 상실을 본다
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { advance, evolve, evolutionOptions, setLook } from "../dex/progress";
-import { appearanceOf } from "../dex/appearance";
-import { buy } from "../shop/core";
-import { SHOP } from "../shop/catalog";
-import { care } from "../state/core";
-import { empty, emptyPet, normalize, read, write } from "../save/store";
 import { createCommands } from "../main/commands";
 import { createGame } from "../main/game-v3";
 import { createV3Party } from "../main/party-v3";
@@ -18,101 +13,11 @@ import { begin } from "../party/starter";
 import * as storeV3 from "../save/store-v3";
 import { empty as emptyV3 } from "../save/v3";
 import { send } from "../save/mailbox";
-import { gameMenu, petGameMenu } from "../main/game-menu";
-import type { Command, SaveV2 } from "../shared/types";
+import type { Command } from "../shared/types";
 
 const T = new Date(2026, 8, 18, 12).getTime();
-function fresh(species = "eevee"): SaveV2 {
-  const save = empty(T);
-  save.party = [emptyPet({ id: "p1", species, now: T })];
-  save.unlocked = [species];
-  return save;
-}
-function unchanged(save: SaveV2, run: () => { ok: boolean; reason: string }, reason: string): void {
-  const before = structuredClone(save);
-  assert.equal(run().reason, reason);
-  assert.deepEqual(save, before, reason);
-}
 
 async function main(): Promise<void> {
-  {
-    const save = fresh();
-    advance(save, T);
-    assert.ok(save.unlocked.includes("snorlax") && save.unlocked.includes("pikachu"));
-    assert.equal(save.points, 0, "무조건 해금은 보상 없음");
-    const once = structuredClone(save);
-    advance(save, T);
-    assert.deepEqual(save, once, "해금 중복 없음");
-    unchanged(save, () => buy(save, undefined, { item: "slot" }, T), "not-enough-points");
-    unchanged(save, () => buy(save, undefined, { item: "species", species: "pikachu" }, T), "party-full");
-    save.points = 2000;
-    assert.ok(buy(save, undefined, { item: "slot" }, T).ok);
-    assert.equal(save.points, 2000 - SHOP.slots[0]!);
-    assert.ok(buy(save, undefined, { item: "species", species: "pikachu" }, T, () => 0).ok);
-    assert.equal(save.party[1]!.id, "p2");
-    while (save.slots < 6) assert.ok(buy(save, undefined, { item: "slot" }, T).ok);
-    unchanged(save, () => buy(save, undefined, { item: "slot" }, T), "max-slots");
-    unchanged(save, () => buy(save, "p1", { item: "mint", nature: "unknown" }, T), "bad-nature");
-    assert.ok(buy(save, "p1", { item: "mint", nature: "jolly" }, T).ok);
-    assert.equal(save.party[0]!.nature, "jolly");
-    unchanged(save, () => buy(save, "p1", { item: "mint", nature: "jolly" }, T), "already-owned");
-    unchanged(save, () => buy(save, undefined, { item: "species", species: "mewtwo" }, T), "locked-species");
-  }
-  {
-    const save = fresh(); const pet = save.party[0]!;
-    unchanged(save, () => evolve(save, "p1", "umbreon", T), "affinity");
-    pet.affinity = 500;
-    assert.equal(evolutionOptions(save, "p1", T).find((o) => o.species === "umbreon")!.reason, "time");
-    unchanged(save, () => evolve(save, "p1", undefined, T), "choose-evolution");
-    assert.ok(evolve(save, "p1", "umbreon", new Date(2026, 8, 18, 22).getTime()).ok);
-    assert.equal(pet.species, "umbreon");
-    assert.equal(pet.affinity, 500);
-    assert.equal(pet.id, "p1");
-    assert.equal(pet.stage, 1);
-    assert.equal(save.points, SHOP.rewards.evolve);
-    unchanged(save, () => evolve(save, "p1", "umbreon", T), "no-evolution");
-    assert.ok(setLook(save, "p1", { look: "eevee" }).ok);
-    assert.equal(pet.species, "umbreon");
-    save.unlocked.push("pikachu");
-    unchanged(save, () => setLook(save, "p1", { look: "pikachu" }), "locked-look");
-    unchanged(save, () => setLook(save, "p1", { shiny: true }), "locked-color");
-    save.points = 1000;
-    assert.ok(buy(save, "p1", { item: "shiny" }, T).ok);
-    assert.equal(appearanceOf(pet), "eevee:shiny");
-    assert.ok(setLook(save, "p1", { shiny: false }).ok);
-    assert.ok(setLook(save, "p1", { shiny: true }).ok);
-    assert.equal(save.points, 1000 - SHOP.shiny);
-    const restored = normalize(JSON.parse(JSON.stringify(save)))!;
-    assert.equal(restored.party[0]!.shiny, true);
-    assert.equal(restored.inventory["shiny:p1"], 1);
-  }
-  {
-    const save = fresh("snorlax"); save.party[0]!.affinity = 1500;
-    advance(save, T);
-    assert.equal(save.points, SHOP.rewards.milestone * 2);
-    const restored = normalize(JSON.parse(JSON.stringify(save)))!;
-    advance(restored, T);
-    assert.equal(restored.points, save.points, "재시작 후 단계 보상 중복 없음");
-  }
-  {
-    const save = fresh(); save.points = 100; const pet = save.party[0]!;
-    pet.hunger = 90;
-    assert.ok(buy(save, undefined, { item: "berry" }, T).ok);
-    assert.ok(care(save, "p1", "feed", T).ok);
-    assert.equal(pet.hunger, 10);
-    assert.equal(pet.affinity, 16);
-    assert.equal(save.inventory.berry, 0);
-    save.inventory.berry = 1;
-    assert.equal(care(save, "p1", "feed", T + 1).reason, "cooldown");
-    assert.equal(save.inventory.berry, 1, "거절된 밥은 먹이를 소비하지 않음");
-  }
-  // S4 메뉴는 저장 v2 모양을 그대로 읽는다. 앱은 관리 창을 쓰지만 이 함수는 남아 있다
-  {
-    const save = fresh(); save.points = 5000; save.slots = 2; advance(save, T);
-    assert.equal(gameMenu(save, () => {}).length, 3);
-    assert.ok(petGameMenu(save, save.party[0]!, () => {}).length >= 4);
-  }
-
   // ── 실제 앱 경로 (저장 v3) — 명령이 거래 실행기를 거쳐 파일까지 간다 ──
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pokebuddy-v3-"));
   const gameDir = path.join(dir, ".claude", "pokebuddy");
@@ -191,6 +96,6 @@ async function main(): Promise<void> {
     commands.stop(); party.stop(); fs.rmSync(dir, { recursive: true, force: true });
   }
 
-  process.stdout.write("통과: v2 규칙(해금·상한·구매·진화·색·먹이) · v3 앱 경로(그림·mailbox·CLI·중복·저장 실패·잠금)\n");
+  process.stdout.write("통과: 앱 명령 경로(그림·mailbox·CLI·중복·저장 실패·잠금)\n");
 }
 void main().catch((e) => { console.error(e); process.exitCode = 1; });

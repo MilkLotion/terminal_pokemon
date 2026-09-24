@@ -1,14 +1,13 @@
-// 마리 목록의 출처 (저장 v3) — 무대는 이것 하나만 본다. v2 의 `createSaveParty` 와 같은 자리를 맡는다.
+// 마리 목록의 출처 (저장 v3) — 무대는 이것 하나만 본다. 세션 펫은 src/main/party.ts 의 샌드박스를 쓴다.
 //
-// v2 와 다른 점
-//   저장을 직접 고치지 않는다. 모든 변경은 거래 실행기(`src/main/game-v3.ts`)를 거친다.
-//   그래서 여기는 세 가지만 한다 — 잠금 잡기, 파일 다시 읽기, 무대가 읽을 모양으로 바꾸기.
+// 저장을 직접 고치지 않는다. 모든 변경은 거래 실행기(`src/main/game-v3.ts`)를 거친다.
+// 그래서 여기는 세 가지만 한다 — 잠금 잡기, 파일 다시 읽기, 무대가 읽을 모양으로 바꾸기.
 //
-// 잠금은 v2 와 같은 파일(`save.lock`)을 쓴다. 기기에서 저장을 쓰는 프로세스는 하나다
+// 잠금 파일은 `save.lock` 이다. 기기에서 저장을 쓰는 프로세스는 하나다
 // (docs/specs/modules.md "창이 여러 개여도 저장 쓰기는 주 프로세스 하나가 한다").
 //   writer  잠금을 잡았다. 명령을 직접 실행한다
 //   reader  못 잡았다. 명령을 mailbox 로 보내고, 파일이 바뀌면 다시 읽는다. 10초마다 다시 잡아 본다
-// 창 펫(window)은 독립 펫(companion)이 살아 있으면 자리를 내준다 — v2 와 같은 우선순위다.
+// 창 펫(window)은 독립 펫(companion)이 살아 있으면 자리를 내준다.
 //
 // 파일 감시는 두 역할 모두 건다. 자기가 쓴 것도 감시로 돌아와 읽으므로 메모리와 파일이 갈라지지 않는다.
 import fs from "node:fs";
@@ -25,7 +24,7 @@ import type { PartyPet } from "./party";
 import type { Paths } from "./paths";
 
 export const PARTY_V3_RULES = {
-  reclaimMs: 10_000, // reader 가 writer 자리를 다시 잡아 보는 간격 — v2 PARTY_RULES.reclaimMs 와 같다
+  reclaimMs: 10_000, // reader 가 writer 자리를 다시 잡아 보는 간격. 창 펫이 독립 펫에 자리를 내주는 확인도 같은 주기다
 };
 
 export interface V3PartyOptions {
