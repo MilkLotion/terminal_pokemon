@@ -6,7 +6,7 @@ import path from "node:path";
 import { randomNature } from "../dex/natures";
 import { newPet, recordDex } from "../party/create";
 import { SAVE_V3_RULES } from "../save/rules";
-import * as storeV3 from "../save/store-v3";
+import * as store from "../save/store";
 import { empty } from "../save/v3";
 import type { SaveV3 } from "../shared/save-v3";
 
@@ -44,7 +44,7 @@ export function devSave(home: string, speciesList: string[], opts: DevSaveOption
   const file = devSaveFile(home);
   const save = devSaveState(speciesList, opts);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  if (!storeV3.write(file, save)) throw new Error(`쓰지 못함: ${file}`);
+  if (!store.write(file, save)) throw new Error(`쓰지 못함: ${file}`);
   return { file, save };
 }
 

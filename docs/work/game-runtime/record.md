@@ -8,7 +8,7 @@ S5 새 게임 규칙을 실제 앱에 붙이는 구현 작업의 기록이다. �
 |---|---|---|
 | 실제 앱을 저장 v3 으로 (검수·수정 포함) | 2026-09-24 | `65db4f8` |
 | 끊긴 기능 세 가지 | 2026-09-24 | `c58da23` |
-| 옛 v2 코드 정리 | 2026-09-25 | 진행 |
+| 옛 v2 코드 정리 | 2026-09-25 | `9aa6241`, 이름 정리 커밋 |
 
 ## 설계
 
@@ -65,7 +65,7 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 
 ### 옛 v2 코드 정리의 설계
 
-날짜: 2026-09-25. 상태: 커밋 1 작업·검수 완료. 커밋 2 미시작. 사용자 지시: "진행" ([작업 후보](../../progress.md#작업-후보) 2번). 설계 승인: "진행".
+날짜: 2026-09-25. 상태: 커밋 1 `9aa6241`. 커밋 2 작업·검수 완료. 사용자 지시: "진행" ([작업 후보](../../progress.md#작업-후보) 2번). 설계 승인: "진행".
 
 **관측** (제품 진입점에서 import 를 따라간 결과. 진입점은 `src/main/app.ts`, `preload.ts`, 렌더러, `src/cli/game.ts`, 훅, `cli/*.js` 가 부르는 `dist/` 모듈이다)
 - 앱과 CLI 가 쓰지 않는 모듈 5개: `src/dex/progress.ts`, `src/main/game-menu.ts`, `src/shop/catalog.ts`, `src/shop/core.ts`, `src/state/core.ts`. 검사 `selftest-shop`·`selftest-state`·`smoke-renderer` 만 쓴다.
@@ -150,6 +150,29 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 - `src/agents/usage.ts`: 지금은 앱이 부르지 않는다. 계약의 연결 화면이 "사용량 감지 상태"를 보이게 되어 있어 남긴다(`docs/specs/s5.md` 설정과 연결). v2 전용 코드가 아니다.
 - `data/shop.json`: 코드가 읽지 않는다. 설계에서 데이터 파일은 범위 밖으로 두었다.
 
+### 옛 v2 코드 정리의 작업 — 커밋 2 (이름)
+
+사용자 지시: "커밋하고 다음작업 진행". 파일은 `git mv` 로 옮겨 이력을 잇는다.
+
+| 옛 이름 | 새 이름 |
+|---|---|
+| `src/save/store.ts` (v1·v2 읽기) | `src/save/legacy.ts` |
+| `src/save/store-v3.ts` | `src/save/store.ts` |
+| `src/main/game-v3.ts` | `src/main/game.ts` |
+| `src/main/party-v3.ts` | `src/main/save-party.ts` |
+| `src/main/status-v3.ts` | `src/main/status.ts` |
+| `src/state/time-v3.ts` · `care-v3.ts` · `settings-v3.ts` | `src/state/time.ts` · `care.ts` · `settings.ts` |
+| `src/shop/catalog-v3.ts` | `src/shop/catalog.ts` |
+| 검사 `selftest-save` · `selftest-save-v3` | `selftest-legacy` · `selftest-save` |
+| 검사 `selftest-shop` · `selftest-shop-v3` · `selftest-time-v3` | `selftest-commands` · `selftest-shop` · `selftest-time` |
+| `createV3Party` · `V3Party` · `V3PartyOptions` · `PARTY_V3_RULES` · `saveFileV3` | `createSaveParty` · `SaveParty` · `SavePartyOptions` · `SAVE_PARTY_RULES` · `saveFile` |
+| 파티 종류 `kind: "v3"`, 도움 이름 `v3()` · `runV3` · `V3_ONLY` · `v3Save` | `kind: "save"`, `saveParty()` · `runSave` · `SAVE_COMMANDS` · `currentSave` |
+| 가져오기 별칭 `storeV3` (v3 저장), `store` (옛 읽기) | `store`, `legacy` |
+
+이름이 서로 겹친다(옛 `store` 와 새 `store`). 그래서 참조를 표식으로 한 번 바꾼 뒤 새 이름으로 바꿨다. 코드·스크립트·현재 문서는 본문을, 지난 기록은 링크 대상만 바꿨다.
+저장 형식 자체를 가리키는 이름은 남겼다: `SaveV3`·`PetV3` 등 타입, `SAVE_V3_RULES`·`TIME_V3_RULES` 등 규칙표, `src/save/v3.ts`, `src/save/migrate-v3.ts`, `src/shared/save-v3.ts`, `emptyV3` 별칭. [번호 체계](../../terms.md#번호-체계)를 이에 맞춰 고쳤다.
+참조 치환 뒤 현재 문서 넷과 주석 둘이 "저장 모듈"을 옛 읽기(`legacy.ts`)로 가리켰다. 가리키는 대상은 v3 저장이므로 `store.ts` 로 손으로 고쳤다: `design.md` 저장 계약 문단, `guide.md` 저장 복구, `specs/s5.md` 대상 목록, `src/main/paths.ts`, `src/save/migrate-v3.ts` 주석. `design.md` 의 "현재 저장 계약은 SaveV2" 문장도 v3 로 고쳤다.
+
 ## 검수
 
 ### 저장 v3 전환의 첫 검증
@@ -212,6 +235,16 @@ SSOT: `docs/specs/s5.md` 의 종료와 재개, `docs/specs/modules.md` 의 저�
 | 파일이 없으면 writer 이고 첫 실행이다. begin 은 한 번만 된다 | 첫 실행 블록 |
 | 잠금을 잃으면 곧바로 알고 쓰지 않는다 | 잠금 상실 블록 |
 | 1판 config.json 의 집을 옮긴다(`migrateHomes`) | 옮기지 않았다. 아래 피드백 1 |
+
+### 옛 v2 코드 정리의 검수 — 커밋 2
+
+- 옛 이름의 `dist/` 산출물만 지운 뒤 빌드했다. `dist/` 전체는 지우지 않았다.
+- `tsc` 두 벌 통과. `npm run selftest` 전체 통과(무대 118건). `node scripts/e2e-companion.cjs` 9개 흐름 통과.
+- 임시 HOME `pokebuddy status`: v3 저장과 v2 저장 모두 게임 줄을 보인다.
+- `npx electron scripts/dev-manage.cjs --shot`: 파티 탭이 그려졌다.
+- import 추적: `src/tools` 밖에서 닿지 않는 모듈은 `src/agents/usage.ts` 하나다(커밋 1 과 같다).
+- `git ls-files src` 에서 `-v3` 가 붙은 파일은 `src/save/migrate-v3.ts`, `src/shared/save-v3.ts` 둘이다. 둘 다 저장 형식 이름이다.
+- `node scripts/check-docs.cjs`, `git diff --check` 통과.
 
 ## 피드백과 수정
 

@@ -16,9 +16,9 @@ import { STAGE_RULES, stageOf, toLocal, type Rect } from "./layout";
 import { clearFailure, createLifetime, petFileOf, reportFailure, type Lifetime } from "./lifetime";
 import { petMenu, trayMenu } from "./menus";
 import { createSandboxParty, type PartyPet, type PartySource } from "./party";
-import { createV3Party, type V3Party } from "./party-v3";
-import { createGame, type GameV3 } from "./game-v3";
-import { careItem, petStatus } from "./status-v3";
+import { createSaveParty, type SaveParty } from "./save-party";
+import { createGame, type GameV3 } from "./game";
+import { careItem, petStatus } from "./status";
 import { openManage } from "./manage-window";
 import { PATHS, loadConfig, logoFile, preloadFile, rendererFile, saveConfig } from "./paths";
 import { pickStarter } from "./picker-window";
@@ -29,7 +29,7 @@ import { langOf, natureName, petLabel, setLang, t } from "./text";
 import { createTray, type TrayHandle } from "./tray";
 import { STATE_RULES } from "../state/rules";
 import { defOf } from "../achievement/core";
-import type { TickEvents } from "../state/time-v3";
+import type { TickEvents } from "../state/time";
 import type { Command } from "../shared/types";
 
 let lastTick = 0;
@@ -96,8 +96,8 @@ const intervals: NodeJS.Timeout[] = [];
 
 // 저장을 쓰는 곳은 하나다 — 거래 실행기. 무대·메뉴·관리 창이 모두 이 하나를 본다
 let game: GameV3 | null = null;
-let party: PartySource | V3Party | null = null;
-const v3 = (): V3Party | null => (party?.kind === "v3" ? party : null);
+let party: PartySource | SaveParty | null = null;
+const saveParty = (): SaveParty | null => (party?.kind === "save" ? party : null);
 let lifetime: Lifetime | null = null;
 let stageWin: StageWindow | null = null;
 let stage: Stage | null = null;
@@ -265,7 +265,7 @@ function showPetMenu(id: string): void {
   const p = stage?.petOf(id);
   if (!p || !stageWin) return;
   const model = { name: petLabel(p), nature: p.nature ? natureName(p.nature) : null, hidden: userHidden };
-  const pet = v3()?.save()?.pets.find((row) => row.id === id) ?? null;
+  const pet = saveParty()?.save()?.pets.find((row) => row.id === id) ?? null;
   const care = pet ? { status: petStatus(pet), feed: careItem(pet, "feed"), play: careItem(pet, "play") } : {};
   const items = petMenu({ ...model, ...care }, {
     toggleHidden, quit: () => app.quit(),
@@ -296,7 +296,7 @@ function stateTick(): void {
   const { state, promptAt } = anchor.currentInfo();
   stage.setState(state, promptAt);
 
-  const worker = v3();
+  const worker = saveParty();
   if (worker?.isWriter() && game) {
     const now = Date.now();
     // 폴링 사이가 크게 벌어졌으면(절전·writer 가 아니던 동안) 그 틈은 작업으로 세지 않는다
@@ -339,8 +339,8 @@ async function main(): Promise<void> {
     party = createSandboxParty({ config, saveConfig });
   } else {
     // 저장을 쓰는 것은 잠금을 잡은 프로세스 하나다. 실행기에 그 조건을 걸어 reader 는 쓰지 못하게 한다
-    game = createGame({ file: PATHS.save, canWrite: () => v3()?.isWriter() ?? false });
-    party = createV3Party({ game, paths: PATHS, mode, log });
+    game = createGame({ file: PATHS.save, canWrite: () => saveParty()?.isWriter() ?? false });
+    party = createSaveParty({ game, paths: PATHS, mode, log });
   }
 
   // 수명 감시는 첫 실행 선택 창보다 먼저 — 고르는 동안 companion stop(lock 삭제)·확장 호스트 종료가 와도 끝나야 한다

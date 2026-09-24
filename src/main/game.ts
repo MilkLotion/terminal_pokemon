@@ -6,9 +6,9 @@
 // 저장은 하나다. 기존 `save.json` 을 그대로 쓴다 — 처음 읽을 때 v2 를 v3 으로 옮기고 원본을 `save.json.v2.bak` 에 남긴다.
 // 쓰기는 잠금을 잡은 프로세스만 한다. `canWrite` 를 주지 않으면 늘 쓴다 (자체 검사와 개발용 실행기).
 import { PATHS } from "./paths.js";
-import * as storeV3 from "../save/store-v3.js";
+import * as store from "../save/store.js";
 import { TIME_V3_RULES } from "../save/rules.js";
-import { applyTime, type TickEvents, type TimeInput } from "../state/time-v3.js";
+import { applyTime, type TickEvents, type TimeInput } from "../state/time.js";
 import { createExecutor, type Executor, type TxResult } from "../tx/executor.js";
 import { HANDLERS } from "../tx/handlers.js";
 import { argsOf, requestIdOf, toCommandResult } from "../tx/bridge.js";
@@ -19,8 +19,8 @@ import type { AgentAction, AgentReply, AgentRow, DexEntry, ManageReply, ManageRe
 import type { SaveV3 } from "../shared/save-v3";
 import type { AgentName, Command, CommandName, CommandSource } from "../shared/types";
 
-// 저장 파일 — v2 와 같은 자리다. 파일을 처음 읽을 때 v3 으로 옮긴다 (src/save/store-v3.ts)
-export const saveFileV3 = (): string => PATHS.save;
+// 저장 파일 — v2 와 같은 자리다. 파일을 처음 읽을 때 v3 으로 옮긴다 (src/save/store.ts)
+export const saveFile = (): string => PATHS.save;
 
 export interface GameV3 {
   file: string;
@@ -40,10 +40,10 @@ export interface GameV3Options {
   canWrite?: () => boolean; // 잠금을 잡은 프로세스만 쓴다. 없으면 늘 쓴다 (자체 검사·개발용 실행기)
 }
 
-export function createGame({ file = saveFileV3(), now = Date.now, rand = Math.random, canWrite }: GameV3Options = {}): GameV3 {
+export function createGame({ file = saveFile(), now = Date.now, rand = Math.random, canWrite }: GameV3Options = {}): GameV3 {
   // 파손 격리와 v2 이전 파일 교체는 쓰는 프로세스만 한다
-  const read = (): SaveV3 | null => storeV3.read(file, { repair: canWrite ? canWrite() : true }).state;
-  const write = (s: SaveV3): boolean => (canWrite && !canWrite() ? false : storeV3.write(file, s));
+  const read = (): SaveV3 | null => store.read(file, { repair: canWrite ? canWrite() : true }).state;
+  const write = (s: SaveV3): boolean => (canWrite && !canWrite() ? false : store.write(file, s));
 
   const executor = createExecutor({ read, write, now, rand }, HANDLERS);
 

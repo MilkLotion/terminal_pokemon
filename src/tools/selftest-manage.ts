@@ -1,6 +1,6 @@
 // 관리 창이 쓰는 길 자체 확인 — npm run build 뒤 node dist/tools/selftest-manage.js
 //
-// Electron 없이 확인한다. 창은 `src/main/game-v3.ts` 하나만 부르므로 그것을 직접 부른다.
+// Electron 없이 확인한다. 창은 `src/main/game.ts` 하나만 부르므로 그것을 직접 부른다.
 // 임시 폴더에 실제 저장 파일을 만들고, 스냅샷을 읽고 명령을 보낸 뒤 다시 읽는다.
 // 계약은 docs/specs/modules.md 의 명령 계약과 `src/shared/manage.d.ts` 다.
 // 끝에 "통과" 한 줄. 실패하면 어디서 깨졌는지와 함께 종료 코드 1
@@ -8,9 +8,9 @@ import assert from "node:assert";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createGame } from "../main/game-v3";
+import { createGame } from "../main/game";
 import { SAVE_V3_RULES } from "../save/rules";
-import * as storeV3 from "../save/store-v3";
+import * as store from "../save/store";
 import { empty } from "../save/v3";
 import type { SaveV3 } from "../shared/save-v3";
 
@@ -46,7 +46,7 @@ try {
   assert.equal(game.tick(), null);
   process.stdout.write("(1) 저장 없음  ok\n");
 
-  assert.equal(storeV3.write(file, seed()), true);
+  assert.equal(store.write(file, seed()), true);
 
   // (2) 스냅샷은 화면이 바로 쓸 값을 준다
   {
@@ -117,10 +117,10 @@ try {
     process.stdout.write("(5) 틱 · 꺼 둔 틈은 버리고 켜 둔 시간만 적용  ok\n");
 
     // 틱은 에이전트 작업 시간을 받는다. 흐른 시간을 넘는 몫은 버린다
-    const before = storeV3.read(file, { repair: false }).state!.totals.workMs;
+    const before = store.read(file, { repair: false }).state!.totals.workMs;
     now += step;
     assert.ok(game.tick({ workMs: 10 * step }));
-    assert.equal(storeV3.read(file, { repair: false }).state!.totals.workMs - before, step, "흐른 30초만 작업으로 센다");
+    assert.equal(store.read(file, { repair: false }).state!.totals.workMs - before, step, "흐른 30초만 작업으로 센다");
     process.stdout.write("(5b) 틱 · 에이전트 작업 시간  ok\n");
   }
 

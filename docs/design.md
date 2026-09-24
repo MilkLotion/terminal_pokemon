@@ -164,7 +164,7 @@ S3 육성(옛 규칙)은 2026-09-25 에 코드에서 걷었다. 지금 육성은
 | 배고픔 | 시간당 +10 |
 | 밥 주기 | 배고픔 −40 |
 
-v2 규칙의 구현 검수는 [S3 검수](work/s3/review.md)에 있다. 지금 계산은 [시간 처리](../src/state/time-v3.ts)와 [규칙표](../src/save/rules.ts)를 따른다. Figma의 친밀도 100 예시는 런타임 상한 변경의 근거가 아니다.
+v2 규칙의 구현 검수는 [S3 검수](work/s3/review.md)에 있다. 지금 계산은 [시간 처리](../src/state/time.ts)와 [규칙표](../src/save/rules.ts)를 따른다. Figma의 친밀도 100 예시는 런타임 상한 변경의 근거가 아니다.
 
 ## 도감 · 해금
 
@@ -284,7 +284,7 @@ S5의 `party.summon`, `party.dismiss`, `bag.use`, `egg.*`, `settings.open` 등�
 
 ## 저장 v2와 S5 전환
 
-현재 저장 계약은 [SaveV2와 Pet](../src/shared/types.ts)에 있다. `SaveV2.party`는 `Pet[]`다. `slots`는 1~6이다. 저장·복원 규칙은 [저장 모듈](../src/save/store.ts)과 [저장 규칙](../src/save/rules.ts)을 따른다.
+현재 저장 계약은 [저장 v3 타입](../src/shared/save-v3.ts)에 있다. 개체(`pets`)와 파티 칸(`party.slots`)이 나뉜다. 저장·복원 규칙은 [저장 모듈](../src/save/store.ts)과 [저장 규칙](../src/save/rules.ts)을 따른다. 옛 `SaveV2`(`party` 가 `Pet[]`)는 [옛 저장 읽기](../src/save/legacy.ts)가 읽어 v3 로 옮긴다.
 `species`는 실제 종이다. `look`은 표시 그림이다. 개체 `id`는 진화 후에도 유지한다. writer 잠금과 mailbox를 유지한다.
 S5는 도감 등록, 개체별 육성 기록, 파티 배치, 도구 재고, 알 상태를 분리하는 방향이다. 후속 결정에 따라 파티 밖 개체를 박스에 보관한다. 개체를 복제하지 않고 보관·재배치하는 상세 저장 계약은 미정이다.
 [스펙 미확정] 저장 버전과 정확한 필드·마이그레이션 절차는 아직 정하지 않았다. 기존 ID·기록·포인트·순서·표시·구매 권리를 보존해야 한다.

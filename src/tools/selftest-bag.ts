@@ -9,8 +9,8 @@ import { expForLevel, growthOf, levelFor, MAX_LEVEL, progressTo } from "../dex/g
 import { BAG_V3_RULES, SAVE_V3_RULES } from "../save/rules";
 import { empty } from "../save/v3";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
-import { feed, play } from "../state/care-v3";
-import { applyTime } from "../state/time-v3";
+import { feed, play } from "../state/care";
+import { applyTime } from "../state/time";
 
 // 놀아주기 상태가 끝날 만큼 시간을 흘린다. 개체가 파티에 있어야 시간이 흐른다
 function applyTimeForTest(s: SaveV3): void {

@@ -1,11 +1,11 @@
 // 화면이 읽는 목록 — 상점 상품과 도감 항목. 스냅샷과 같은 태도로 화면이 바로 그릴 값만 준다.
 //
 // 상점은 작아서 스냅샷에 함께 담는다. 도감은 1089종이라 탭을 열 때만 따로 부른다.
-// 값의 출처는 한 곳이다. 가격은 `src/shop/catalog-v3.ts`, 이름은 이름표, 상태는 저장이 가진다.
+// 값의 출처는 한 곳이다. 가격은 `src/shop/catalog.ts`, 이름은 이름표, 상태는 저장이 가진다.
 import { isMetaKey, loadJson, type DexOptions } from "../dex/data.js";
 import { petName } from "../main/text.js";
 import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
-import { eggName, eggPrice, slotPrice, speciesPrice, toolName, toolPrice } from "../shop/catalog-v3.js";
+import { eggName, eggPrice, slotPrice, speciesPrice, toolName, toolPrice } from "../shop/catalog.js";
 import type { DexEntry, ShopItemView } from "../shared/manage";
 import type { SaveV3 } from "../shared/save-v3";
 

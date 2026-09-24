@@ -330,7 +330,7 @@ async function companion(opts = {}) {
   delete env.POKEBUDDY_DOT_SIZE;
   delete env.POKEBUDDY_KEEP_VISIBLE;
   // 저장은 v3 이다. 옛 v2 파일이면 읽는 값만 v3 로 옮겨 본다 — 파일을 옮기는 것은 펫(writer)의 일 (repair:false)
-  const { state: saved } = require("../dist/save/store-v3.js").read(PATHS.save, { repair: false });
+  const { state: saved } = require("../dist/save/store.js").read(PATHS.save, { repair: false });
   const firstRun = !saved || saved.pets.length === 0;
   if (firstRun) say("첫 실행 — 포켓몬 선택 창에서 고르면 뜬다 (닫으면 시작하지 않는다)");
   if (debug) {
@@ -370,7 +370,7 @@ async function companion(opts = {}) {
 // repair:false — 파손 파일을 .bak 으로 옮기는 것은 writer 의 일. 저장이 없거나 꺼낸 마리가 없으면 null
 function savedSpecies() {
   try {
-    const { state: save } = require("../dist/save/store-v3.js").read(PATHS.save, { repair: false });
+    const { state: save } = require("../dist/save/store.js").read(PATHS.save, { repair: false });
     const slot = save ? save.party.slots.find((s) => s.state === "pokemon" && s.petId && !s.hidden) : null;
     const pet = slot ? save.pets.find((p) => p.id === slot.petId) : null;
     return pet ? pet.species : null;

@@ -1,7 +1,7 @@
 // 관리 창 IPC 계약 — 메인 · preload · 렌더러가 같은 모양을 본다. 타입만 둔다 (런타임 값 없음)
 // 선언 파일인 이유와 다른 파일을 import 하지 않는 이유는 shared/stage.d.ts 와 같다.
 // 화면이 읽는 값은 src/tx/snapshot.ts 가 만든다. 그 파일이 여기 타입을 가져다 쓴다 — 모양의 출처는 한 곳이다.
-// FullnessZone 은 src/state/time-v3.ts 의 같은 이름과 같은 값이다. 자체 검사가 서로 대입해 어긋남을 잡는다
+// FullnessZone 은 src/state/time.ts 의 같은 이름과 같은 값이다. 자체 검사가 서로 대입해 어긋남을 잡는다
 
 export type ViewZone = "full" | "normal" | "hungry" | "starving";
 export type ViewSlotState = "pokemon" | "empty" | "locked";

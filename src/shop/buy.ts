@@ -13,7 +13,7 @@ import { newPet, nextPetId, recordDex } from "../party/create.js";
 import type { Rand } from "../egg/hatch";
 import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
 import type { EggV3, SaveV3 } from "../shared/save-v3";
-import { eggPool, find, slotPrice } from "./catalog-v3.js";
+import { eggPool, find, slotPrice } from "./catalog.js";
 
 export type BuyFailure =
   | "no-product" // 그런 상품이 없다

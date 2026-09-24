@@ -46,7 +46,7 @@ const DEX_TABS = [
   { id: "locked", label: "미해금" },
 ];
 
-// 잠들기 기준 — 0 은 잠들지 않음. 값은 src/state/settings-v3.ts 의 허용 목록과 같다
+// 잠들기 기준 — 0 은 잠들지 않음. 값은 src/state/settings.ts 의 허용 목록과 같다
 const SLEEP_CHOICES = [
   { id: "3", label: "3분" },
   { id: "5", label: "5분" },

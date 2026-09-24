@@ -14,7 +14,7 @@ import { STAGE_RULES, clampInStage, homeOf, homeSpot, isDefaultHome, petSpot, ro
 import { petLine, petMenu, trayMenu } from "../main/menus";
 import { t } from "../main/text";
 import { SAVE_RULES, SAVE_V3_RULES } from "../save/rules";
-import * as store from "../save/store";
+import * as legacy from "../save/legacy";
 import * as writer from "../save/writer";
 import type { LookSheets, PointerMsg, StageFrame, StageState } from "../shared/stage";
 import type { AgentState, Mode } from "../shared/types";
@@ -24,10 +24,10 @@ import type { Look, ArtLoader } from "../main/art";
 import type { StageWindow } from "../main/stage-window";
 import type { PartyPet } from "../main/party";
 import { createCommands } from "../main/commands";
-import { createGame } from "../main/game-v3";
-import { createV3Party, type V3Party } from "../main/party-v3";
+import { createGame } from "../main/game";
+import { createSaveParty, type SaveParty } from "../main/save-party";
 import { begin } from "../party/starter";
-import * as storeV3 from "../save/store-v3";
+import * as store from "../save/store";
 import { empty as emptyV3 } from "../save/v3";
 import { send } from "../save/mailbox";
 
@@ -155,9 +155,9 @@ ok(frame.pets[0]?.play?.mode === "loop" && sheets.clips.idle?.anim === "Idle" &&
 // ── party — 파일 · writer/reader · 옛 저장 · 첫 실행 (저장 v3) ─────────────────────
 // 앱과 같게 묶는다 — 실행기는 잠금을 잡은 프로세스만 쓴다 (src/main/app.ts)
 function openParty(p: ReturnType<typeof pathsIn>, mode: Mode) {
-  let party: V3Party | null = null;
+  let party: SaveParty | null = null;
   const game = createGame({ file: p.save, canWrite: () => party?.isWriter() ?? false, rand: () => 0.5 });
-  party = createV3Party({ game, paths: p, mode });
+  party = createSaveParty({ game, paths: p, mode });
   return { game, party };
 }
 
@@ -165,18 +165,18 @@ async function partyTests(): Promise<void> {
   // writer — 파일을 읽고 자리·숨김이 실행기를 거쳐 파일에 내려간다
   {
     const p = pathsIn(tmpDir("writer"));
-    storeV3.write(p.save, devSaveState(["eevee", "pikachu"], { now: T0, rng: () => 0 }));
+    store.write(p.save, devSaveState(["eevee", "pikachu"], { now: T0, rng: () => 0 }));
     const { party } = openParty(p, "companion");
     ok(party.isWriter(), "writer 가 됐다");
     eq(party.pets().map((x) => x.id), ["p1", "p2"], "writer 가 파티를 읽었다");
     eq(party.pets()[0]?.nature, "hardy", "성격이 실렸다");
     ok(!party.needsStarter(), "파티가 있으면 첫 실행 아님");
     ok((await party.setHome("p1", { dx: -10, dy: -20 })).ok, "setHome 성공");
-    const disk = storeV3.read(p.save, { repair: false }).state!;
+    const disk = store.read(p.save, { repair: false }).state!;
     eq(disk.pets[0]!.home, { dx: -10, dy: -20 }, "setHome 이 파일에 내려갔다");
     eq(disk.pets[1]!.home, devSaveState(["eevee", "pikachu"], { now: T0 }).pets[1]!.home, "다른 마리의 집은 그대로");
     const shown = await party.setShown("p2", false);
-    ok(shown.ok && storeV3.read(p.save, { repair: false }).state!.party.slots[1]!.hidden === true, "setShown 이 파일에 내려갔다");
+    ok(shown.ok && store.read(p.save, { repair: false }).state!.party.slots[1]!.hidden === true, "setShown 이 파일에 내려갔다");
     eq(party.pets().length, 1, "숨긴 마리는 pets 에서 빠진다");
     eq(party.all().length, 2, "all 은 숨긴 마리도 준다");
     party.stop();
@@ -188,7 +188,7 @@ async function partyTests(): Promise<void> {
     const v1 = { v: 1, active: "eevee#1", points: 3, party: { "eevee#1": { species: "eevee", since: T0, affinity: 5 } }, daily: { date: "2026-09-17", streak: 2 } };
     fs.writeFileSync(p.save, JSON.stringify(v1));
     const { party } = openParty(p, "companion");
-    const bak = storeV3.backupName(p.save);
+    const bak = store.backupName(p.save);
     ok(fs.existsSync(bak), "원본 사본 save.json.v2.bak 이 생겼다");
     eq(JSON.parse(fs.readFileSync(bak, "utf8")).v, 1, "사본은 v1 그대로");
     eq(JSON.parse(fs.readFileSync(p.save, "utf8")).v, 3, "원본은 v3 로 다시 썼다");
@@ -206,7 +206,7 @@ async function partyTests(): Promise<void> {
     try {
       fs.writeFileSync(p.saveLock, `${idle.pid}
 `);
-      storeV3.write(p.save, devSaveState(["eevee", "pikachu"], { now: T0, rng: () => 0 }));
+      store.write(p.save, devSaveState(["eevee", "pikachu"], { now: T0, rng: () => 0 }));
       const before = fs.readFileSync(p.save, "utf8");
       const { game, party } = openParty(p, "window");
       ok(!party.isWriter(), "잠금이 남의 것이면 reader");
@@ -221,7 +221,7 @@ async function partyTests(): Promise<void> {
       let changes = 0;
       party.onChange(() => void (changes += 1));
       await sleep(50);
-      storeV3.write(p.save, devSaveState(["eevee", "pikachu", "squirtle"], { now: T0 + 1000, rng: () => 0 }));
+      store.write(p.save, devSaveState(["eevee", "pikachu", "squirtle"], { now: T0 + 1000, rng: () => 0 }));
       ok(await waitFor(() => party.pets().length === 3), "reader 가 파일 변화를 감시로 읽었다");
       ok(changes >= 1, "onChange 가 불렸다");
       party.stop();
@@ -239,7 +239,7 @@ async function partyTests(): Promise<void> {
     eq(party.pets(), [], "첫 실행 전에는 빈 파티");
     ok(party.begin("eevee"), "begin 이 첫 선택으로 시작한다");
     ok(!party.needsStarter(), "begin 뒤에는 첫 실행 아님");
-    const disk = storeV3.read(p.save, { repair: false }).state!;
+    const disk = store.read(p.save, { repair: false }).state!;
     eq([disk.pets.length, disk.pets[0]!.species, disk.party.slots[0]!.petId], [1, "eevee", "p1"], "첫 실행 저장 모양");
     ok(disk.dex.obtained.includes("eevee"), "첫 포켓몬은 도감에");
     ok(!party.begin("pikachu"), "두 번째 begin 은 거절");
@@ -335,7 +335,7 @@ async function stageRuntimeTests(): Promise<void> {
   // 잠금을 잃으면 곧바로 reader 다. 실행기도 쓰지 않는다 — 다른 writer 의 저장을 덮지 않는다
   {
     const lost = pathsIn(tmpDir("lost-writer"));
-    storeV3.write(lost.save, devSaveState(["eevee"], { now: T0 }));
+    store.write(lost.save, devSaveState(["eevee"], { now: T0 }));
     const { game, party } = openParty(lost, "companion");
     const other = spawnIdle();
     try {
@@ -351,20 +351,20 @@ async function stageRuntimeTests(): Promise<void> {
   // v2 저장을 처음 열면 v3 으로 옮긴다. 원본은 옆에 남고 무대는 그대로 돈다
   {
     const migPaths = pathsIn(tmpDir("migrate-v3"));
-    const legacy = store.empty(T0);
-    legacy.party.push(store.emptyPet({ id: "p1", species: "eevee", now: T0 }), store.emptyPet({ id: "p2", species: "pikachu", now: T0 }));
-    legacy.slots = 2;
-    legacy.party[0]!.nick = "뽀야";
-    legacy.party[0]!.look = "eevee-starter";
-    legacy.points = 1234;
-    store.write(migPaths.save, legacy);
+    const old = legacy.empty(T0);
+    old.party.push(legacy.emptyPet({ id: "p1", species: "eevee", now: T0 }), legacy.emptyPet({ id: "p2", species: "pikachu", now: T0 }));
+    old.slots = 2;
+    old.party[0]!.nick = "뽀야";
+    old.party[0]!.look = "eevee-starter";
+    old.points = 1234;
+    legacy.write(migPaths.save, old);
     const migGame = createGame({ file: migPaths.save });
-    const migParty = createV3Party({ game: migGame, paths: migPaths, mode: "companion" });
+    const migParty = createSaveParty({ game: migGame, paths: migPaths, mode: "companion" });
     try {
-      const moved = storeV3.read(migPaths.save, { repair: false }).state!;
+      const moved = store.read(migPaths.save, { repair: false }).state!;
       eq(moved.pets.length, 2, "두 마리가 그대로 옮겨진다");
       eq(moved.points.balance, 1234, "포인트가 그대로");
-      ok(fs.existsSync(storeV3.backupName(migPaths.save)), "원본을 옆에 남긴다");
+      ok(fs.existsSync(store.backupName(migPaths.save)), "원본을 옆에 남긴다");
       ok(!migParty.needsStarter(), "이미 개체가 있으면 첫 선택을 묻지 않는다");
       eq(migParty.pets().map((p) => p.id), ["p1", "p2"], "무대에 두 마리");
       // 별명·모습은 쓰지 않는다. 실제 종의 이름과 그림이다 (docs/specs/s5.md). 옛 값은 legacy 에 남는다
@@ -380,9 +380,9 @@ async function stageRuntimeTests(): Promise<void> {
   const seed = emptyV3(T0);
   begin(seed, "eevee", T0, () => 0);
   seed.pets[0]!.fullness = 40;
-  storeV3.write(commandPaths.save, seed);
+  store.write(commandPaths.save, seed);
   const game = createGame({ file: commandPaths.save, rand: () => 0 });
-  const source = createV3Party({ game, paths: commandPaths, mode: "companion" });
+  const source = createSaveParty({ game, paths: commandPaths, mode: "companion" });
   let animations = 0;
   const commands = createCommands({ mode: "companion", mailboxDir: commandPaths.mailbox, party: source, game,
     stage: { poke: () => true, care: () => void animations++, petIds: () => ["p1"], size: () => ({ w: 800, h: 600 }), visible: () => true },
@@ -393,7 +393,7 @@ async function stageRuntimeTests(): Promise<void> {
     commands.setWriter(true);
     const fed = await send(commandPaths.mailbox, { cmd: "feed", target: "p1", from: "cli" });
     ok(fed.ok, "mailbox → dispatcher → 실행기 → 저장 왕복");
-    eq(storeV3.read(commandPaths.save, { repair: false }).state!.pets[0]!.fullness, 60, "밥 효과가 디스크에 저장");
+    eq(store.read(commandPaths.save, { repair: false }).state!.pets[0]!.fullness, 60, "밥 효과가 디스크에 저장");
     eq(animations, 1, "저장 성공 뒤 연출 요청");
     const again = await commands.dispatcher.dispatch({ cmd: "feed", target: "p1", from: "menu" });
     eq(again.reason, "cooldown", "중복 밥 거절");
@@ -402,7 +402,7 @@ async function stageRuntimeTests(): Promise<void> {
     // 포켓몬 클릭은 놀아주기다. 쿨타임이면 무대 반응만으로 끝난다
     const clicked = await commands.click("p1");
     ok(clicked.ok, "클릭이 놀아주기로 저장된다");
-    eq(storeV3.read(commandPaths.save, { repair: false }).state!.pets[0]!.playStreak, 1, "놀아주기 중첩 1");
+    eq(store.read(commandPaths.save, { repair: false }).state!.pets[0]!.playStreak, 1, "놀아주기 중첩 1");
     eq(animations, 2, "놀아주기 연출");
     eq((await commands.click("p1")).reason, "cooldown", "쿨타임의 클릭은 놀아주지 않는다");
     eq(animations, 2, "쿨타임이면 놀이 연출이 없다");

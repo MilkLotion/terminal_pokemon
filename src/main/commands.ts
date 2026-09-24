@@ -1,6 +1,6 @@
 // 커맨드 배선 — dispatcher 를 만들고 무대가 받는 명령을 등록한다. writer 면 mailbox 를 잇는다 (CLI·확장·읽기 전용 펫의 요청).
 //
-// 저장을 바꾸는 명령은 전부 거래 실행기(`src/main/game-v3.ts`)로 간다. 여기서 저장을 직접 고치지 않는다.
+// 저장을 바꾸는 명령은 전부 거래 실행기(`src/main/game.ts`)로 간다. 여기서 저장을 직접 고치지 않는다.
 //   writer  실행기를 직접 부른다
 //   reader  mailbox 로 보낸다. writer 가 처리해 파일에 쓰면 감시가 읽어 온다
 // 창 표시 항목(hidden · clickThrough · keepVisible)만 저장 밖의 설정이라 여기서 처리한다.
@@ -10,8 +10,8 @@ import type { MailServer } from "../save/mailbox";
 import type { Command, CommandName, CommandResult, Mode } from "../shared/types";
 import type { Size } from "./layout";
 import type { PartySource } from "./party";
-import type { V3Party } from "./party-v3";
-import type { GameV3 } from "./game-v3";
+import type { SaveParty } from "./save-party";
+import type { GameV3 } from "./game";
 import type { CareAction } from "../state/types";
 import { send } from "../save/mailbox";
 import { candidates, dayPartOf } from "../dex/evolve";
@@ -31,7 +31,7 @@ export interface CommandSettings {
 export interface CommandContext {
   mode: Mode;
   mailboxDir: string;
-  party: PartySource | V3Party;
+  party: PartySource | SaveParty;
   game?: GameV3 | null; // 세션 펫(sandbox)은 저장이 없어 null 이다
   stage: { poke(id: string): boolean; care?(id: string, action: CareAction): void; petIds(): string[]; size(): Size; visible(): boolean };
   settings: CommandSettings;
@@ -69,8 +69,8 @@ const isSettingKey = (v: unknown): v is SettingKey => typeof v === "string" && (
 const EVOLVE_EXPIRE_MS = 40_000;
 
 // 인자를 풀어 실행기에 넣기만 하면 되는 명령 — 무대 반응도 그림 준비도 필요 없다.
-// party.show · party.hide · pet.set 은 reader 경로가 달라 `ctx.party` 가 맡는다 (src/main/party-v3.ts)
-const V3_ONLY: readonly CommandName[] = [
+// party.show · party.hide · pet.set 은 reader 경로가 달라 `ctx.party` 가 맡는다 (src/main/save-party.ts)
+const SAVE_COMMANDS: readonly CommandName[] = [
   "party.place",
   "party.swap",
   "party.keep",
@@ -91,12 +91,12 @@ export function createCommands(ctx: CommandContext): Commands {
 
   const target = (c: Command): string | null => (typeof c.target === "string" && c.target ? c.target : null);
 
-  const v3Save = (): SaveV3 | null => (ctx.party.kind === "v3" ? ctx.party.save() : null);
+  const currentSave = (): SaveV3 | null => (ctx.party.kind === "save" ? ctx.party.save() : null);
 
   // 저장을 바꾸는 명령 하나 — writer 면 실행기로, reader 면 mailbox 로.
   // mailbox 를 잇고 있는 쪽(server)이 reader 일 수는 없다. 그때는 받아 줄 writer 가 없다는 뜻이다
-  async function runV3(c: Command): Promise<CommandResult> {
-    if (!ctx.game || ctx.party.kind !== "v3") return { ok: false, reason: "sandbox" };
+  async function runSave(c: Command): Promise<CommandResult> {
+    if (!ctx.game || ctx.party.kind !== "save") return { ok: false, reason: "sandbox" };
     if (!ctx.party.isWriter()) return server ? { ok: false, reason: "not-writer" } : send(ctx.mailboxDir, c);
     const result = ctx.game.send({ cmd: c.cmd, target: c.target, args: c.args }, c.from);
     ctx.party.refresh();
@@ -121,7 +121,7 @@ export function createCommands(ctx: CommandContext): Commands {
   // 창 표시 항목은 저장 밖의 설정이라 여기서 처리한다. 그 밖의 키는 저장으로 넘긴다
   dispatcher.register("settings.set", (c) => {
     const key = target(c) ?? (isObj(c.args) ? c.args.key : undefined);
-    if (!isSettingKey(key)) return runV3(c);
+    if (!isSettingKey(key)) return runSave(c);
     const value = asBool(isObj(c.args) ? c.args.value : undefined);
     if (value == null) return { ok: false, reason: "bad-value", key };
     if (key === "hidden") ctx.settings.setHidden(value);
@@ -146,7 +146,7 @@ export function createCommands(ctx: CommandContext): Commands {
     if (!isObj(home)) return { ok: false, reason: "not-yet", id };
     const { dx, dy } = home;
     if (typeof dx !== "number" || typeof dy !== "number" || !Number.isFinite(dx) || !Number.isFinite(dy)) return { ok: false, reason: "bad-value", id };
-    if (ctx.party.kind === "v3") return ctx.party.setHome(id, { dx, dy });
+    if (ctx.party.kind === "save") return ctx.party.setHome(id, { dx, dy });
     ctx.party.setHome(id, { dx, dy });
     return { ok: true, reason: "ok", id, home: { dx, dy } };
   });
@@ -155,7 +155,7 @@ export function createCommands(ctx: CommandContext): Commands {
   for (const action of ["feed", "play"] as const) dispatcher.register(action, async (c) => {
     const id = target(c);
     if (!id) return { ok: false, reason: "no-pet" };
-    const result = await runV3(c);
+    const result = await runSave(c);
     if (result.ok) ctx.stage.care?.(id, action);
     return result;
   });
@@ -171,7 +171,7 @@ export function createCommands(ctx: CommandContext): Commands {
   dispatcher.register("evolve", async (c) => {
     const id = target(c);
     if (!id) return { ok: false, reason: "no-pet" };
-    const save = ctx.game && ctx.party.isWriter() ? v3Save() : null;
+    const save = ctx.game && ctx.party.isWriter() ? currentSave() : null;
     if (save) {
       const pet = save.pets.find((row) => row.id === id);
       if (!pet) return { ok: false, reason: "no-pet", id };
@@ -183,7 +183,7 @@ export function createCommands(ctx: CommandContext): Commands {
       }
       if (c.at != null && Date.now() - c.at > EVOLVE_EXPIRE_MS) return { ok: false, reason: "expired", id };
     }
-    const result = await runV3(c);
+    const result = await runSave(c);
     if (result.ok) await refreshAfter(id);
     return result;
   });
@@ -193,8 +193,8 @@ export function createCommands(ctx: CommandContext): Commands {
   dispatcher.register("pet.look", () => ({ ok: false, reason: "removed" }));
 
   // 나머지 저장 명령 — 인자를 풀고 실행기에 넣는 일만 한다
-  for (const cmd of V3_ONLY) dispatcher.register(cmd, async (c) => {
-    const result = await runV3(c);
+  for (const cmd of SAVE_COMMANDS) dispatcher.register(cmd, async (c) => {
+    const result = await runSave(c);
     if (result.ok) await refreshAfter();
     return result;
   });
@@ -202,7 +202,7 @@ export function createCommands(ctx: CommandContext): Commands {
 
   // CLI·확장이 읽는 현재 상태. 저장 v3 의 값을 그대로 준다 — 화면 문구는 표면이 만든다
   dispatcher.register("snapshot", () => {
-    const save = v3Save();
+    const save = currentSave();
     const slots = save?.party.slots ?? [];
     return {
       ok: true,
@@ -238,7 +238,7 @@ export function createCommands(ctx: CommandContext): Commands {
     // 클릭 반응은 무대가 이미 보였다. 놀아주기에 성공하면 play 명령이 놀이 연출을 더한다.
     // 쿨타임·세션 펫처럼 못 놀아주면 반응만으로 끝난다. 실패를 알림으로 띄우지 않는다
     async click(id) {
-      if (ctx.party.kind !== "v3") return { ok: false, reason: "sandbox" };
+      if (ctx.party.kind !== "save") return { ok: false, reason: "sandbox" };
       return dispatcher.dispatch({ cmd: "play", target: id, from: "pet" });
     },
     setWriter(on) {

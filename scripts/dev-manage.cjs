@@ -20,10 +20,10 @@ function loadApp() {
   process.env.HOME = dir;
   process.env.USERPROFILE = dir;
   return {
-    createGame: require(path.join(root, "dist/main/game-v3.js")).createGame,
+    createGame: require(path.join(root, "dist/main/game.js")).createGame,
     openManage: require(path.join(root, "dist/main/manage-window.js")).openManage,
     paths: require(path.join(root, "dist/main/paths.js")),
-    storeV3: require(path.join(root, "dist/save/store-v3.js")),
+    store: require(path.join(root, "dist/save/store.js")),
     empty: require(path.join(root, "dist/save/v3.js")).empty,
   };
 }
@@ -119,8 +119,8 @@ function seed(empty, now) {
 
 app.whenReady().then(async () => {
   const file = path.join(dir, "save-v3.json");
-  const { createGame, openManage, paths, storeV3, empty } = loadApp();
-  storeV3.write(file, seed(empty, Date.now()));
+  const { createGame, openManage, paths, store, empty } = loadApp();
+  store.write(file, seed(empty, Date.now()));
 
   const win = openManage({ preload: paths.preloadFile(), html: paths.rendererFile("manage.html"), game: createGame({ file }) });
   if (!shotFile) return;

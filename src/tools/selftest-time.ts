@@ -1,4 +1,4 @@
-// 시간 처리 자체 확인 — npm run build 뒤 node dist/tools/selftest-time-v3.js
+// 시간 처리 자체 확인 — npm run build 뒤 node dist/tools/selftest-time.js
 //
 // 테스트 프레임워크 없이 assert 만. 파일을 만들지 않는다 — 값만으로 확인한다.
 // 계약은 docs/specs/modules.md "시간 처리 순서", 수치는 docs/specs/balance.md 다.
@@ -6,7 +6,7 @@
 import assert from "node:assert";
 import { TIME_V3_RULES } from "../save/rules";
 import { empty } from "../save/v3";
-import { affinityPercent, applyTime, buffPercent, zoneOf } from "../state/time-v3";
+import { affinityPercent, applyTime, buffPercent, zoneOf } from "../state/time";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
 
 const T0 = new Date(2026, 8, 24, 10, 0, 0).getTime();
@@ -196,4 +196,4 @@ function seed(over: Partial<PetV3> = {}): SaveV3 {
   process.stdout.write("(14) 작업 보너스 · 상한과 대상  ok\n");
 }
 
-process.stdout.write("selftest-time-v3: 통과 (만복도·친밀도·포인트·버프·구간·알·작업 보너스)\n");
+process.stdout.write("selftest-time: 통과 (만복도·친밀도·포인트·버프·구간·알·작업 보너스)\n");

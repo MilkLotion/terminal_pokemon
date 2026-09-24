@@ -1,6 +1,6 @@
 // 마리 목록의 출처 (저장 v3) — 무대는 이것 하나만 본다. 세션 펫은 src/main/party.ts 의 샌드박스를 쓴다.
 //
-// 저장을 직접 고치지 않는다. 모든 변경은 거래 실행기(`src/main/game-v3.ts`)를 거친다.
+// 저장을 직접 고치지 않는다. 모든 변경은 거래 실행기(`src/main/game.ts`)를 거친다.
 // 그래서 여기는 세 가지만 한다 — 잠금 잡기, 파일 다시 읽기, 무대가 읽을 모양으로 바꾸기.
 //
 // 잠금 파일은 `save.lock` 이다. 기기에서 저장을 쓰는 프로세스는 하나다
@@ -13,21 +13,21 @@
 import fs from "node:fs";
 import path from "node:path";
 import * as mailbox from "../save/mailbox.js";
-import * as storeV3 from "../save/store-v3.js";
+import * as store from "../save/store.js";
 import { empty } from "../save/v3.js";
 import * as writer from "../save/writer.js";
 import type { CommandResult, Mode } from "../shared/types";
 import type { SaveV3 } from "../shared/save-v3";
-import type { GameV3 } from "./game-v3";
+import type { GameV3 } from "./game";
 import type { Home } from "./layout";
 import type { PartyPet } from "./party";
 import type { Paths } from "./paths";
 
-export const PARTY_V3_RULES = {
+export const SAVE_PARTY_RULES = {
   reclaimMs: 10_000, // reader 가 writer 자리를 다시 잡아 보는 간격. 창 펫이 독립 펫에 자리를 내주는 확인도 같은 주기다
 };
 
-export interface V3PartyOptions {
+export interface SavePartyOptions {
   game: GameV3;
   paths: Pick<Paths, "save" | "saveLock" | "mailbox" | "companionLock">;
   mode: Mode;
@@ -36,8 +36,8 @@ export interface V3PartyOptions {
   log?: ((o: Record<string, unknown>) => void) | null;
 }
 
-export interface V3Party {
-  kind: "v3";
+export interface SaveParty {
+  kind: "save";
   pets(): PartyPet[]; // 무대에 나올 마리 — 꺼내 놓은 것만
   all(): PartyPet[]; // 파티 칸에 있는 마리 전부 — 숨긴 것도
   isWriter(): boolean;
@@ -52,7 +52,7 @@ export interface V3Party {
   stop(): void;
 }
 
-export function createV3Party(opts: V3PartyOptions): V3Party {
+export function createSaveParty(opts: SavePartyOptions): SaveParty {
   const { game, paths, mode } = opts;
   const now = opts.now ?? Date.now;
   const pid = opts.pid ?? process.pid;
@@ -122,9 +122,9 @@ export function createV3Party(opts: V3PartyOptions): V3Party {
       return;
     }
     // 읽기 전용은 파손 파일을 옮기지 않는다 — writer 의 일이다
-    const r = storeV3.read(paths.save, { repair: amWriter });
+    const r = store.read(paths.save, { repair: amWriter });
     if (r.reason === "unreadable") return; // 잠깐 잠겼다 — 지난 값을 그대로 쓴다
-    if (r.migrated) log?.({ party: "migrated-v3", backup: storeV3.backupName(paths.save) });
+    if (r.migrated) log?.({ party: "migrated-v3", backup: store.backupName(paths.save) });
     if (r.corrupted) log?.({ party: "save-corrupted", movedTo: `${paths.save}.bak` });
     cacheKey = key;
     state = r.state;
@@ -207,10 +207,10 @@ export function createV3Party(opts: V3PartyOptions): V3Party {
   claim();
   reload(true);
   watch();
-  timer = setInterval(tick, PARTY_V3_RULES.reclaimMs);
+  timer = setInterval(tick, SAVE_PARTY_RULES.reclaimMs);
 
   return {
-    kind: "v3",
+    kind: "save",
     pets: () => slotPets(true),
     all: () => slotPets(false),
     isWriter: () => amWriter && writer.isMine(paths.saveLock, pid),
@@ -218,7 +218,7 @@ export function createV3Party(opts: V3PartyOptions): V3Party {
     begin(species) {
       if (!amWriter) return false;
       // 저장이 아직 없으면 빈 저장을 먼저 만든다. 실행기는 읽을 것이 있어야 돈다
-      if (!state && !storeV3.write(paths.save, empty(now()))) return false;
+      if (!state && !store.write(paths.save, empty(now()))) return false;
       const r = game.send({ cmd: "starter.pick", target: species, args: { reqId: `starter:${species}:${now()}` } }, "menu");
       reload(true);
       return r.ok;

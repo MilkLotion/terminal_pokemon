@@ -1,4 +1,4 @@
-// 마리 목록의 출처 — 무대는 이 모양 하나만 본다. 저장이 있는 펫은 저장 v3 의 `createV3Party`(src/main/party-v3.ts),
+// 마리 목록의 출처 — 무대는 이 모양 하나만 본다. 저장이 있는 펫은 저장 v3 의 `createSaveParty`(src/main/save-party.ts),
 // 세션 펫은 여기의 샌드박스다.
 //
 // sandboxParty  POKEBUDDY_SLUG 한 마리, id "session". 집은 config.json windows[windowKey] — 1판과 같은 키라 저장된 자리가 그대로.

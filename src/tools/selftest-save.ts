@@ -1,673 +1,267 @@
-// 저장 v2 · writer 잠금 · mailbox · 커맨드 처리기 자체 확인 — npm run build 뒤 node dist/tools/selftest-save.js (npm run selftest 가 넷을 차례로 돈다)
+// 저장 v3 의 빈 상태·정규화·v2 이전 자체 확인 — npm run build 뒤 node dist/tools/selftest-save.js
 //
-// 테스트 프레임워크 없이 assert 만. 임시 폴더에서만 돌고 끝나면 지운다 — 사용자의 ~/.claude/pokebuddy/ 는 건드리지 않는다.
-// 정규화·이전은 값만으로, 파일·잠금·mailbox 는 실제 파일·프로세스로 확인한다.
-// v1 모양은 리터럴 픽스처(아래 SaveV1 · v1Pet · freshV1)로 만든다 — 옛 game/economy.js 의 newState · newPet · start 가 만들던 모양 그대로.
-//   game/ 에 기대지 않는다 — game/ 은 S2 정리에서 지웠다
+// 테스트 프레임워크 없이 assert 만. 앞쪽은 값만으로, 뒤쪽 파일 통로는 임시 폴더에서 확인한다.
+// 계약은 docs/specs/modules.md "저장 구조"와 "V2 → V3 변환 규칙"이다.
 // 끝에 "통과" 한 줄. 실패하면 어디서 깨졌는지와 함께 종료 코드 1
 import assert from "node:assert";
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { bridgeMailbox, createDispatcher } from "../commands/dispatcher";
-import * as mailbox from "../save/mailbox";
-import * as rules from "../save/rules";
+import { migrate, verify } from "../save/migrate-v3";
+import * as legacy from "../save/legacy";
 import * as store from "../save/store";
-import * as writer from "../save/writer";
-import type { Command, CommandName, CommandResult, LogEntry, SaveV2 } from "../shared/types";
+import { SAVE_V3_RULES } from "../save/rules";
+import { empty, normalize } from "../save/v3";
+import type { Pet, SaveV2 } from "../shared/types";
 
-const save = { ...rules, ...store, ...writer, ...mailbox }; // 배럴 없이 모듈을 직접
+const T0 = new Date(2026, 8, 24, 10, 0, 0).getTime(); // 2026-09-24 10:00 로컬
+const TODAY = "2026-09-24";
 
-const { SAVE_RULES } = save;
-const T0 = new Date(2026, 8, 17, 10, 0, 0).getTime(); // 2026-09-17 10:00 로컬
-const TODAY = "2026-09-17";
-
-const out = (line: string): void => {
-  process.stdout.write(`${line}\n`);
-};
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-async function waitFor(check: () => boolean, ms = 3000, step = 20): Promise<boolean> {
-  const until = Date.now() + ms;
-  while (Date.now() < until) {
-    if (check()) return true;
-    await sleep(step);
-  }
-  return check();
-}
-
-// 있어야 하는 값 — 없으면 여기서 실패한다 (없는 값에 점을 찍어 TypeError 로 죽는 대신)
-function some<T>(v: T | null | undefined, what = "값"): T {
-  assert.ok(v != null, `${what} 이(가) 없다`);
-  return v;
-}
-
-// 정규화 결과가 있어야 하는 자리 — 파손(null)이면 여기서 실패한다
-const norm = (raw: unknown, what = "정규화 결과"): SaveV2 => some(save.normalize(raw), what);
-
-// 살아 있는 다른 프로세스 — lock 이 "살아 있는 pid" 를 가리는지 볼 때 쓴다
-function spawnIdle(): { pid: number; kill: () => void; exited: Promise<unknown> } {
-  const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore", windowsHide: true });
-  const exited = new Promise((r) => child.on("exit", r));
-  return { pid: some(child.pid, "자식 pid"), kill: () => child.kill(), exited };
-}
-
-// 이미 끝난 pid — 잠깐 떠서 바로 끝나는 프로세스의 pid
-async function deadPid(): Promise<number> {
-  const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore", windowsHide: true });
-  await new Promise((r) => child.on("exit", r));
-  return some(child.pid, "자식 pid");
-}
-
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pokebuddy-selftest-save-"));
-const tmpDir = (name: string): string => {
-  const dir = path.join(tmpRoot, name);
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
-};
-const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
-const ZERO_TOTALS = { workMs: 0, presenceMs: 0, tokens: 0, turns: 0, days: 0, fed: 0, played: 0 };
-const freshDaily = (date: string) => ({ date, gained: 0, feeds: 0, plays: 0, pokes: 0, presence: 0, work: 0, turns: 0 });
-
-// 잘못된 모양을 일부러 넣는 자리 — 타입은 맞지 않지만 런타임 거절을 본다
-const asCommand = (v: unknown): Command => v as Command;
-const asResult = (v: unknown): CommandResult => v as CommandResult;
-
-// ── v1 픽스처 — 1판 game/economy.js 의 저장 모양 ──────────────────────────────
-// { v:1, active: "<종>#<n>", party: { "<종>#<n>": {...} }, daily(파티 전체 하나 + streak), acc(누적기), log }
-interface V1Pet {
-  species: string;
-  nick: string | null;
-  affinity: number;
-  stage: number;
-  mood: number;
-  shiny: boolean;
-  since: number;
-  fedAt: number | null;
-  playedAt: number | null;
-  evolved: string[];
-}
-interface V1Daily {
-  date: string;
-  gained: number;
-  feeds: number;
-  plays: number;
-  pokes: number;
-  presence: number;
-  work: number;
-  turns: number;
-  streak?: number;
-}
-interface SaveV1 {
-  v: 1;
-  points: number;
-  active: string | null;
-  party: Record<string, V1Pet>;
-  inventory: Record<string, number>;
-  daily: V1Daily;
-  log: LogEntry[];
-  acc: Record<string, unknown>;
-}
-
-// economy.newPet — 새 마리 (시작 기분 60)
-const v1Pet = (species: string, since: number): V1Pet => ({
-  species,
-  nick: null,
-  affinity: 0,
-  stage: 0,
-  mood: 60,
+const v2Pet = (over: Partial<Pet> = {}): Pet => ({
+  id: "p1",
+  species: "charmander",
   shiny: false,
-  since,
+  nature: "hardy",
+  nick: null,
+  size: 2,
+  shown: true,
+  home: { dx: -24, dy: -60 },
+  hunger: 30,
+  mood: 60,
+  affinity: 40,
+  stage: 0,
+  since: T0 - 60_000,
   fedAt: null,
   playedAt: null,
+  daily: { date: TODAY, gained: 0, feeds: 0, plays: 0, pokes: 0, presence: 0, work: 0, turns: 0 },
   evolved: [],
+  ...over,
 });
 
-// economy.start(null, now, species).state — 스타터 한 마리로 시작한 직후
-const freshV1 = (now: number, species: string): SaveV1 => {
-  const key = `${species}#1`;
-  return {
-    v: 1,
-    points: 0,
-    active: key,
-    party: { [key]: v1Pet(species, now) },
-    inventory: {},
-    daily: { ...freshDaily(TODAY), streak: 1 },
-    log: [{ at: now, kind: "start", pet: key }],
-    acc: { presenceMs: 0, workMs: 0, neglectMs: 0, failedAt: [] },
-  };
-};
+const v2Save = (over: Partial<SaveV2> = {}): SaveV2 => ({
+  v: 2,
+  points: 120,
+  slots: 2,
+  party: [v2Pet()],
+  daily: { date: TODAY, streak: 3, interacted: true },
+  totals: { workMs: 0, presenceMs: 0, tokens: 0, turns: 0, days: 1, fed: 2, played: 1 },
+  agents: {},
+  unlocked: ["charmander", "squirtle"],
+  inventory: { berry: 3, "shiny:p1": 1 },
+  acc: {},
+  log: [],
+  ...over,
+});
 
-// ── 1. empty · normalize ──────────────────────────────────────────────────────
-function testEmptyAndNormalize(): void {
-  const e = save.empty(T0);
-  assert.deepStrictEqual(e, {
-    v: 2,
-    points: 0,
-    slots: 1,
-    party: [],
-    daily: { date: TODAY, streak: 1, interacted: false },
-    totals: ZERO_TOTALS,
-    agents: {},
-    unlocked: [],
-    inventory: {},
-    acc: {},
-    log: [],
-  });
-  assert.deepStrictEqual(save.normalize(clone(e)), e, "빈 저장은 정규화해도 같다");
+// (1) 빈 저장 — 파티는 두 칸이 열려 있고 나머지는 잠겨 있다
+{
+  const s = empty(T0);
+  assert.equal(s.v, 3);
+  assert.equal(s.party.slots.length, SAVE_V3_RULES.party.total);
+  const open = s.party.slots.filter((x) => x.state === "empty").length;
+  const shop = s.party.slots.filter((x) => x.state === "locked" && x.unlockBy === "shop").length;
+  const ach = s.party.slots.filter((x) => x.state === "locked" && x.unlockBy === "achievement").length;
+  assert.equal(open, SAVE_V3_RULES.party.openAtStart, "시작은 두 칸");
+  assert.equal(shop, SAVE_V3_RULES.party.shopUnlock, "상점으로 여는 칸");
+  assert.equal(ach, SAVE_V3_RULES.party.total - SAVE_V3_RULES.party.openAtStart - SAVE_V3_RULES.party.shopUnlock, "업적으로 여는 칸");
+  assert.equal(s.boxes.length, 1);
+  assert.equal(s.boxes[0]?.slots.length, SAVE_V3_RULES.box.size);
+  process.stdout.write("(1) 빈 저장 · 파티 칸 구성  ok\n");
+}
 
-  // 뼈대가 아니면 파손
-  for (const bad of [null, "x", 7, [], {}, { v: 3, party: [] }, { v: "2", party: [] }, { v: 2 }, { v: 2, party: {} }, { v: 2, party: [{}] }, { v: 2, party: [{ species: "" }] }]) {
-    assert.strictEqual(save.normalize(bad), null, `파손: ${JSON.stringify(bad)}`);
-  }
+// (2) 이전 — 배고픔이 만복도로 뒤집히고 표시 상태가 숨김으로 뒤집힌다
+{
+  const src = v2Save({ party: [v2Pet({ hunger: 30, shown: true }), v2Pet({ id: "p2", species: "squirtle", hunger: 80, shown: false, affinity: 10 })] });
+  const { save, failed } = migrate(src, T0);
+  assert.deepStrictEqual(failed, [], "검사를 모두 통과");
+  assert.ok(save);
+  assert.equal(save.pets.length, 2);
+  assert.equal(save.pets[0]?.fullness, 70, "fullness = 100 − hunger");
+  assert.equal(save.pets[1]?.fullness, 20);
+  const s0 = save.party.slots[0];
+  const s1 = save.party.slots[1];
+  assert.equal(s0?.state, "pokemon");
+  assert.equal(s0?.hidden, false, "shown 이면 숨김이 아니다");
+  assert.equal(s1?.hidden, true, "shown 이 아니면 숨김이다");
+  assert.equal(save.points.balance, 120);
+  assert.deepStrictEqual(save.dex.unlocked, ["charmander", "squirtle"]);
+  assert.deepStrictEqual(save.dex.obtained.sort(), ["charmander", "squirtle"]);
+  process.stdout.write("(2) 이전 · 만복도와 숨김 뒤집기  ok\n");
 
-  // 빠진 필드는 기본값
-  const s = norm({ v: 2, party: [{ species: "eevee" }] });
-  const p = some(s.party[0]);
-  assert.strictEqual(p.id, "p1");
-  assert.strictEqual(p.species, "eevee");
-  assert.strictEqual("look" in p, false, "look 은 없으면 두지 않는다");
-  assert.strictEqual(p.nature, SAVE_RULES.pet.nature);
-  assert.strictEqual(p.hunger, SAVE_RULES.pet.hunger);
-  assert.strictEqual(p.mood, SAVE_RULES.pet.mood);
-  assert.strictEqual(p.size, SAVE_RULES.pet.size);
-  assert.strictEqual(p.shown, true);
-  assert.deepStrictEqual(p.home, SAVE_RULES.pet.home);
-  assert.deepStrictEqual(p.daily, freshDaily(""));
-  assert.deepStrictEqual(p.evolved, []);
-  assert.strictEqual(p.nick, null);
-  assert.strictEqual(p.fedAt, null);
-  assert.strictEqual(p.since, 0);
-  assert.strictEqual(s.slots, 1);
-  assert.deepStrictEqual(s.daily, { date: "", streak: 1, interacted: false });
-  assert.deepStrictEqual(s.totals, ZERO_TOTALS);
-  assert.deepStrictEqual(s.agents, {});
-  assert.deepStrictEqual(s.acc, {});
+  // v2 의 오늘 작업 적립은 친밀도 단위다. v3 은 가중 ms 라서 옮기지 않는다
+  const worked = migrate(v2Save({ party: [v2Pet({ daily: { date: TODAY, gained: 5, feeds: 1, plays: 0, pokes: 0, presence: 0, work: 7, turns: 0 } })] }), T0).save;
+  assert.equal(worked?.pets[0]?.daily.work, 0, "단위가 다른 작업 적립은 0 에서 시작");
+  assert.equal(worked?.pets[0]?.daily.feeds, 1, "나머지 오늘 기록은 그대로");
+  process.stdout.write("(2b) 이전 · 오늘 작업 적립 단위  ok\n");
+}
 
-  // id 가 없거나 겹치면 비어 있는 p<n> 을 붙인다
-  const ids = norm({ v: 2, party: [{ species: "a", id: "p2" }, { species: "b" }, { species: "c", id: "p2" }, { species: "d", id: "" }] }).party.map((x) => x.id);
-  assert.deepStrictEqual(ids, ["p2", "p1", "p3", "p4"]);
+// (3) 이전 — 이로치 권리는 가방이 아니라 legacy 로, 도구는 가방으로
+{
+  const { save } = migrate(v2Save(), T0);
+  assert.ok(save);
+  assert.equal(save.bag.berry, undefined, "v2 이름 그대로 남기지 않는다");
+  assert.equal(save.bag["premium-food"], 3, "berry 는 프리미엄먹이의 옛 이름이다");
+  assert.equal(save.bag["shiny:p1"], undefined, "이로치 권리는 도구가 아니다");
+  assert.equal(save.legacy["shiny:p1"], 1, "legacy 에 보존한다");
+  process.stdout.write("(3) 이전 · 이로치 권리 보존  ok\n");
+}
 
-  // 범위·검증
-  const r = norm({
-    v: 2,
-    points: -5,
-    slots: 9,
-    party: [
-      { id: "p1", species: "umbreon", look: "eevee", nature: "jolly", hunger: 150, mood: -5, size: -1, stage: 1.7, affinity: -3, shown: false, home: { dx: 5 }, evolved: ["eevee", 3], nick: 7 },
+// (4) 이전 — 칸 수보다 많은 개체는 박스로 간다
+{
+  const party = [v2Pet(), v2Pet({ id: "p2" }), v2Pet({ id: "p3" })];
+  const { save, failed } = migrate(v2Save({ party, slots: 2 }), T0);
+  assert.deepStrictEqual(failed, []);
+  assert.ok(save);
+  const inParty = save.party.slots.filter((s) => s.state === "pokemon").map((s) => s.petId);
+  assert.deepStrictEqual(inParty, ["p1", "p2"], "열린 칸까지만 파티에 둔다");
+  assert.equal(save.boxes[0]?.slots[0], "p3", "남은 개체는 박스 첫 칸으로");
+  process.stdout.write("(4) 이전 · 칸을 넘는 개체는 박스로  ok\n");
+}
+
+// (5) 이전 — 밥 쿨타임은 남은 시간으로 바뀐다
+{
+  const half = SAVE_V3_RULES.feedCooldownMs / 2;
+  const { save } = migrate(v2Save({ party: [v2Pet({ fedAt: T0 - half })] }), T0);
+  assert.ok(save);
+  assert.equal(save.pets[0]?.feedCooldownMs, half, "지난 만큼 뺀 남은 시간");
+  const done = migrate(v2Save({ party: [v2Pet({ fedAt: T0 - SAVE_V3_RULES.feedCooldownMs * 2 })] }), T0);
+  assert.equal(done.save?.pets[0]?.feedCooldownMs, 0, "다 지났으면 0");
+  process.stdout.write("(5) 이전 · 쿨타임을 남은 시간으로  ok\n");
+}
+
+// (6) 검사 — 값이 어긋나면 결과를 버린다
+{
+  const src = v2Save();
+  const { save } = migrate(src, T0);
+  assert.ok(save);
+  const broken = { ...save, points: { ...save.points, balance: 0 } };
+  const checks = verify(src, broken);
+  const failed = checks.filter((c) => !c.ok).map((c) => c.name);
+  assert.deepStrictEqual(failed, ["포인트"], "어긋난 검사 이름을 돌려준다");
+  process.stdout.write("(6) 검사 · 어긋나면 이름을 돌려준다  ok\n");
+}
+
+// (7) 정규화 — 없는 개체를 가리키는 칸과 중복 개체를 정리한다
+{
+  const base = empty(T0);
+  const raw = {
+    ...base,
+    pets: [
+      { id: "p1", species: "pikachu", affinity: 200, fullness: -5, level: 0 },
+      { id: "p1", species: "pikachu" }, // 중복은 버린다
+      { species: "eevee" }, // 식별자가 없으면 버린다
     ],
-    daily: { date: TODAY, streak: 0, interacted: "yes" },
-    totals: { workMs: 10, bogus: 1, fed: -2 },
-    agents: { claude: { connected: true, tokensToday: 5, date: TODAY }, bogus: { connected: true }, codex: "x" },
-    unlocked: ["eevee", "eevee", 3, "pikachu"],
-    inventory: { berry: 3, x: "y", mint: -1 },
-    acc: { presenceMs: 12 },
-  });
-  const q = some(r.party[0]);
-  assert.strictEqual(r.points, 0);
-  assert.strictEqual(r.slots, SAVE_RULES.slots.max);
-  assert.strictEqual(norm({ v: 2, slots: 0, party: [] }).slots, SAVE_RULES.slots.min);
-  assert.strictEqual(q.look, "eevee");
-  assert.strictEqual(q.nature, "jolly");
-  assert.strictEqual(some(norm({ v: 2, party: [{ species: "a", nature: "bogus" }] }).party[0]).nature, SAVE_RULES.pet.nature);
-  assert.strictEqual(q.hunger, 100);
-  assert.strictEqual(q.mood, 0);
-  assert.strictEqual(q.size, SAVE_RULES.pet.size);
-  assert.strictEqual(q.stage, 1);
-  assert.strictEqual(q.affinity, 0);
-  assert.strictEqual(q.shown, false);
-  assert.deepStrictEqual(q.home, { dx: 5, dy: SAVE_RULES.pet.home.dy });
-  assert.deepStrictEqual(q.evolved, ["eevee"]);
-  assert.strictEqual(q.nick, null);
-  assert.deepStrictEqual(r.daily, { date: TODAY, streak: 1, interacted: false });
-  assert.deepStrictEqual(r.totals, { ...ZERO_TOTALS, workMs: 10 });
-  assert.deepStrictEqual(r.agents, { claude: { connected: true, date: TODAY, tokensToday: 5 } });
-  assert.deepStrictEqual(r.unlocked, ["eevee", "pikachu"]);
-  assert.deepStrictEqual(r.inventory, { berry: 3, mint: 0 });
-  assert.deepStrictEqual(r.acc, { presenceMs: 12 }, "acc 는 상태 모듈 것 — 그대로 둔다");
-
-  // log 는 at·kind 있는 것만 최근 200건
-  const log: unknown[] = [];
-  for (let i = 0; i < 250; i++) log.push({ at: T0 + i, kind: "poke", i });
-  log.push({ kind: "no-at" }, { at: 1 }, "x", null);
-  const l = norm({ v: 2, party: [], log }).log;
-  assert.strictEqual(l.length, SAVE_RULES.log.keep);
-  assert.strictEqual(some(l[0]).i, 50);
-  assert.strictEqual(some(l[l.length - 1]).i, 249);
-  assert.deepStrictEqual(norm({ v: 2, party: [], log: "x" }).log, []);
-
-  // emptyPet — 새 마리의 기본값
-  const np = save.emptyPet({ id: "p9", species: "pikachu", now: T0, nature: "brave", shiny: true });
-  assert.strictEqual(np.id, "p9");
-  assert.strictEqual(np.nature, "brave");
-  assert.strictEqual(np.shiny, true);
-  assert.strictEqual(np.since, T0);
-  assert.deepStrictEqual(np.daily, freshDaily(TODAY));
-  assert.deepStrictEqual(norm({ v: 2, party: [np] }).party[0], np, "새 마리는 정규화해도 같다");
-  out("  empty · normalize");
+    party: { slots: [{ state: "pokemon", petId: "ghost" }, { state: "pokemon", petId: "p1", hidden: true }] },
+    tx: [{ id: "t1", at: T0, result: { ok: true } }],
+  };
+  const s = normalize(raw, T0);
+  assert.ok(s);
+  assert.equal(s.pets.length, 1, "중복과 뼈대 아닌 개체는 버린다");
+  assert.equal(s.pets[0]?.affinity, 100, "친밀도는 100 을 넘지 않는다");
+  assert.equal(s.pets[0]?.fullness, 0, "만복도는 0 아래로 내려가지 않는다");
+  assert.equal(s.pets[0]?.level, 1, "레벨은 1 부터");
+  assert.equal(s.party.slots[0]?.state, "empty", "없는 개체를 가리키면 빈 칸");
+  assert.equal(s.party.slots[1]?.petId, "p1");
+  assert.equal(s.tx.length, 1);
+  process.stdout.write("(7) 정규화 · 어긋난 참조와 범위 정리  ok\n");
 }
 
-// ── 2. v1 → v2 이전 ──────────────────────────────────────────────────────────
-function makeV1(): SaveV1 {
-  const v1 = freshV1(T0, "eevee"); // 옛 모양 — { v:1, active, party:{}, daily, acc, ... }
-  assert.strictEqual(v1.v, 1);
-  assert.strictEqual(v1.active, "eevee#1");
-  const first = some(v1.party["eevee#1"]);
-  Object.assign(first, { nick: "이브", affinity: 120, mood: 80, shiny: true, fedAt: T0, stage: 1, evolved: ["eevee"], species: "umbreon" });
-  v1.party["pikachu#1"] = v1Pet("pikachu", T0 + 1000);
-  Object.assign(v1.daily, { streak: 4, gained: 30, feeds: 1, pokes: 2 });
-  v1.points = 77;
-  v1.inventory = { berry: 2 };
-  v1.acc = { presenceMs: 123456, workMs: 7, neglectMs: 0, failedAt: [T0] };
-  return v1;
+// (8) 정규화 — v 가 3 이 아니면 받지 않는다
+{
+  assert.equal(normalize({ ...empty(T0), v: 2 }, T0), null);
+  assert.equal(normalize(null, T0), null);
+  assert.equal(normalize("x", T0), null);
+  process.stdout.write("(8) 정규화 · 뼈대가 아니면 null  ok\n");
 }
 
-function testMigrateV1(): void {
-  const v1 = makeV1();
-  const v2 = some(save.normalize(clone(v1)), "v1 은 파손이 아니다");
-  assert.strictEqual(v2.v, 2);
-  assert.strictEqual(v2.points, 77);
-  assert.strictEqual(v2.slots, 2); // 1판 마리 둘 → 칸 둘
-  assert.ok(Array.isArray(v2.party));
-  assert.strictEqual(v2.party.length, 2);
+process.stdout.write("selftest-save: 통과 (빈 저장·이전·검사·정규화)\n");
 
-  const a = some(v2.party[0]);
-  const b = some(v2.party[1]);
-  assert.strictEqual(a.id, "p1");
-  assert.strictEqual(a.species, "umbreon");
-  assert.strictEqual("look" in a, false);
-  assert.strictEqual(a.nick, "이브");
-  assert.strictEqual(a.affinity, 120);
-  assert.strictEqual(a.mood, 80);
-  assert.strictEqual(a.stage, 1);
-  assert.strictEqual(a.shiny, true);
-  assert.strictEqual(a.fedAt, T0);
-  assert.strictEqual(a.playedAt, null);
-  assert.strictEqual(a.since, T0);
-  assert.deepStrictEqual(a.evolved, ["eevee"]);
-  assert.strictEqual(a.hunger, SAVE_RULES.pet.hunger);
-  assert.strictEqual(a.size, SAVE_RULES.pet.size);
-  assert.strictEqual(a.nature, SAVE_RULES.pet.nature);
-  assert.strictEqual(a.shown, true, "active 였던 마리는 보인다");
-  assert.deepStrictEqual(a.home, SAVE_RULES.pet.home);
-  assert.deepStrictEqual(a.daily, { ...freshDaily(TODAY), gained: 30, feeds: 1, pokes: 2 }, "활성 마리가 오늘 기록을 이어받는다");
-
-  assert.strictEqual(b.id, "p2");
-  assert.strictEqual(b.species, "pikachu");
-  assert.strictEqual(b.shown, false, "active 가 아니던 마리는 안 보임");
-  assert.strictEqual(b.since, T0 + 1000);
-  assert.deepStrictEqual(b.daily, freshDaily(TODAY));
-
-  assert.deepStrictEqual(v2.daily, { date: TODAY, streak: 4, interacted: true });
-  assert.deepStrictEqual(v2.totals, ZERO_TOTALS);
-  assert.deepStrictEqual(v2.agents, {});
-  assert.deepStrictEqual(v2.unlocked, ["umbreon", "eevee", "pikachu"], "가진 종과 거쳐 온 종은 해금");
-  assert.deepStrictEqual(v2.inventory, { berry: 2 });
-  assert.deepStrictEqual(v2.acc, {}, "v1 누적기는 버린다");
-  assert.strictEqual(v2.log.length, 1);
-  assert.strictEqual(some(v2.log[0]).kind, "start");
-  assert.deepStrictEqual(save.normalize(clone(v2)), v2, "이전한 값은 v2 로 다시 읽어도 같다");
-
-  // active 가 둘째면 둘째가 보인다
-  const v1b = clone(v1);
-  v1b.active = "pikachu#1";
-  assert.deepStrictEqual(norm(v1b).party.map((p) => p.shown), [false, true]);
-
-  // active 가 없거나 틀리면 첫 마리
-  const v1c = clone(v1);
-  v1c.active = "nope";
-  assert.deepStrictEqual(norm(v1c).party.map((p) => p.shown), [true, false]);
-
-  // 교감이 없던 날 → interacted false. streak 없음 → 1
-  const plain = freshV1(T0, "eevee");
-  delete plain.daily.streak;
-  assert.deepStrictEqual(norm(plain).daily, { date: TODAY, streak: 1, interacted: false });
-
-  // 종 없는 마리 · party 가 객체가 아니면 파손
-  const v1d = clone(v1);
-  v1d.party["x#1"] = { nick: "no-species" } as unknown as V1Pet;
-  assert.strictEqual(save.normalize(v1d), null);
-  assert.strictEqual(save.normalize({ v: 1, party: [] }), null);
-  assert.strictEqual(save.normalize({ v: 1 }), null);
-
-  // 파일로 — v1 을 읽으면 v2 가 나오고, 다시 쓰면 v2 로 남는다
-  const file = path.join(tmpDir("migrate"), "save.json");
-  fs.writeFileSync(file, JSON.stringify(v1));
-  const r1 = save.read(file);
-  assert.strictEqual(r1.corrupted, false);
-  const r1state = some(r1.state, "읽은 v1");
-  assert.strictEqual(r1state.v, 2);
-  assert.strictEqual(fs.existsSync(`${file}.bak`), false, "이전은 파손이 아니다");
-  assert.strictEqual(save.write(file, r1state), true);
-  assert.strictEqual((JSON.parse(fs.readFileSync(file, "utf8")) as { v: unknown }).v, 2);
-  assert.deepStrictEqual(save.read(file).state, r1state);
-  out("  v1 → v2 이전");
-}
-
-// ── 3. 파일 — 읽기·쓰기·파손 ────────────────────────────────────────────────
-function testFiles(): void {
-  const dir = tmpDir("files");
-  const file = path.join(dir, "nested", "save.json");
-
-  assert.deepStrictEqual(save.read(file), { state: null, corrupted: false }, "없는 파일은 파손이 아니다");
-
-  const e = save.empty(T0);
-  e.party.push(save.emptyPet({ id: "p1", species: "eevee", now: T0 }));
-  assert.strictEqual(save.write(file, e), true, "폴더가 없어도 만든다");
-  assert.deepStrictEqual(save.read(file), { state: e, corrupted: false });
-  assert.deepStrictEqual(fs.readdirSync(path.dirname(file)), ["save.json"], "tmp 파일이 남지 않는다");
-  assert.ok(fs.readFileSync(file, "utf8").endsWith("\n"));
-
-  // BOM 은 벗긴다
-  fs.writeFileSync(file, `﻿${JSON.stringify(e)}`);
-  assert.deepStrictEqual(save.read(file).state, e);
-
-  // 파손 — repair:false 는 손대지 않는다
-  fs.writeFileSync(file, "{{{ not json");
-  assert.deepStrictEqual(save.read(file, { repair: false }), { state: null, corrupted: true });
-  assert.strictEqual(fs.existsSync(file), true);
-  assert.strictEqual(fs.existsSync(`${file}.bak`), false);
-
-  // 파손 — repair 는 .bak 으로 옮긴다
-  assert.deepStrictEqual(save.read(file), { state: null, corrupted: true });
-  assert.strictEqual(fs.existsSync(file), false);
-  assert.strictEqual(fs.readFileSync(`${file}.bak`, "utf8"), "{{{ not json");
-  assert.deepStrictEqual(save.read(file), { state: null, corrupted: false }, "옮긴 뒤엔 없는 파일");
-
-  // 모르는 버전도 파손 — .bak 을 덮어쓴다
-  fs.writeFileSync(file, JSON.stringify({ v: 3, party: [] }));
-  assert.deepStrictEqual(save.read(file), { state: null, corrupted: true });
-  assert.strictEqual((JSON.parse(fs.readFileSync(`${file}.bak`, "utf8")) as { v: unknown }).v, 3);
-
-  // writeAtomic 은 문자열도 그대로
-  const txt = path.join(dir, "plain.txt");
-  assert.strictEqual(save.writeAtomic(txt, "hello"), true);
-  assert.strictEqual(fs.readFileSync(txt, "utf8"), "hello");
-  out("  파일 — 읽기·쓰기·파손 → .bak");
-}
-
-// ── 4. writer 잠금 ───────────────────────────────────────────────────────────
-async function testWriter(): Promise<void> {
-  const lock = path.join(tmpDir("writer"), "deep", "save.lock");
-
-  assert.deepStrictEqual(save.claim(lock), { ok: true, owner: process.pid, reason: "ok" });
-  assert.strictEqual(save.isMine(lock), true);
-  assert.strictEqual(save.owner(lock), process.pid);
-  assert.strictEqual(save.claim(lock).ok, true, "내 것은 다시 잡아도 된다");
-  assert.strictEqual(save.release(lock), true);
-  assert.strictEqual(fs.existsSync(lock), false);
-  assert.strictEqual(save.release(lock), false, "없는 lock 은 놓을 것이 없다");
-  assert.strictEqual(save.isMine(lock), false);
-  assert.strictEqual(save.owner(lock), null);
-
-  // 죽은 pid 는 덮어쓴다
-  fs.writeFileSync(lock, `${await deadPid()}\n`);
-  assert.strictEqual(save.owner(lock), null);
-  assert.strictEqual(save.claim(lock).ok, true);
-  assert.strictEqual(save.isMine(lock), true);
-  save.release(lock);
-
-  // 파손 lock 도 덮어쓴다
-  fs.writeFileSync(lock, "garbage");
-  assert.strictEqual(save.readOwner(lock), null);
-  assert.strictEqual(save.claim(lock).ok, true);
-  save.release(lock);
-
-  // 살아 있는 다른 pid 는 busy — release 도 남의 것은 건드리지 않는다
-  const other = spawnIdle();
+// ── 파일 통로 ──────────────────────────────────────────────────────────────────
+// 여기부터는 임시 폴더에서 실제 파일로 확인한다. 끝나면 지운다
+{
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pokebuddy-selftest-v3-"));
   try {
-    fs.writeFileSync(lock, `${other.pid}\n`);
-    assert.strictEqual(save.pidAlive(other.pid), true);
-    assert.deepStrictEqual(save.claim(lock), { ok: false, owner: other.pid, reason: "busy" });
-    assert.strictEqual(save.owner(lock), other.pid);
-    assert.strictEqual(save.isMine(lock), false);
-    assert.strictEqual(save.release(lock), false);
-    assert.strictEqual(save.readOwner(lock), other.pid, "남의 lock 은 그대로");
-    assert.strictEqual(save.release(lock, other.pid), true, "그 pid 로는 놓을 수 있다");
-    fs.writeFileSync(lock, `${other.pid}\n`);
-  } finally {
-    other.kill();
-    await other.exited;
-  }
-  assert.ok(await waitFor(() => !save.pidAlive(other.pid)));
-  assert.strictEqual(save.claim(lock).ok, true, "죽으면 이어받는다");
-  assert.strictEqual(save.release(lock), true);
-  out("  writer 잠금");
-}
-
-// ── 5. mailbox ───────────────────────────────────────────────────────────────
-async function testMailbox(): Promise<void> {
-  const dir = path.join(tmpDir("mailbox"), "box");
-  const seen: Command[] = [];
-  const logs: Record<string, unknown>[] = [];
-  const server = save.serve(
-    dir,
-    async (command) => {
-      seen.push(command);
-      if (command.cmd === "quit") throw new Error("boom");
-      if (command.cmd === "snapshot") return asResult(undefined); // 결과를 안 주는 핸들러 — no-result 를 본다
-      return { ok: true, reason: "ok", echo: command.args ?? null, target: command.target ?? null };
-    },
-    { pollMs: 50, log: (e) => logs.push(e) },
-  );
-  const sendOpts = { timeoutMs: 3000, pollMs: 20 };
-  try {
-    assert.strictEqual(fs.existsSync(dir), true, "serve 가 폴더를 만든다");
-
-    // 왕복
-    const r1 = await save.send(dir, { cmd: "feed", target: "p1", args: { x: 1 }, from: "cli" }, sendOpts);
-    assert.deepStrictEqual(r1, { ok: true, reason: "ok", echo: { x: 1 }, target: "p1" });
-    assert.strictEqual(seen.length, 1);
-    const first = some(seen[0]);
-    assert.strictEqual(first.cmd, "feed");
-    assert.strictEqual(first.target, "p1");
-    assert.strictEqual(first.from, "cli");
-    assert.strictEqual(typeof first.at, "number");
-    assert.ok(Date.now() - some(first.at) < 3000, "at 은 보낸 시각");
-
-    // 점이 든 명령 이름
-    const r2 = await save.send(dir, { cmd: "party.show", target: "p2", from: "vscode" }, sendOpts);
-    assert.strictEqual(r2.ok, true);
-    const second = some(seen[1]);
-    assert.strictEqual(second.cmd, "party.show");
-    assert.strictEqual(second.from, "vscode");
-    assert.strictEqual("args" in second, false);
-
-    // 이름이 틀리면 파일을 만들지 않고 bad-cmd
-    for (const cmd of ["Feed", "feed!", "", "x.result", "1feed", ".feed", undefined]) {
-      const r = await save.send(dir, asCommand({ cmd, from: "cli" }), sendOpts);
-      assert.strictEqual(r.reason, "bad-cmd", `bad-cmd: ${cmd}`);
+    // (9) 없는 파일
+    {
+      const res = store.read(path.join(root, "none.json"));
+      assert.equal(res.state, null);
+      assert.equal(res.corrupted, false);
+      process.stdout.write("(9) 파일 없음  ok\n");
     }
-    assert.strictEqual(seen.length, 2);
 
-    // 핸들러가 던지면 error, 결과를 안 주면 no-result — 통로는 살아 있다
-    const r3 = await save.send(dir, { cmd: "quit", from: "tray" }, sendOpts);
-    assert.strictEqual(r3.ok, false);
-    assert.strictEqual(r3.reason, "error");
-    assert.strictEqual(r3.message, "boom");
-    assert.strictEqual(logs.filter((e) => e.mailbox === "handle-error").length, 1);
-    const r4 = await save.send(dir, { cmd: "snapshot", from: "cli" }, sendOpts);
-    assert.deepStrictEqual(r4, { ok: false, reason: "no-result", cmd: "snapshot" });
-    const r5 = await save.send(dir, { cmd: "poke", from: "pet" }, sendOpts);
-    assert.strictEqual(r5.ok, true, "죽지 않고 다음 요청을 받는다");
+    // (10) v3 파일은 그대로 읽는다
+    {
+      const file = path.join(root, "v3.json");
+      const s = empty(T0);
+      s.points.balance = 77;
+      assert.equal(store.write(file, s), true);
+      const res = store.read(file);
+      assert.ok(res.state);
+      assert.equal(res.migrated, false);
+      assert.equal(res.state.points.balance, 77);
+      process.stdout.write("(10) v3 읽기·쓰기  ok\n");
+    }
 
-    const sameTime = Date.now();
-    const simultaneous = await Promise.all(["p1", "p2"].map((target) => save.send(dir, { cmd: "feed", target, from: "cli" }, { ...sendOpts, clock: () => sameTime })));
-    assert.deepStrictEqual(simultaneous.map((r) => r.target), ["p1", "p2"], "동일 시각·명령도 두 요청과 회신이 독립");
+    // (11) v2 파일은 백업하고 v3 으로 옮긴다
+    {
+      const file = path.join(root, "v2.json");
+      const src = v2Save();
+      assert.equal(legacy.write(file, src), true);
+      const res = store.read(file);
+      assert.ok(res.state, "이전 결과가 있다");
+      assert.equal(res.migrated, true);
+      assert.equal(res.state.v, 3);
+      assert.equal(res.state.points.balance, 120);
+      assert.ok(fs.existsSync(store.backupName(file)), "원본을 백업한다");
+      const backup = JSON.parse(fs.readFileSync(store.backupName(file), "utf8")) as { v: number };
+      assert.equal(backup.v, 2, "백업은 v2 그대로");
+      // 파일은 v3 으로 바뀌었다 — 다시 읽어도 옮기지 않는다
+      const again = store.read(file);
+      assert.equal(again.migrated, false);
+      assert.equal(again.state?.v, 3);
+      process.stdout.write("(11) v2 이전 · 백업 후 교체  ok\n");
+    }
 
-    // 손으로 둔 요청 — from 을 모르면 cli, target 아닌 값은 버린다
-    const before = seen.length;
-    save.writeAtomic(path.join(dir, save.requestName(Date.now(), 1, "play")), { cmd: "play", from: "bogus", target: 7, args: [1] });
-    await server.scan();
-    assert.strictEqual(seen.length, before + 1);
-    assert.deepStrictEqual(seen[before], { cmd: "play", from: "cli" });
-    await waitFor(() => fs.readdirSync(dir).some((n) => save.RESULT.test(n)));
-    for (const n of fs.readdirSync(dir)) if (save.RESULT.test(n)) fs.unlinkSync(path.join(dir, n)); // 아무도 안 가져가는 회신 — 치운다
+    // (12) 파손 파일은 .bak 으로 옮긴다
+    {
+      const file = path.join(root, "broken.json");
+      fs.writeFileSync(file, "{ 이건 JSON 이 아니다");
+      const res = store.read(file);
+      assert.equal(res.state, null);
+      assert.equal(res.corrupted, true);
+      assert.ok(fs.existsSync(`${file}.bak`), "파손 파일을 격리한다");
+      process.stdout.write("(12) 파손 격리  ok\n");
+    }
 
-    // 파손 요청은 지우고 부르지 않는다
-    const broken = path.join(dir, save.requestName(Date.now(), 1, "feed"));
-    fs.writeFileSync(broken, "{{{");
-    await server.scan();
-    assert.strictEqual(fs.existsSync(broken), false);
-    assert.strictEqual(seen.length, before + 1);
+    // (13) 읽기 전용은 파손 파일을 손대지 않는다
+    {
+      const file = path.join(root, "broken2.json");
+      fs.writeFileSync(file, "깨진 내용");
+      const res = store.read(file, { repair: false });
+      assert.equal(res.corrupted, true);
+      assert.ok(fs.existsSync(file), "원본이 남아 있다");
+      assert.equal(fs.existsSync(`${file}.bak`), false);
+      process.stdout.write("(13) 읽기 전용은 격리하지 않는다  ok\n");
+    }
 
-    // 오래된 요청은 지우고 부르지 않는다
-    const oldAt = Date.now() - SAVE_RULES.io.requestTtlMs - 60_000;
-    const stale = path.join(dir, save.requestName(oldAt, 1, "feed"));
-    save.writeAtomic(stale, { cmd: "feed", from: "cli", at: oldAt });
-    await server.scan();
-    assert.strictEqual(fs.existsSync(stale), false);
-    assert.strictEqual(seen.length, before + 1);
-    assert.strictEqual(fs.readdirSync(dir).some((n) => save.RESULT.test(n)), false, "버린 요청엔 회신도 없다");
-
-    // cmd 가 없는 요청도 지운다
-    const noCmd = path.join(dir, save.requestName(Date.now(), 1, "feed"));
-    save.writeAtomic(noCmd, { from: "cli" });
-    await server.scan();
-    assert.strictEqual(fs.existsSync(noCmd), false);
-    assert.strictEqual(seen.length, before + 1);
-
-    // 안 가져간 회신 — TTL 지나면 청소, 새것은 둔다
-    const oldResult = path.join(dir, save.resultName(save.requestName(Date.now(), 2, "feed")));
-    fs.writeFileSync(oldResult, "{}");
-    const past = (Date.now() - SAVE_RULES.io.resultTtlMs - 60_000) / 1000;
-    fs.utimesSync(oldResult, past, past);
-    const freshResult = path.join(dir, save.resultName(save.requestName(Date.now(), 3, "feed")));
-    fs.writeFileSync(freshResult, "{}");
-    await server.scan();
-    assert.strictEqual(fs.existsSync(oldResult), false);
-    assert.strictEqual(fs.existsSync(freshResult), true);
-    fs.unlinkSync(freshResult);
-
-    // 규칙에 안 맞는 파일은 건드리지 않는다
-    const other = path.join(dir, "readme.txt");
-    fs.writeFileSync(other, "x");
-    await server.scan();
-    assert.strictEqual(fs.existsSync(other), true);
-    fs.unlinkSync(other);
-    assert.deepStrictEqual(fs.readdirSync(dir), [], "요청·회신·tmp 가 남지 않는다");
+    // (14) 읽기 전용은 v2 파일을 바꾸지 않는다. 옮긴 값만 돌려준다
+    {
+      const file = path.join(root, "v2-reader.json");
+      assert.equal(legacy.write(file, v2Save()), true);
+      const before = fs.readFileSync(file, "utf8");
+      const res = store.read(file, { repair: false });
+      assert.equal(res.state?.v, 3, "옮긴 값을 돌려준다");
+      assert.equal(fs.readFileSync(file, "utf8"), before, "파일은 v2 그대로");
+      assert.equal(fs.existsSync(store.backupName(file)), false, "백업도 만들지 않는다");
+      process.stdout.write("(14) 읽기 전용은 v2 를 교체하지 않는다  ok\n");
+    }
   } finally {
-    server.stop();
-  }
-
-  // writer 가 없으면 timeout — 요청은 회수한다
-  const r6 = await save.send(dir, { cmd: "feed", from: "cli" }, { timeoutMs: 200, pollMs: 20 });
-  assert.deepStrictEqual(r6, { ok: false, reason: "timeout", cmd: "feed" });
-  assert.deepStrictEqual(fs.readdirSync(dir), [], "회수한 요청은 남지 않는다");
-
-  // stop 뒤엔 처리하지 않는다
-  save.writeAtomic(path.join(dir, save.requestName(Date.now(), 1, "feed")), { cmd: "feed", from: "cli" });
-  await server.scan();
-  await sleep(120);
-  assert.strictEqual(fs.readdirSync(dir).length, 1, "멈춘 서버는 요청을 건드리지 않는다");
-
-  // 시계 주입 — 서버 시계가 미래면 방금 요청도 오래된 것
-  const dir2 = path.join(tmpDir("mailbox-clock"), "box");
-  const late = save.serve(dir2, () => ({ ok: true, reason: "ok" }), { pollMs: 50, clock: () => Date.now() + SAVE_RULES.io.requestTtlMs * 2 });
-  try {
-    const r7 = await save.send(dir2, { cmd: "feed", from: "cli" }, { timeoutMs: 300, pollMs: 20 });
-    assert.strictEqual(r7.reason, "timeout");
-  } finally {
-    late.stop();
-  }
-  out("  mailbox 왕복·timeout·파손·오래된 요청·회신 청소");
-}
-
-// ── 6. dispatcher ────────────────────────────────────────────────────────────
-async function testDispatcher(): Promise<void> {
-  const logs: Record<string, unknown>[] = [];
-  const d = createDispatcher({ log: (e) => logs.push(e) });
-  const got: Command[] = [];
-
-  assert.strictEqual(d.has("feed"), false);
-  assert.deepStrictEqual(await d.dispatch({ cmd: "feed", from: "menu" }), { ok: false, reason: "unknown-cmd", cmd: "feed" });
-
-  const off = d.register("feed", (c) => {
-    got.push(c);
-    return { ok: true, reason: "ok", gained: 15 };
-  });
-  assert.strictEqual(d.has("feed"), true);
-  const cmd: Command = { cmd: "feed", target: "p1", args: { double: true }, from: "menu" };
-  assert.deepStrictEqual(await d.dispatch(cmd), { ok: true, reason: "ok", gained: 15 });
-  assert.strictEqual(got[0], cmd, "명령 객체를 그대로 넘긴다");
-
-  // 비동기 핸들러
-  d.register("play", async () => {
-    await sleep(5);
-    return { ok: false, reason: "cooldown", nextAt: T0 };
-  });
-  assert.deepStrictEqual(await d.dispatch({ cmd: "play", from: "cli" }), { ok: false, reason: "cooldown", nextAt: T0 });
-
-  // 던지면 error + message, 처리기는 살아 있다
-  d.register("poke", () => {
-    throw new Error("boom");
-  });
-  assert.deepStrictEqual(await d.dispatch({ cmd: "poke", from: "pet" }), { ok: false, reason: "error", message: "boom", cmd: "poke" });
-  assert.deepStrictEqual(logs, [{ dispatch: "handler-error", cmd: "poke", message: "boom" }]);
-  d.register("evolve", async () => Promise.reject(new Error("async boom")));
-  assert.strictEqual((await d.dispatch({ cmd: "evolve", from: "menu" })).message, "async boom");
-  assert.strictEqual((await d.dispatch({ cmd: "feed", from: "menu" })).ok, true);
-
-  // 결과가 아니면 no-result, reason 이 없으면 ok 로 채운다
-  d.register("snapshot", () => asResult(undefined));
-  assert.deepStrictEqual(await d.dispatch({ cmd: "snapshot", from: "cli" }), { ok: false, reason: "no-result", cmd: "snapshot" });
-  d.register("quit", () => asResult({ ok: true }));
-  assert.deepStrictEqual(await d.dispatch({ cmd: "quit", from: "tray" }), { ok: true, reason: "ok" });
-  d.register("pet.set", () => asResult({ ok: false }));
-  assert.deepStrictEqual(await d.dispatch({ cmd: "pet.set", from: "settings" }), { ok: false, reason: "error" });
-
-  // 두 번 등록은 던진다 — 해제하면 다시 등록할 수 있다
-  assert.throws(() => d.register("feed", () => ({ ok: true, reason: "ok" })), /이미 등록/);
-  off();
-  assert.strictEqual(d.has("feed"), false);
-  assert.strictEqual((await d.dispatch({ cmd: "feed", from: "menu" })).reason, "unknown-cmd");
-  d.register("feed", () => ({ ok: true, reason: "again" }));
-  assert.strictEqual((await d.dispatch({ cmd: "feed", from: "menu" })).reason, "again");
-  off(); // 옛 해제 함수는 새 핸들러를 건드리지 않는다
-  assert.strictEqual(d.has("feed"), true);
-
-  // 이상한 입력도 던지지 않는다
-  assert.strictEqual((await d.dispatch(asCommand(null))).reason, "unknown-cmd");
-  assert.strictEqual((await d.dispatch(asCommand({}))).reason, "unknown-cmd");
-  assert.strictEqual((await d.dispatch(asCommand({ cmd: 7 }))).reason, "unknown-cmd");
-
-  // mailbox 브리지 — 파일로 온 요청이 처리기를 거쳐 회신된다
-  const dir = path.join(tmpDir("bridge"), "box");
-  const server = bridgeMailbox(d, dir, { pollMs: 50 });
-  try {
-    const sendOpts = { timeoutMs: 3000, pollMs: 20 };
-    assert.deepStrictEqual(await save.send(dir, { cmd: "feed", target: "p1", from: "cli" }, sendOpts), { ok: true, reason: "again" });
-    assert.deepStrictEqual(await save.send(dir, { cmd: "shop.buy" satisfies CommandName, from: "cli" }, sendOpts), { ok: false, reason: "unknown-cmd", cmd: "shop.buy" });
-    const r = await save.send(dir, { cmd: "poke", from: "vscode" }, sendOpts);
-    assert.strictEqual(r.reason, "error");
-    assert.strictEqual(r.message, "boom");
-    assert.deepStrictEqual(fs.readdirSync(dir), []);
-  } finally {
-    server.stop();
-  }
-  out("  dispatcher register·unknown·error·bridge");
-}
-
-async function main(): Promise<void> {
-  out("selftest-save");
-  testEmptyAndNormalize();
-  testMigrateV1();
-  testFiles();
-  await testWriter();
-  await testMailbox();
-  await testDispatcher();
-  out("통과");
-}
-
-main()
-  .catch((e: unknown) => {
-    console.error(e instanceof Error && e.stack ? e.stack : e);
-    process.exitCode = 1;
-  })
-  .finally(() => {
     try {
-      fs.rmSync(tmpRoot, { recursive: true, force: true });
+      fs.rmSync(root, { recursive: true, force: true });
     } catch {
-      // 임시 폴더 — 남아도 해가 없다
+      // 지우지 못해도 검사 결과는 그대로다
     }
-  });
+  }
+}
+
+process.stdout.write("selftest-save: 파일 통로 통과 (없음·v3·v2 이전·파손)\n");

@@ -12,7 +12,7 @@ import path from "node:path";
 import { realClock, type Clock } from "../shared/clock.js";
 import type { Command, CommandName, CommandResult } from "../shared/types.js";
 import { SAVE_RULES, isCommandSource } from "./rules.js";
-import { writeAtomic } from "./store.js";
+import { writeAtomic } from "./legacy.js";
 
 export type MailLog = (entry: Record<string, unknown>) => void;
 export type MailHandler = (command: Command) => CommandResult | Promise<CommandResult>;

@@ -172,7 +172,7 @@ function status(petArg) {
   // 게임 진행 — 저장 v3 를 읽기 전용으로 본다 (쓰는 쪽은 떠 있는 동반자·창 펫). repair:false — 파손 파일을 옮기는 것은 writer 의 일.
   // 옛 v2 파일이면 읽는 값만 v3 로 옮겨 보인다. 세션 펫은 저장을 모른다
   try {
-    const { state: save, corrupted, reason } = require("../dist/save/store-v3.js").read(PATHS.save, { repair: false });
+    const { state: save, corrupted, reason } = require("../dist/save/store.js").read(PATHS.save, { repair: false });
     const { nature } = require("../dist/dex/natures.js");
     const lang = i18n.langOf(config);
     if (corrupted) say(`\n게임: 저장이 깨짐 — 펫이 다음에 열 때 save.json.bak 으로 옮기고 새로 시작한다 (${PATHS.save})`);

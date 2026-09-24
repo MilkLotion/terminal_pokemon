@@ -10,8 +10,8 @@ import { care, isCareAction } from "../egg/care.js";
 import { open } from "../egg/open.js";
 import { keep, place, swap } from "../party/placement.js";
 import { setHidden, shownCount } from "../party/visibility.js";
-import { feed, play } from "../state/care-v3.js";
-import { isSettingKey, setSetting } from "../state/settings-v3.js";
+import { feed, play } from "../state/care.js";
+import { isSettingKey, setSetting } from "../state/settings.js";
 import { setHome } from "../party/home.js";
 import { begin } from "../party/starter.js";
 import { buy } from "../shop/buy.js";
@@ -217,7 +217,7 @@ HANDLERS["tutorial.done"] = tutorialHandler("done");
 
 // ── 설정 ───────────────────────────────────────────────────────────────────────
 
-// 설정 한 항목 바꾸기 — 허용 값은 src/state/settings-v3.ts 가 가진다
+// 설정 한 항목 바꾸기 — 허용 값은 src/state/settings.ts 가 가진다
 const settingsHandler: TxHandler = (draft, args) => {
   if (!isObj(args)) return { ok: false, reason: "bad-args" };
   if (!isSettingKey(args.key)) return { ok: false, reason: "bad-args" };

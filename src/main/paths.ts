@@ -18,7 +18,7 @@ export interface Paths {
   pets: string; // 떠 있는 펫 — pid 파일 하나씩 (임시 폴더)
   companionLock: string; // 동반자 — 기기당 하나
   cli: string;
-  save: string; // 저장 v2 (src/save/store.ts)
+  save: string; // 저장 (src/save/store.ts). 옛 v1·v2 파일은 처음 열 때 v3 로 옮긴다
   saveLock: string; // 저장을 쓰는 프로세스의 pid (src/save/writer.ts)
   mailbox: string; // 명령 통로 (src/save/mailbox.ts)
 }

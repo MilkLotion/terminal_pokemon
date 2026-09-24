@@ -6,7 +6,7 @@
 import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
 import type { AgentAction, ManageChannel, ManageReply, ManageRequest } from "../shared/manage";
 import { WINDOW_V3_RULES } from "../save/rules.js";
-import { createGame, type GameV3 } from "./game-v3.js";
+import { createGame, type GameV3 } from "./game.js";
 import { windowIcon } from "./paths.js";
 
 const CH = {
