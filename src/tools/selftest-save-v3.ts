@@ -87,6 +87,12 @@ const v2Save = (over: Partial<SaveV2> = {}): SaveV2 => ({
   assert.deepStrictEqual(save.dex.unlocked, ["charmander", "squirtle"]);
   assert.deepStrictEqual(save.dex.obtained.sort(), ["charmander", "squirtle"]);
   process.stdout.write("(2) 이전 · 만복도와 숨김 뒤집기  ok\n");
+
+  // v2 의 오늘 작업 적립은 친밀도 단위다. v3 은 가중 ms 라서 옮기지 않는다
+  const worked = migrate(v2Save({ party: [v2Pet({ daily: { date: TODAY, gained: 5, feeds: 1, plays: 0, pokes: 0, presence: 0, work: 7, turns: 0 } })] }), T0).save;
+  assert.equal(worked?.pets[0]?.daily.work, 0, "단위가 다른 작업 적립은 0 에서 시작");
+  assert.equal(worked?.pets[0]?.daily.feeds, 1, "나머지 오늘 기록은 그대로");
+  process.stdout.write("(2b) 이전 · 오늘 작업 적립 단위  ok\n");
 }
 
 // (3) 이전 — 이로치 권리는 가방이 아니라 legacy 로, 도구는 가방으로

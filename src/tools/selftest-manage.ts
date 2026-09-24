@@ -115,6 +115,13 @@ try {
     assert.ok(v && v.points > 340, "포인트가 쌓였다");
     assert.ok(hungry >= 1, "배고픔 구간 진입을 알린다");
     process.stdout.write("(5) 틱 · 꺼 둔 틈은 버리고 켜 둔 시간만 적용  ok\n");
+
+    // 틱은 에이전트 작업 시간을 받는다. 흐른 시간을 넘는 몫은 버린다
+    const before = storeV3.read(file, { repair: false }).state!.totals.workMs;
+    now += step;
+    assert.ok(game.tick({ workMs: 10 * step }));
+    assert.equal(storeV3.read(file, { repair: false }).state!.totals.workMs - before, step, "흐른 30초만 작업으로 센다");
+    process.stdout.write("(5b) 틱 · 에이전트 작업 시간  ok\n");
   }
 
   // (6) 밥을 주면 만복도가 오르고 쿨타임이 화면 값으로 온다

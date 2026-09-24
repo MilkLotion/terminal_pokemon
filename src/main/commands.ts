@@ -44,6 +44,7 @@ export interface CommandContext {
 export interface Commands {
   dispatcher: Dispatcher;
   setWriter(on: boolean): void; // writer 가 되면 mailbox 를 잇고, 내주면 끊는다
+  click(id: string): Promise<CommandResult>; // 포켓몬 클릭 — 놀아주기
   stop(): void;
 }
 
@@ -159,7 +160,7 @@ export function createCommands(ctx: CommandContext): Commands {
     return result;
   });
 
-  // 찌르기는 무대 반응만 한다. 저장을 바꾸는 규칙이 v3 에 아직 없다
+  // 찌르기는 무대 반응만 한다. 클릭은 놀아주기이므로(아래 click) 이 명령은 CLI 호환으로만 남는다
   dispatcher.register("poke", (c) => {
     const id = target(c);
     if (!id) return { ok: false, reason: "no-pet" };
@@ -187,8 +188,9 @@ export function createCommands(ctx: CommandContext): Commands {
     return result;
   });
 
-  // 모습 선택(pet.look)은 v3 에 아직 없다. 저장의 `look` 은 legacy 로만 남아 있다
-  dispatcher.register("pet.look", () => ({ ok: false, reason: "not-yet" }));
+  // 모습 선택은 제거했다 — 실제 종의 이름과 그림을 보인다 (docs/specs/s5.md "별명 입력과 모습 선택을 제공하지 않는다").
+  // 옛 값은 legacy 에 남아 있다. 명령은 CLI 호환으로 남기고 제거됐다고 답한다
+  dispatcher.register("pet.look", () => ({ ok: false, reason: "removed" }));
 
   // 나머지 저장 명령 — 인자를 풀고 실행기에 넣는 일만 한다
   for (const cmd of V3_ONLY) dispatcher.register(cmd, async (c) => {
@@ -232,6 +234,13 @@ export function createCommands(ctx: CommandContext): Commands {
 
   return {
     dispatcher,
+    // 포켓몬 클릭은 놀아주기다 (docs/specs/s5.md "직접 돌봄 — 클릭 한 번으로 반응을 구경한다").
+    // 클릭 반응은 무대가 이미 보였다. 놀아주기에 성공하면 play 명령이 놀이 연출을 더한다.
+    // 쿨타임·세션 펫처럼 못 놀아주면 반응만으로 끝난다. 실패를 알림으로 띄우지 않는다
+    async click(id) {
+      if (ctx.party.kind !== "v3") return { ok: false, reason: "sandbox" };
+      return dispatcher.dispatch({ cmd: "play", target: id, from: "pet" });
+    },
     setWriter(on) {
       if (on && !server) {
         server = bridgeMailbox(dispatcher, ctx.mailboxDir, { log });

@@ -373,6 +373,7 @@ async function stageRuntimeTests(): Promise<void> {
     const migPaths = pathsIn(tmpDir("migrate-v3"));
     const legacy = devSaveState(["eevee", "pikachu"], { now: T0 });
     legacy.party[0]!.nick = "뽀야";
+    legacy.party[0]!.look = "eevee-starter";
     legacy.points = 1234;
     store.write(migPaths.save, legacy);
     const migGame = createGame({ file: migPaths.save });
@@ -384,7 +385,11 @@ async function stageRuntimeTests(): Promise<void> {
       ok(fs.existsSync(storeV3.backupName(migPaths.save)), "원본을 옆에 남긴다");
       ok(!migParty.needsStarter(), "이미 개체가 있으면 첫 선택을 묻지 않는다");
       eq(migParty.pets().map((p) => p.id), ["p1", "p2"], "무대에 두 마리");
-      eq(migParty.pets()[0]!.nick, "뽀야", "별명은 legacy 에서 되살린다");
+      // 별명·모습은 쓰지 않는다. 실제 종의 이름과 그림이다 (docs/specs/s5.md). 옛 값은 legacy 에 남는다
+      eq(migParty.pets()[0]!.nick, null, "별명을 보이지 않는다");
+      eq(migParty.pets()[0]!.look, "eevee", "고른 모습이 아니라 종의 그림");
+      eq(moved.legacy["nick:p1"], "뽀야", "별명은 legacy 에 보존");
+      eq(moved.legacy["look:p1"], "eevee-starter", "모습도 legacy 에 보존");
     } finally { migParty.stop(); }
   }
 
@@ -412,13 +417,25 @@ async function stageRuntimeTests(): Promise<void> {
     eq(again.reason, "cooldown", "중복 밥 거절");
     eq(animations, 1, "거절된 명령은 연출하지 않음");
 
+    // 포켓몬 클릭은 놀아주기다. 쿨타임이면 무대 반응만으로 끝난다
+    const clicked = await commands.click("p1");
+    ok(clicked.ok, "클릭이 놀아주기로 저장된다");
+    eq(storeV3.read(commandPaths.save, { repair: false }).state!.pets[0]!.playStreak, 1, "놀아주기 중첩 1");
+    eq(animations, 2, "놀아주기 연출");
+    eq((await commands.click("p1")).reason, "cooldown", "쿨타임의 클릭은 놀아주지 않는다");
+    eq(animations, 2, "쿨타임이면 놀이 연출이 없다");
+
+    // 모습 선택은 제거된 기능이다
+    eq((await commands.dispatcher.dispatch({ cmd: "pet.look", target: "p1", args: { look: "eevee" }, from: "cli" })).reason, "removed", "pet.look 은 제거됐다고 답한다");
+
     const old = structuredClone(source.save());
     // 저장 경로를 디렉터리로 바꿔 파일에 닿지 못하는 상황 재현 — 임시 폴더 안에서만
     fs.unlinkSync(commandPaths.save);
     fs.mkdirSync(commandPaths.save);
-    const failed = await commands.dispatcher.dispatch({ cmd: "play", target: "p1", from: "menu" });
+    // 놀아주기는 위의 클릭으로 쿨타임이다. 규칙에 걸리지 않는 명령으로 저장 실패만 본다
+    const failed = await commands.dispatcher.dispatch({ cmd: "settings.set", target: "sound", args: { value: false }, from: "menu" });
     ok(!failed.ok, "저장에 닿지 못하면 성공으로 응답하지 않음");
-    eq(animations, 1, "저장 실패 시 연출하지 않음");
+    eq(animations, 2, "저장 실패 시 연출하지 않음");
     const moved = await commands.dispatcher.dispatch({ cmd: "pet.set", target: "p1", args: { home: { dx: -123, dy: -45 } }, from: "cli" });
     ok(!moved.ok, "위치 저장 실패를 성공으로 응답하지 않음");
     eq(source.save(), old, "저장 실패는 메모리 상태를 바꾸지 않는다");

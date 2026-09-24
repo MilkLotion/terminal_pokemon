@@ -170,4 +170,30 @@ function seed(over: Partial<PetV3> = {}): SaveV3 {
   process.stdout.write("(12) 흐른 시간 0  ok\n");
 }
 
-process.stdout.write("selftest-time-v3: 통과 (만복도·친밀도·포인트·버프·구간·알)\n");
+// (13) 에이전트 작업 보너스 — 작업한 시간만큼 친밀도와 포인트를 한 번 더 쌓는다
+{
+  const base = seed();
+  applyTime(base, HOUR, T0 + HOUR);
+  const working = seed();
+  applyTime(working, HOUR, T0 + HOUR, { workMs: HOUR });
+  assert.equal(base.pets[0]?.affinity, 6, "기본은 1시간에 친밀도 6");
+  assert.equal(working.pets[0]?.affinity, 12, "작업한 1시간은 2배");
+  assert.ok(working.points.balance >= base.points.balance * 2 - 1, "포인트도 2배");
+  assert.equal(working.pets[0]?.fullness, base.pets[0]?.fullness, "만복도 감소는 그대로");
+  assert.equal(working.pets[0]?.daily.work, HOUR, "오늘 작업 적립을 가중 시간으로 남긴다");
+  assert.equal(working.totals.workMs, HOUR);
+  process.stdout.write("(13) 작업 보너스 · 적립 2배  ok\n");
+}
+
+// (14) 작업 시간은 흐른 시간을 넘지 않는다. 박스 개체는 받지 않는다
+{
+  const s = seed();
+  s.pets.push(pet({ id: "p2" })); // 파티 칸에 없다 — 박스와 같다
+  applyTime(s, HOUR, T0 + HOUR, { workMs: 5 * HOUR });
+  assert.equal(s.pets[0]?.affinity, 12, "흐른 시간만큼만 더한다");
+  assert.equal(s.pets[1]?.affinity, 0, "파티 밖 개체는 받지 않는다");
+  assert.equal(s.pets[1]?.daily.work, 0);
+  process.stdout.write("(14) 작업 보너스 · 상한과 대상  ok\n");
+}
+
+process.stdout.write("selftest-time-v3: 통과 (만복도·친밀도·포인트·버프·구간·알·작업 보너스)\n");

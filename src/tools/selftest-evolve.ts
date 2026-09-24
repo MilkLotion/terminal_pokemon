@@ -152,14 +152,4 @@ function seed(over: Partial<PetV3> = {}, bag: Record<string, number> = {}): Save
   process.stdout.write("(10) 친밀도 조건  ok\n");
 }
 
-// (11) v2 에서 고른 모습은 진화하면 풀린다. 값은 다른 키로 보존한다
-{
-  const s = seed({ species: "charmander", level: 16 });
-  s.legacy["look:p1"] = "charmander";
-  assert.equal(evolve(s, "p1", "day").ok, true);
-  assert.equal(s.legacy["look:p1"], undefined, "무대는 새 종의 그림을 그린다");
-  assert.equal(s.legacy["look-before-evolve:p1"], "charmander", "옛 값은 지우지 않는다");
-  process.stdout.write("(11) 고른 모습은 진화하면 풀린다  ok\n");
-}
-
 process.stdout.write("selftest-evolve: 통과 (레벨·도구·시간대·분기·이로치)\n");

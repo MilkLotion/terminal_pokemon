@@ -57,7 +57,8 @@ export function convertPet(pet: Pet, now: number, date: string): PetV3 {
     since: pet.since,
     stage: pet.stage,
     evolved: [...pet.evolved],
-    daily: { ...pet.daily, date },
+    // v2 의 daily.work 는 친밀도 단위다. v3 은 가중 ms 로 센다 (src/state/time-v3.ts). 단위가 달라 옮기지 않는다
+    daily: { ...pet.daily, date, work: 0 },
   };
 }
 

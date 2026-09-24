@@ -2,6 +2,8 @@
 //
 // 순서는 시간 적용 → 값 변경 → 상태 판정 → 배너다. 여기서는 값 변경과 상태 판정을 하고 배너 거리를 돌려준다.
 // 흐르는 시간은 부르는 쪽이 준다. PC 잠금·절전·앱 종료 중에는 시간이 흐르지 않는다.
+// 에이전트가 작업한 시간(workMs)도 부르는 쪽이 준다. 그 시간만큼 친밀도와 포인트를 한 번 더 쌓는다.
+// 기본 적립에 더하는 추가 이득이며 상한이 없다 (docs/specs/balance.md "에이전트 작업 보너스")
 //
 // 값 변경 대상
 //   파티에 있는 개체   만복도 감소, 친밀도 획득, 포인트 적립, 밥 쿨타임, 버프 잔여 시간
@@ -73,11 +75,17 @@ function tickBuffs(pet: PetV3, elapsed: number): void {
 const partyPetIds = (save: SaveV3): string[] =>
   save.party.slots.filter((s) => s.state === "pokemon" && s.petId).map((s) => s.petId as string);
 
-export function applyTime(save: SaveV3, elapsedMs: number, now: number): TickEvents {
+export interface TimeInput {
+  workMs?: number; // 이 구간 중 에이전트가 작업한 시간. 흐른 시간을 넘지 않는다
+}
+
+export function applyTime(save: SaveV3, elapsedMs: number, now: number, input: TimeInput = {}): TickEvents {
   const events: TickEvents = { achieved: [], hatchReady: [], hungerEnter: [], pointsGained: 0, affinityGained: [] };
   const elapsed = Math.max(0, Math.round(elapsedMs));
   save.lastTickAt = now;
   if (elapsed === 0) return events;
+  const work = Math.min(elapsed, Math.max(0, Math.round(input.workMs ?? 0)));
+  const earning = elapsed + work; // 친밀도·포인트를 쌓는 시간. 작업한 시간은 두 번 센다
 
   const { fullnessDropMs, affinityGainMs, pointGainMs } = TIME_V3_RULES;
   const inParty = new Set(partyPetIds(save));
@@ -88,7 +96,7 @@ export function applyTime(save: SaveV3, elapsedMs: number, now: number): TickEve
     const before = zoneOf(pet.fullness);
 
     // 포인트 — 이 구간 동안 가지고 있던 친밀도로 셈한다. 구간 중간에 오른 친밀도를 소급하지 않는다
-    pointWeighted += Math.round((elapsed * (100 + pet.affinity)) / 100);
+    pointWeighted += Math.round((earning * (100 + pet.affinity)) / 100);
 
     // 만복도 — 부분 진행을 쌓아 1씩 줄인다
     pet.fullnessProgressMs += elapsed;
@@ -99,7 +107,11 @@ export function applyTime(save: SaveV3, elapsedMs: number, now: number): TickEve
     }
 
     // 친밀도 — 버프와 디버프를 반영한 가중 시간으로 쌓는다. 줄어든 만복도를 기준으로 본다
-    pet.affinityProgressMs += Math.round((elapsed * affinityPercent(pet)) / 100);
+    const percent = affinityPercent(pet);
+    pet.affinityProgressMs += Math.round((earning * percent) / 100);
+    // 오늘 작업 보너스로 쌓은 친밀도 진행(ms). 저장은 정수만 받으므로 ms 로 둔다.
+    // 친밀도로 보일 때는 affinityGainMs 로 나눈다 (docs/specs/s5.md "오늘 날짜의 파티 전체 작업 적립")
+    if (work > 0) pet.daily.work += Math.round((work * percent) / 100);
     const gain = Math.floor(pet.affinityProgressMs / affinityGainMs);
     if (gain > 0) {
       pet.affinityProgressMs -= gain * affinityGainMs;
@@ -118,6 +130,7 @@ export function applyTime(save: SaveV3, elapsedMs: number, now: number): TickEve
     if (after !== before && NOTIFY_ZONES.includes(after)) events.hungerEnter.push({ petId: pet.id, zone: after });
   }
 
+  save.totals.workMs += work;
   save.points.progressMs += pointWeighted;
   const points = Math.floor(save.points.progressMs / pointGainMs);
   if (points > 0) {

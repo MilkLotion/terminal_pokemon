@@ -53,12 +53,6 @@ export interface V3Party {
   stop(): void;
 }
 
-// v2 에서 옮겨온 별명과 모습은 `legacy` 에 남아 있다 (src/save/migrate-v3.ts)
-const legacyText = (save: SaveV3, key: string): string | null => {
-  const v = save.legacy[key];
-  return typeof v === "string" && v ? v : null;
-};
-
 export function createV3Party(opts: V3PartyOptions): V3Party {
   const { game, paths, mode } = opts;
   const now = opts.now ?? Date.now;
@@ -81,17 +75,18 @@ export function createV3Party(opts: V3PartyOptions): V3Party {
     for (const cb of roleCbs) cb(amWriter);
   };
 
+  // 실제 종의 이름과 그림을 보인다. v2 에서 옮겨 온 별명·모습은 legacy 에 보존만 하고 쓰지 않는다
+  // (docs/specs/s5.md "별명 입력과 모습 선택을 제공하지 않는다. 실제 종의 이름과 그림을 표시한다")
   const petView = (save: SaveV3, petId: string, hidden: boolean): PartyPet | null => {
     const pet = save.pets.find((p) => p.id === petId);
     if (!pet) return null;
-    const look = legacyText(save, `look:${pet.id}`) ?? pet.species;
     return {
       id: pet.id,
       species: pet.species,
-      look: `${look}${pet.shiny ? ":shiny" : ""}`,
+      look: `${pet.species}${pet.shiny ? ":shiny" : ""}`,
       size: pet.size,
       nature: pet.nature,
-      nick: legacyText(save, `nick:${pet.id}`),
+      nick: null,
       home: { ...pet.home },
       shown: !hidden,
     };

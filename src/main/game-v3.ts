@@ -8,7 +8,7 @@
 import { PATHS } from "./paths.js";
 import * as storeV3 from "../save/store-v3.js";
 import { TIME_V3_RULES } from "../save/rules.js";
-import { applyTime, type TickEvents } from "../state/time-v3.js";
+import { applyTime, type TickEvents, type TimeInput } from "../state/time-v3.js";
 import { createExecutor, type Executor, type TxResult } from "../tx/executor.js";
 import { HANDLERS } from "../tx/handlers.js";
 import { argsOf, requestIdOf, toCommandResult } from "../tx/bridge.js";
@@ -25,7 +25,7 @@ export const saveFileV3 = (): string => PATHS.save;
 export interface GameV3 {
   file: string;
   read: () => SaveV3 | null;
-  tick: () => TickEvents | null; // 마지막 틱 뒤로 흐른 시간을 적용한다. 상한을 넘는 틈은 버린다
+  tick: (input?: TimeInput) => TickEvents | null; // 마지막 틱 뒤로 흐른 시간을 적용한다. 상한을 넘는 틈은 버린다
   view: () => Snapshot | null;
   dex: () => DexEntry[];
   agents: (req?: { name: string; action: AgentAction }) => AgentReply;
@@ -48,12 +48,13 @@ export function createGame({ file = saveFileV3(), now = Date.now, rand = Math.ra
   const executor = createExecutor({ read, write, now, rand }, HANDLERS);
 
   // 마지막 틱 뒤로 흐른 시간을 적용한다. 앱이 꺼져 있던 틈은 세지 않는다 — 상한을 넘는 몫은 버린다
-  const tick = (): TickEvents | null => {
+  // input.workMs — 지난 틱 뒤로 에이전트가 작업한 시간. 흐른 시간을 넘는 몫은 applyTime 이 버린다
+  const tick = (input: TimeInput = {}): TickEvents | null => {
     const save = read();
     if (!save) return null;
     const at = now();
     const elapsed = Math.min(TIME_V3_RULES.maxTickMs, Math.max(0, at - save.lastTickAt));
-    const events = applyTime(save, elapsed, at);
+    const events = applyTime(save, elapsed, at, input);
     save.savedAt = at;
     if (!write(save)) return null; // 쓰지 못했으면 시간도 흐르지 않은 것으로 본다
     return events;

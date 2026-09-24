@@ -34,6 +34,9 @@ import type { TickEvents } from "../state/time-v3";
 import type { Command } from "../shared/types";
 
 let lastTick = 0;
+// 에이전트 작업 시간 — 상태를 볼 때마다 running 이던 만큼 쌓아 두고, 게임 틱에 넘기고 비운다
+let workMs = 0;
+let lastPollAt = 0;
 let lastMenuPoints = -1;
 
 // POKEBUDDY_LOG 가 있으면 출력(console·stderr)을 그 파일에 이어 쓴다 — pokebuddy 는 펫에 출력 핸들을 넘기지 않는다
@@ -288,6 +291,7 @@ async function refreshParty(): Promise<void> {
 // 게임 시간 — 흐른 만큼 한 번에 적용한다. 쓰기는 거래 실행기 하나가 하므로 writer 일 때만 부른다.
 // 주기는 저장 주기와 같다. 주기보다 크게 벌어진 틈(앱 종료·절전)은 `game.tick` 이 버린다
 // (docs/specs/s5.md "복귀할 때 중단 기간을 소급 진행하지 않는다")
+// 에이전트가 작업하는 동안 적립이 2배다. 작업 판정은 무대의 에이전트 상태 running 이다 (docs/specs/balance.md "에이전트 작업 보너스")
 function stateTick(): void {
   if (!anchor || !stage) return;
   const { state, promptAt } = anchor.currentInfo();
@@ -296,9 +300,14 @@ function stateTick(): void {
   const worker = v3();
   if (worker?.isWriter() && game) {
     const now = Date.now();
+    // 폴링 사이가 크게 벌어졌으면(절전·writer 가 아니던 동안) 그 틈은 작업으로 세지 않는다
+    const gap = lastPollAt > 0 ? now - lastPollAt : 0;
+    if (state === "running" && gap <= STATE_RULES.maxTickMs) workMs += gap;
+    lastPollAt = now;
     if (now - lastTick >= STATE_RULES.saveMs) {
       lastTick = now;
-      const events = game.tick();
+      const events = game.tick({ workMs });
+      if (events) workMs = 0; // 쓰지 못했으면 다음 틱에 흐른 시간과 함께 다시 넘긴다
       worker.refresh();
       if (events) notifyTick(events);
       const points = Math.floor(worker.save()?.points.balance ?? 0);
@@ -307,6 +316,10 @@ function stateTick(): void {
         tray?.refresh();
       }
     }
+  } else {
+    // writer 가 아니면 쌓지 않는다. 다시 writer 가 되면 새로 센다
+    workMs = 0;
+    lastPollAt = 0;
   }
   if (state !== lastState) {
     lastState = state;
@@ -409,7 +422,7 @@ async function main(): Promise<void> {
         await refreshParty();
       });
     },
-    onClick: (id) => void commands?.dispatcher.dispatch({ cmd: "poke", target: id, from: "pet" }),
+    onClick: (id) => void commands?.click(id), // 클릭은 놀아주기 (src/main/commands.ts)
     onMenu: showPetMenu,
     onArtMissing: (pet) => {
       // PMD 를 못 받았다 — 대개 없는 이름이거나 네트워크가 막혔다. 무대에 나오지 않고 이유만 남긴다 (s2-plan 2.2 h)
