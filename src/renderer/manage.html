@@ -366,6 +366,11 @@
         color: var(--disabled);
         cursor: default;
       }
+      /* 주 버튼이 막히면 채움도 뺀다 — 누를 수 있는 버튼과 헷갈리지 않게 */
+      button.act.primary:disabled {
+        background: var(--subtle);
+        border-color: var(--subtle);
+      }
       /* 알림 — 할 말이 없으면 자리도 차지하지 않는다 */
       .notice {
         margin-top: 14px;
@@ -421,6 +426,10 @@
         grid-template-columns: repeat(2, 1fr);
         gap: 10px;
       }
+      /* 대화상자 안의 목록은 한 줄에 하나 — 좁은 폭에서 반씩 나누면 글자가 잘린다 */
+      #dialog .rows {
+        grid-template-columns: 1fr;
+      }
       .row-card {
         display: flex;
         align-items: center;
@@ -437,6 +446,34 @@
       .row-card:disabled {
         color: var(--disabled);
         cursor: default;
+      }
+      /* 고른 행 — 왼쪽 막대와 옅은 배경. 테두리 색으로 강조하지 않는다 */
+      .row-card[aria-pressed="true"] {
+        position: relative;
+        background: var(--accent-bg);
+      }
+      .row-card[aria-pressed="true"]::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
+        height: 20px;
+        border-radius: 0 3px 3px 0;
+        background: var(--primary);
+      }
+      .info-box {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: var(--canvas);
+        font-size: 13px;
+      }
+      .info-box .note {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 2px;
       }
       .row-card .body {
         flex: 1;

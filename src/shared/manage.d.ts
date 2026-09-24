@@ -12,6 +12,15 @@ export interface ViewBuff {
   remainMin: number;
 }
 
+// 진화 후보 하나 — 화면이 그대로 보인다. 낮·밤은 스냅샷을 만든 시각으로 정했다
+export interface EvolutionView {
+  to: string; // 결과 종 슬러그 — evolve 명령의 args.to 로 보낸다
+  name: string; // 결과 종의 화면 이름
+  ready: boolean;
+  need?: string; // 모자란 조건의 화면 문구 — "Lv.16 필요", "물의돌 필요", "밤에만"
+  item?: string; // 진화용 도구가 조건이면 그 도구 id. 가방의 돌로 대상을 고를 때 쓴다
+}
+
 export interface PetView {
   id: string;
   species: string;
@@ -33,6 +42,7 @@ export interface PetView {
   playStreak: number;
   longPlay: boolean;
   buffs: ViewBuff[];
+  evolutions: EvolutionView[]; // 다음 한 단계의 후보. 최종 단계면 비어 있다
 }
 
 export interface SlotView {
@@ -65,6 +75,7 @@ export interface BagItemView {
   id: string;
   name: string;
   count: number;
+  evolution: boolean; // 진화용 도구 — 누르면 진화할 개체를 고른다
 }
 
 export type ShopCategory = "egg" | "pokemon" | "tool" | "evolution" | "slot";

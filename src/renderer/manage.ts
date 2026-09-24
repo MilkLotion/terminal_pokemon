@@ -133,6 +133,8 @@ const achDotEl = need("achievements-dot", HTMLElement);
 type Dialog =
   | { kind: "pet"; petId: string }
   | { kind: "use"; itemId: string }
+  | { kind: "evolve"; petId: string; to?: string; itemId?: string } // 진화 확인 — to 는 고른 후보, itemId 는 가방의 돌로 왔을 때
+  | { kind: "evo-target"; itemId: string } // 가방의 진화용 도구 — 진화할 개체를 고른다
   | { kind: "buy"; productId: string; qty: number }
   | { kind: "pick-box"; slotIndex: number } // 칸이 정해졌고 넣을 박스 개체를 고른다
   | { kind: "pick-slot"; petId: string } // 개체가 정해졌고 넣을 파티 칸을 고른다
@@ -416,10 +418,10 @@ function bagRow(item: BagItemView): HTMLElement {
   const card = button("row-card");
   const blocked = NEEDS_NATURE.has(item.id);
   const body = el("div", "body");
-  body.append(el("div", "title", item.name), el("div", "note", blocked ? "성격을 고르는 화면이 아직 없습니다" : "눌러서 사용"));
+  body.append(el("div", "title", item.name), el("div", "note", blocked ? "성격을 고르는 화면이 아직 없습니다" : item.evolution ? "눌러서 진화할 포켓몬 고르기" : "눌러서 사용"));
   card.append(body, el("div", "count", `×${item.count}`));
   card.disabled = blocked;
-  card.addEventListener("click", () => open({ kind: "use", itemId: item.id }));
+  card.addEventListener("click", () => open(item.evolution ? { kind: "evo-target", itemId: item.id } : { kind: "use", itemId: item.id }));
   return card;
 }
 
@@ -527,28 +529,87 @@ function drawPet(petId: string): void {
     // 박스 개체 — 빈 칸이 있으면 바로 배치하고, 없으면 바꿀 칸을 고른다
     const free = emptySlot();
     dialogEl.appendChild(el("div", "sub", "박스에 있습니다. 파티에 있는 동안에만 시간이 흐릅니다."));
-    dialogEl.appendChild(
-      actions(
-        free != null
-          ? actionButton("파티에 배치", true, false, () => void send("party.place", pet.id, { slotIndex: free }))
-          : actionButton("교체", true, false, () => open({ kind: "pick-slot", petId: pet.id })),
-        closeButton(),
-      ),
-    );
+    // 박스 개체도 진화할 수 있다 (docs/specs/s5.md "박스 개체의 상세에는 … 성장·진화, 도구 사용, 파티에 배치 또는 교체만 둔다")
+    const boxButtons = [
+      free != null
+        ? actionButton("파티에 배치", true, false, () => void send("party.place", pet.id, { slotIndex: free }))
+        : actionButton("교체", true, false, () => open({ kind: "pick-slot", petId: pet.id })),
+    ];
+    if (pet.evolutions.length) boxButtons.push(actionButton("진화", false, false, () => open({ kind: "evolve", petId: pet.id })));
+    boxButtons.push(closeButton());
+    dialogEl.appendChild(actions(...boxButtons));
     return;
   }
 
-  dialogEl.appendChild(
-    actions(
-      actionButton(pet.hidden ? "꺼내기" : "숨기기", true, false, () => void send(pet.hidden ? "party.show" : "party.hide", pet.id)),
-      actionButton(pet.feedReady ? "밥 주기" : `밥 주기 (${pet.feedInSec}초)`, false, !pet.feedReady || pet.fullness >= 100, () => void send("feed", pet.id)),
-      actionButton(pet.playReady ? "놀아주기" : "놀아주기 (쿨타임)", false, !pet.playReady, () => void send("play", pet.id)),
-      actionButton("진화", false, false, () => void send("evolve", pet.id)),
-      actionButton("교체", false, false, () => open({ kind: "pick-box", slotIndex: slot })),
-      actionButton("박스에 보관", false, false, () => void send("party.keep", pet.id)),
-      closeButton(),
-    ),
+  const buttons = [
+    actionButton(pet.hidden ? "꺼내기" : "숨기기", true, false, () => void send(pet.hidden ? "party.show" : "party.hide", pet.id)),
+    actionButton(pet.feedReady ? "밥 주기" : `밥 주기 (${pet.feedInSec}초)`, false, !pet.feedReady || pet.fullness >= 100, () => void send("feed", pet.id)),
+    actionButton(pet.playReady ? "놀아주기" : "놀아주기 (쿨타임)", false, !pet.playReady, () => void send("play", pet.id)),
+  ];
+  // 최종 단계는 진화할 곳이 없다 — 버튼을 두지 않는다
+  if (pet.evolutions.length) buttons.push(actionButton("진화", false, false, () => open({ kind: "evolve", petId: pet.id })));
+  buttons.push(
+    actionButton("교체", false, false, () => open({ kind: "pick-box", slotIndex: slot })),
+    actionButton("박스에 보관", false, false, () => void send("party.keep", pet.id)),
+    closeButton(),
   );
+  dialogEl.appendChild(actions(...buttons));
+}
+
+// ── 모달 · 진화 확인 ───────────────────────────────────────────────────────────
+// 후보마다 결과 종과 상태를 보인다. 가능한 후보가 하나면 그것을 고른 채로 연다.
+// `취소` 는 아무것도 바꾸지 않는다 (docs/specs/s5.md "진화 확인 화면에서 취소한 개체는 진화 가능 상태를 유지한다")
+
+function drawEvolve(petId: string, to?: string, itemId?: string): void {
+  const pet = petOf(petId);
+  if (!pet) {
+    close();
+    return;
+  }
+  // 가방의 돌로 왔으면 그 돌이 조건인 후보만 보인다
+  const list = itemId ? pet.evolutions.filter((c) => c.item === itemId) : pet.evolutions;
+  const ready = list.filter((c) => c.ready);
+  const picked = list.find((c) => c.to === to && c.ready) ?? (ready.length === 1 ? ready[0] : undefined);
+  const back: { label: string; to: Dialog } = itemId ? { label: "대상", to: { kind: "evo-target", itemId } } : { label: pet.name, to: { kind: "pet", petId } };
+  dialogEl.append(...dialogHead("진화", ready.length > 1 ? "진화할 모습을 고르세요." : `${pet.name} · Lv.${pet.level}`, back));
+
+  const rows = el("div", "rows");
+  for (const c of list) {
+    const row = button("row-card");
+    const body = el("div", "body");
+    body.append(el("div", "title", c.name), el("div", "note", c.ready ? "진화할 수 있어요" : (c.need ?? "조건이 모자라요")));
+    row.appendChild(body);
+    row.disabled = !c.ready;
+    row.setAttribute("aria-pressed", String(picked?.to === c.to));
+    row.addEventListener("click", () => open({ kind: "evolve", petId, to: c.to, ...(itemId ? { itemId } : {}) }));
+    rows.appendChild(row);
+  }
+  dialogEl.appendChild(rows);
+
+  if (picked) {
+    const info = el("div", "info-box");
+    info.appendChild(el("div", undefined, `${pet.name} → ${picked.name}`));
+    const item = picked.item ? view?.bag.find((b) => b.id === picked.item) : undefined;
+    info.appendChild(el("div", "note", item ? `${item.name} 1개를 씁니다. 레벨·친밀도·성격은 그대로입니다.` : "레벨·친밀도·성격은 그대로입니다."));
+    dialogEl.appendChild(info);
+  }
+
+  const go = actionButton("진화", true, !picked, () => {
+    if (!picked) return;
+    void send("evolve", pet.id, { to: picked.to }).then((ok) => {
+      if (ok) open({ kind: "pet", petId });
+    });
+  });
+  dialogEl.appendChild(actions(go, actionButton("취소", false, false, () => open(back.to))));
+}
+
+// 가방의 진화용 도구 — 그 도구로 지금 진화할 수 있는 개체를 고른다. 박스 개체에게도 쓸 수 있다
+function drawEvoTarget(itemId: string): void {
+  const item = view?.bag.find((b) => b.id === itemId);
+  const pets = [...partyPets(), ...boxPets()].filter((p) => p.evolutions.some((c) => c.item === itemId && c.ready));
+  dialogEl.append(...dialogHead(item ? item.name : itemId, pets.length ? "누구를 진화시킬까요?" : "이 도구로 지금 진화할 수 있는 포켓몬이 없어요."));
+  const acts = pets.map((p) => actionButton(`${p.name} (Lv.${p.level})`, false, false, () => open({ kind: "evolve", petId: p.id, itemId })));
+  dialogEl.appendChild(actions(...acts, closeButton()));
 }
 
 // ── 모달 · 도구 사용 대상 고르기 ───────────────────────────────────────────────
@@ -816,6 +877,8 @@ function drawGuide(): void {
 const SHAPE: Record<Dialog["kind"], string> = {
   pet: "dialog",
   use: "dialog",
+  evolve: "dialog",
+  "evo-target": "dialog",
   buy: "dialog",
   "pick-box": "dialog wide",
   "pick-slot": "dialog wide",
@@ -835,6 +898,8 @@ function drawDialog(): void {
 
   if (dialog.kind === "pet") drawPet(dialog.petId);
   else if (dialog.kind === "use") drawUse(dialog.itemId);
+  else if (dialog.kind === "evolve") drawEvolve(dialog.petId, dialog.to, dialog.itemId);
+  else if (dialog.kind === "evo-target") drawEvoTarget(dialog.itemId);
   else if (dialog.kind === "buy") drawBuy(dialog.productId, dialog.qty);
   else if (dialog.kind === "pick-box") drawPickBox(dialog.slotIndex);
   else if (dialog.kind === "pick-slot") drawPickSlot(dialog.petId);
@@ -884,7 +949,8 @@ const REASON: Record<string, string> = {
   "not-unlocked": "아직 해금하지 않은 종이에요.",
   "not-ready": "아직 준비되지 않았어요.",
   "no-candidate": "지금은 진화할 수 없어요.",
-  "need-choice": "진화할 곳이 여럿이에요. 고르는 화면이 아직 없습니다.",
+  "need-choice": "진화할 모습을 골라 주세요.",
+  "bad-choice": "고른 모습으로는 지금 진화할 수 없어요.",
   "no-step": "더 진화하지 않아요.",
   "none-left": "가방에 남은 것이 없어요.",
   "no-item": "가방에 없어요.",

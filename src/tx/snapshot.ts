@@ -13,8 +13,10 @@ import { itemOf } from "../bag/use.js";
 import { eggName } from "../shop/catalog.js";
 import { zoneOf } from "../state/time.js";
 import { moodWord, natureName, petName, typeName } from "../main/text.js";
-import type { AchievementView, BagItemView, BoxView, EggView, PetView, SlotView, Snapshot } from "../shared/manage";
-import { nameOfItem, shopList } from "./lists.js";
+import type { AchievementView, BagItemView, BoxView, EggView, EvolutionView, PetView, SlotView, Snapshot } from "../shared/manage";
+import { candidates, dayPartOf } from "../dex/evolve.js";
+import type { DayPart } from "../shared/types";
+import { isEvoItem, nameOfItem, shopList } from "./lists.js";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
 
 // 보상 종류 → 화면 문구. 종류가 하나뿐이라 표로 둔다
@@ -27,7 +29,29 @@ const min = (ms: number): number => Math.round(ms / 60_000);
 const eggPercent = (remainMs: number, readyMs: number): number =>
   readyMs <= 0 ? 100 : Math.min(100, Math.max(0, Math.round(((readyMs - remainMs) / readyMs) * 100)));
 
-export function petView(pet: PetV3, hidden: boolean): PetView {
+// 모자란 조건 → 화면 문구. 판정의 이유 코드는 src/dex/evolve.ts 의 checkNeed 다
+function needText(missing: string | undefined): string | undefined {
+  if (!missing) return undefined;
+  const [kind, value = ""] = missing.split(":");
+  if (kind === "level") return `Lv.${value} 필요`;
+  if (kind === "affinity") return `친밀도 ${value} 필요`;
+  if (kind === "item") return `${nameOfItem(value)} 필요`;
+  if (kind === "time") return value === "night" ? "밤에만" : "낮에만";
+  return missing;
+}
+
+// 다음 한 단계의 후보 — 상세의 진화 확인 창과 가방의 진화용 도구가 같은 판정을 본다
+function evolutionsOf(save: SaveV3, pet: PetV3, dayPart: DayPart): EvolutionView[] {
+  return candidates(save, pet.id, dayPart).map((c) => ({
+    to: c.to,
+    name: petName(c.to),
+    ready: c.ready,
+    ...(c.ready ? {} : { need: needText(c.missing) }),
+    ...(c.need.kind === "item" ? { item: c.need.item } : {}),
+  }));
+}
+
+export function petView(save: SaveV3, pet: PetV3, hidden: boolean, dayPart: DayPart = dayPartOf(Date.now())): PetView {
   const rate = growthOf(pet.species);
   const { percent } = progressTo(rate, pet.exp);
   return {
@@ -51,6 +75,7 @@ export function petView(pet: PetV3, hidden: boolean): PetView {
     playStreak: pet.playStreak,
     longPlay: pet.buffs.some((b) => b.kind === "long-play" && b.remainMs > 0),
     buffs: pet.buffs.map((b) => ({ kind: b.kind, remainMin: min(b.remainMs) })),
+    evolutions: evolutionsOf(save, pet, dayPart),
   };
 }
 
@@ -60,14 +85,16 @@ export function snapshot(
   eggReadyMs: number = EGG_V3_RULES.readyMs,
   boxSize: number = SAVE_V3_RULES.box.size,
   maxEggs: number = EGG_V3_RULES.maxEggs,
+  now: number = Date.now(), // 진화 후보의 낮·밤을 정한다
 ): Snapshot {
+  const dayPart = dayPartOf(now);
   const byId = new Map(save.pets.map((p) => [p.id, p]));
 
   const slots: SlotView[] = save.party.slots.map((s, index) => {
     if (s.state !== "pokemon" || !s.petId) return { index, state: s.state, unlockBy: s.unlockBy };
     const pet = byId.get(s.petId);
     if (!pet) return { index, state: "empty" };
-    return { index, state: "pokemon", pet: petView(pet, s.hidden === true) };
+    return { index, state: "pokemon", pet: petView(save, pet, s.hidden === true, dayPart) };
   });
 
   const boxes: BoxView[] = save.boxes.map((b) => ({
@@ -77,7 +104,7 @@ export function snapshot(
     size: boxSize,
     slots: b.slots.map((id) => {
       const pet = id ? byId.get(id) : undefined;
-      return pet ? petView(pet, true) : null;
+      return pet ? petView(save, pet, true, dayPart) : null;
     }),
   }));
 
@@ -94,7 +121,7 @@ export function snapshot(
 
   const bag: BagItemView[] = Object.entries(save.bag)
     .filter(([, n]) => n > 0)
-    .map(([id, count]) => ({ id, name: itemOf(id)?.ko ?? nameOfItem(id), count }))
+    .map(([id, count]) => ({ id, name: itemOf(id)?.ko ?? nameOfItem(id), count, evolution: isEvoItem(id) }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const achievements: AchievementView[] = defs().map(([id, def]) => {

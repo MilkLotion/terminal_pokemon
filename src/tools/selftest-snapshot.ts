@@ -143,4 +143,31 @@ function seed(): SaveV3 {
   process.stdout.write("(10) 어긋난 참조는 빈 칸  ok\n");
 }
 
-process.stdout.write("selftest-snapshot: 통과 (이름·구간·단위·칸·알·가방·도감)\n");
+// (11) 진화 후보 — 가능한 후보와 모자란 조건을 화면 문구로 준다. 낮·밤은 스냅샷 시각으로 정한다
+{
+  const s = empty(T0);
+  s.pets.push(pet({ id: "p1", species: "eevee" }));
+  s.pets.push(pet({ id: "p2", species: "charizard" }));
+  s.party.slots[0] = { state: "pokemon", petId: "p1", hidden: false };
+  s.party.slots[1] = { state: "pokemon", petId: "p2", hidden: false };
+  s.bag = { "fire-stone": 1, "premium-food": 1 };
+  const day = snapshot(s, undefined, undefined, undefined, T0); // 10시 0분 — 낮
+  const evo = day.party.slots[0]?.pet?.evolutions ?? [];
+  assert.deepStrictEqual(evo.filter((c) => c.ready).map((c) => c.to), ["flareon"], "불꽃의돌이 있으면 부스터만 가능");
+  const byTo = (list: typeof evo, to: string) => list.find((c) => c.to === to);
+  assert.equal(byTo(evo, "flareon")?.name, "부스터", "결과 종은 화면 이름");
+  assert.equal(byTo(evo, "flareon")?.item, "fire-stone", "돌 조건이면 도구 id 를 준다");
+  assert.equal(byTo(evo, "vaporeon")?.need, "물의돌 필요", "없는 돌은 모자란 조건");
+  assert.equal(byTo(evo, "espeon")?.need, "친밀도 65 필요");
+  assert.equal(byTo(evo, "umbreon")?.need, "밤에만", "낮에는 밤 조건을 알린다");
+  const night = snapshot(s, undefined, undefined, undefined, T0 + 30 * MIN); // 30분 — 밤
+  const nightEvo = night.party.slots[0]?.pet?.evolutions ?? [];
+  assert.equal(byTo(nightEvo, "umbreon")?.need, "친밀도 65 필요", "밤에는 친밀도가 모자란 것만 남는다");
+  assert.equal(byTo(nightEvo, "espeon")?.need, "낮에만");
+  assert.deepStrictEqual(day.party.slots[1]?.pet?.evolutions, [], "최종 단계는 후보가 없다");
+  assert.equal(day.bag.find((b) => b.id === "fire-stone")?.evolution, true, "진화용 도구 표시");
+  assert.equal(day.bag.find((b) => b.id === "premium-food")?.evolution, false);
+  process.stdout.write("(11) 진화 후보와 조건 문구  ok\n");
+}
+
+process.stdout.write("selftest-snapshot: 통과 (이름·구간·단위·칸·알·가방·도감·진화 후보)\n");

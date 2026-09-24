@@ -62,7 +62,7 @@ export function createGame({ file = saveFile(), now = Date.now, rand = Math.rand
 
   const view = (): Snapshot | null => {
     const save = read();
-    return save ? snapshot(save) : null;
+    return save ? snapshot(save, undefined, undefined, undefined, now()) : null;
   };
 
   // 화면이 보낸 요청을 명령으로 바꿔 실행기에 넘긴다. 다리와 같은 규칙을 쓴다

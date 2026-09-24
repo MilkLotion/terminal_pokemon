@@ -132,3 +132,6 @@ export function dexList(save: SaveV3, opts?: DexOptions): DexEntry[] {
 
 // 도구 하나의 이름 — 가방이 모르는 식별자를 만나도 화면이 비지 않게
 export const nameOfItem = (id: string, opts?: DexOptions): string => toolName(id, opts) ?? id;
+
+// 진화용 도구인가 — data/evo-items.json 에 있으면 그렇다
+export const isEvoItem = (id: string, opts?: DexOptions): boolean => evoItems(opts)[id] != null;
