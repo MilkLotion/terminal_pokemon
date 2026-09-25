@@ -153,6 +153,13 @@ let dexPick: string | null = null;
 let dexDetail: DexDetail | null = null;
 let agentRows: AgentRow[] | null = null;
 let boxPage = 0;
+// 검색어 — 탭을 옮겨도 남는다 (docs/specs/s5.md "검색과 선택을 유지한다")
+let boxQuery = "";
+let dexQuery = "";
+let pickQuery = "";
+let boxMarked: string | null = null; // 박스 검색 결과로 찾아간 개체 — 그 칸을 고른 칸으로 보인다
+// 다시 그린 뒤 되돌릴 검색 칸 — 입력 중에 화면을 새로 그려도 포커스와 커서가 남게
+let searchFocus: { key: string; caret: number } | null = null;
 let shopFilter = "all";
 let dexFilter = "all";
 let dialog: Dialog | null = null;
@@ -300,6 +307,55 @@ function eggCard(egg: EggView): HTMLElement {
   return card;
 }
 
+// ── 검색 ───────────────────────────────────────────────────────────────────────
+// 한글은 조합 중인 글자가 있다. 조합 중에는 다시 그리지 않고, 조합이 끝나면 그린다
+
+function searchBox(key: string, value: string, placeholder: string, onChange: (q: string) => void): HTMLInputElement {
+  const input = document.createElement("input");
+  input.type = "search";
+  input.className = "search";
+  input.id = `search-${key}`;
+  input.placeholder = placeholder;
+  input.value = value;
+  input.setAttribute("aria-label", placeholder);
+  // 다시 그리면 옛 칸이 빠지며 blur 가 먼저 온다(Chromium). 그래서 그린 뒤에 기억을 다시 넣고 되돌린다
+  const apply = (): void => {
+    const saved = { key, caret: input.selectionStart ?? input.value.length };
+    onChange(input.value);
+    searchFocus = saved;
+    restoreSearchFocus();
+  };
+  input.addEventListener("input", (e) => {
+    if (!(e as InputEvent).isComposing) apply();
+  });
+  input.addEventListener("compositionend", apply);
+  // 사용자가 다른 곳을 누르면 포커스 기억을 지운다
+  input.addEventListener("blur", () => {
+    if (searchFocus?.key === key) searchFocus = null;
+  });
+  return input;
+}
+
+function restoreSearchFocus(): void {
+  if (!searchFocus) return;
+  const input = document.getElementById(`search-${searchFocus.key}`);
+  if (!(input instanceof HTMLInputElement)) return;
+  input.focus();
+  input.setSelectionRange(searchFocus.caret, searchFocus.caret);
+}
+
+const normQuery = (q: string): string => q.trim().toLowerCase();
+
+// 이름은 부분 일치, 숫자만 넣으면 도감 번호 앞자리 일치("025" 와 "25" 가 같다)
+function matchesName(name: string, q: string): boolean {
+  return name.toLowerCase().includes(q);
+}
+function matchesDex(row: DexEntry, q: string): boolean {
+  if (/^\d+$/.test(q)) return String(row.dex).startsWith(String(Number(q)));
+  // 미해금 종은 이름이 숨겨져 있다 — 이름으로 찾으면 무엇인지 드러나므로 번호로만 찾는다
+  return row.state !== "locked" && matchesName(row.name, q);
+}
+
 function boxCell(pet: PetView, onPick: () => void): HTMLButtonElement {
   const cell = button("cell");
   cell.append(el("div", "dot"), el("div", "who", pet.name), el("div", "note", pet.shiny ? `Lv.${pet.level} · 이로치` : `Lv.${pet.level}`));
@@ -330,16 +386,50 @@ function drawBox(v: Snapshot): void {
   prev.disabled = boxPage === 0;
   prev.addEventListener("click", () => {
     boxPage -= 1;
+    boxMarked = null;
     draw();
   });
   const next = button("", "▶");
   next.disabled = boxPage >= v.boxes.length - 1;
   next.addEventListener("click", () => {
     boxPage += 1;
+    boxMarked = null;
     draw();
   });
   pager.append(prev, el("span", "label", box.name), el("span", "used", `${box.used} / ${box.size}`), next);
+  // 이름 검색 — 모든 박스를 대상으로 한다. 정렬은 기준이 미정이라 두지 않는다 (docs/specs/ui-components.md C-07)
+  pager.appendChild(
+    searchBox("box", boxQuery, "이름 검색", (q) => {
+      boxQuery = q;
+      draw();
+    }),
+  );
   bodyEl.appendChild(pager);
+
+  const q = normQuery(boxQuery);
+  if (q) {
+    const found = v.boxes.flatMap((b, bi) => b.slots.filter((p): p is PetView => p != null && matchesName(p.name, q)).map((p) => ({ pet: p, bi, box: b.name })));
+    if (!found.length) {
+      bodyEl.appendChild(el("div", "empty-note", "검색 결과 없음"));
+      return;
+    }
+    const results = el("div", "box-grid");
+    for (const { pet, bi, box: boxName } of found) {
+      // 결과를 누르면 그 개체가 있는 박스로 간다
+      const cell = boxCell(pet, () => {
+        boxQuery = "";
+        searchFocus = null;
+        boxPage = bi;
+        boxMarked = pet.id;
+        draw();
+      });
+      cell.appendChild(el("div", "note", boxName));
+      cell.title = `${pet.name} · ${boxName}로 가기`;
+      results.appendChild(cell);
+    }
+    bodyEl.appendChild(results);
+    return;
+  }
 
   const grid = el("div", "box-grid");
   for (const pet of box.slots) {
@@ -348,6 +438,7 @@ function drawBox(v: Snapshot): void {
       continue;
     }
     const cell = boxCell(pet, () => openPet(pet.id));
+    cell.setAttribute("aria-pressed", String(pet.id === boxMarked));
     cell.title = `${pet.name} · 눌러서 상세 보기`;
     grid.appendChild(cell);
   }
@@ -408,6 +499,15 @@ async function pickDex(slug: string): Promise<void> {
 
 function drawDex(v: Snapshot): void {
   bodyEl.appendChild(head("도감", `획득 ${v.dex.obtained} · 해금 ${v.dex.unlocked} · 이로치 ${v.dex.shiny}`));
+  // 이름·번호 검색 — 등록 상태 칩과 함께 적용한다. 지방 셀렉트는 목록·매핑이 미정이라 두지 않는다
+  const bar = el("div", "search-row");
+  bar.appendChild(
+    searchBox("dex", dexQuery, "이름 또는 번호 검색", (q) => {
+      dexQuery = q;
+      draw();
+    }),
+  );
+  bodyEl.appendChild(bar);
   bodyEl.appendChild(
     chips(DEX_TABS, dexFilter, (id) => {
       dexFilter = id;
@@ -418,9 +518,10 @@ function drawDex(v: Snapshot): void {
     bodyEl.appendChild(el("div", "empty-note", "도감을 읽는 중입니다."));
     return;
   }
-  const rows = dexRows.filter((r) => dexFilter === "all" || r.state === dexFilter);
+  const q = normQuery(dexQuery);
+  const rows = dexRows.filter((r) => (dexFilter === "all" || r.state === dexFilter) && (!q || matchesDex(r, q)));
   if (!rows.length) {
-    bodyEl.appendChild(el("div", "empty-note", "해당하는 종이 없습니다."));
+    bodyEl.appendChild(el("div", "empty-note", q ? "검색 결과 없음" : "해당하는 종이 없습니다."));
     return;
   }
   // 상세 패널은 고른 칸이 있는 줄 바로 아래에 격자 폭으로 끼운다. 목록이 길어도 눈앞에 열린다
@@ -520,6 +621,7 @@ function draw(): void {
   else if (tab === "dex") drawDex(view);
   else if (tab === "shop") drawShop(view);
   else drawBag(view);
+  restoreSearchFocus();
 }
 
 // ── 모달 · 공통 ────────────────────────────────────────────────────────────────
@@ -835,9 +937,27 @@ async function buy(productId: string, count: number): Promise<void> {
 // ── 모달 · 개체와 칸 고르기 ────────────────────────────────────────────────────
 
 function drawPickBox(slotIndex: number): void {
-  const pets = boxPets();
+  const all = boxPets();
+  const q = normQuery(pickQuery);
+  const pets = q ? all.filter((p) => matchesName(p.name, q)) : all;
   const filled = view?.party.slots[slotIndex]?.state === "pokemon";
   dialogEl.append(...dialogHead("박스에서 고르기", filled ? `${slotIndex + 1}번 칸의 개체와 맞바꿉니다.` : `${slotIndex + 1}번 칸에 넣습니다.`));
+  // 박스 탭과 같은 검색 줄 (docs/work/s5-design-system-v2/plan.md "원작식 박스 구조와 검색")
+  if (all.length) {
+    const bar = el("div", "search-row");
+    bar.appendChild(
+      searchBox("pick", pickQuery, "이름 검색", (value) => {
+        pickQuery = value;
+        drawDialog();
+      }),
+    );
+    dialogEl.appendChild(bar);
+  }
+  if (all.length && !pets.length) {
+    dialogEl.appendChild(el("div", "empty-note", "검색 결과 없음"));
+    dialogEl.appendChild(actions(closeButton()));
+    return;
+  }
   if (!pets.length) {
     dialogEl.appendChild(el("div", "empty-note", "박스가 비었습니다."));
     dialogEl.appendChild(actions(closeButton()));
@@ -1055,6 +1175,7 @@ function drawDialog(): void {
   else drawGuide();
 
   if (notice) dialogEl.appendChild(el("div", "notice bad", notice));
+  restoreSearchFocus();
 }
 
 // 다른 모달로 갈 때는 지난 실패 문구를 지운다. 구매 창의 부족 안내처럼 그 화면이 다시 만드는 것은 남는다

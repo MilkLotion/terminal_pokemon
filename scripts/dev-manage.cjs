@@ -6,6 +6,7 @@
 // `--tab <파티|박스|도감|상점|가방>` 을 주면 그 탭을 눌러 놓고 찍는다.
 // `--detail` 을 주면 첫 칸을 눌러 개체 상세까지 찍는다.
 // `--click <선택자>` 를 주면 그 요소를 한 번 눌러 놓고 찍는다. 여러 번 주면 순서대로 누른다.
+// `--input <선택자>=<글자>` 를 주면 누른 뒤에 그 입력칸에 한 글자씩 넣는다. 다 넣은 뒤 포커스가 있는 요소의 id 를 출력한다.
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -136,9 +137,22 @@ app.whenReady().then(async () => {
         step = step.then(() => click(js));
       }
       if (process.argv.includes("--detail")) step = step.then(() => click("document.querySelector('.slot:not(.blank)').click(); true"));
-      for (const pick of argsAfter("--click")) {
-        step = step.then(() => click(`document.querySelector(${JSON.stringify(pick)}).click(); true`));
-      }
+      // --click 과 --input 은 적은 순서대로 한다 — 검색한 뒤 결과를 누르는 흐름을 찍을 수 있게
+      // --input 은 한 글자씩 넣는다. 매 글자마다 화면을 다시 그려도 포커스가 남는지 보려고 입력칸을 매번 새로 찾는다
+      process.argv.forEach((flag, at) => {
+        const value = process.argv[at + 1];
+        if (flag === "--click" && value) step = step.then(() => click(`document.querySelector(${JSON.stringify(value)}).click(); true`));
+        if (flag !== "--input" || !value) return;
+        const cut = value.indexOf("=");
+        const sel = value.slice(0, cut);
+        const text = value.slice(cut + 1);
+        for (let i = 1; i <= text.length; i++) {
+          const js = `(() => { const el = document.querySelector(${JSON.stringify(sel)}); el.focus(); el.value = ${JSON.stringify(text.slice(0, i))}; el.setSelectionRange(el.value.length, el.value.length); el.dispatchEvent(new InputEvent("input", { bubbles: true })); return true; })()`;
+          step = step.then(() => click(js));
+        }
+        step = step.then(() => win.webContents.executeJavaScript("document.activeElement && document.activeElement.id").then((id) => process.stdout.write(`focus: ${id}
+`)));
+      });
       step
         .then(() => win.webContents.capturePage())
         .then((img) => {
