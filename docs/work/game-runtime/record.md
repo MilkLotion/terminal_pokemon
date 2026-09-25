@@ -597,6 +597,23 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 
 **검수** — 개발용 실행기로 파티·박스 개체 상세와 진화 창(페이지 위)을 찍어 시안 C 와 같은 배치를 확인했다. `npm run selftest` 전체, E2E(종료 코드 0), `check-docs` 통과.
 
+### 설치 파일에 그림 미리 넣기
+
+날짜: 2026-09-25. 상태: 구현·검수 완료. 사용자 지시: "이미지들 설치할때 미리 로드해놓게 수정".
+
+**작업**
+- `scripts/fetch-sprites.cjs`: PokeAPI 에서 초상(보통·이로치, `lib/dex.json` 의 1025 번호)·도구·알 그림을 `.cache/sprites/` 에 받는다. 이름은 앱 캐시와 같다. `.gitignore` 에 `.cache/`.
+- `scripts/build-exe.cjs`: `.cache/sprites` 를 앱 안 `sprites/` 로 복사한다(없으면 멈춘다). `dist:win` 이 빌드 → 그림 받기 → 묶기 순서로 돈다.
+- `src/main/portraits.ts` `createPortraits(dir, bundled)`: 앱 안 그림 → 사용자 캐시 → 네트워크 순서. 관리 창·선택 창이 `PATHS.project/sprites` 를 넘긴다.
+- 범위 밖: 무대 애니메이션(PMD, 종마다 수백 KB 묶음·CC BY-NC)은 지금처럼 처음 띄울 때 받는다.
+
+**검수**
+- 그림 받기: 새로 2062개(초상 2050 · 알 · 도구 11), 없음 45(PokeAPI 에 그림이 없는 도구), 합 2.0MB.
+- 임시 캐시 폴더로 `createPortraits` 를 불러 피카츄·이로치 복숭악동 초상·알·이상한사탕이 모두 나오고 캐시에 받은 파일이 0개임을 확인했다.
+- 설치 파일: 앱 안 `sprites/` 2052 항목, 설치 파일 104.3 → 106.6MB. 설치하지 않은 exe 기동 확인, `npm run selftest` 전체 통과.
+
+## 작업
+
 ### 저장 v3 전환의 작업
 
 **만든 파일** — `src/main/party-v3.ts`(무대가 보는 마리 목록), `src/main/status-v3.ts`(우클릭 메뉴의 상태 문구), `src/party/create.ts`(개체 하나 만들기), `src/party/starter.ts`(첫 선택), `src/party/home.ts`(놓아 둔 자리)다.

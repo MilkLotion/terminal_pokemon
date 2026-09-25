@@ -42,6 +42,11 @@ function stageFiles() {
       copied.push(rel);
     }
   }
+  // 미리 받은 그림(초상·도구·알)을 앱 안 sprites/ 로 넣는다 — 설치 직후 오프라인이어도 보인다 (scripts/fetch-sprites.cjs)
+  const sprites = path.join(root, ".cache", "sprites");
+  if (!fs.existsSync(sprites)) throw new Error("미리 받은 그림이 없다 — node scripts/fetch-sprites.cjs 먼저");
+  fs.cpSync(sprites, path.join(stage, "sprites"), { recursive: true });
+  copied.push("sprites (.cache/sprites)");
   // 자체 검사와 데이터 생성 도구는 실행에 쓰지 않는다
   fs.rmSync(path.join(stage, "dist", "tools"), { recursive: true, force: true });
   const appPkg = {

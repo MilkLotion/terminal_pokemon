@@ -5,6 +5,7 @@ helpers/winbounds
 *.tgz
 dist/
 release/
+.cache/
 
 # PC Settings
 .playwright-mcp/

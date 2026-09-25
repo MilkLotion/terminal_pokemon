@@ -747,7 +747,7 @@ PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이다. 
 
 ### 관리 창의 초상
 
-관리 창과 첫 포켓몬 선택 창의 원형 초상은 [PokeAPI sprites](https://github.com/PokeAPI/sprites) 의 기본 그림(`sprites/pokemon/<도감>.png`, 96 × 96)이다. 이로치는 `sprites/pokemon/shiny/<도감>.png` 를 쓰고, 없으면 보통 그림을 쓴다. 저장소는 CC0 이고 그림 저작권은 The Pokémon Company 에 있다. 둘레 여백은 잘라 원을 채운다. 받는 사람 컴퓨터의 `~/.claude/pokebuddy/sprites/` 에 캐시한다. 받지 못하면 빈 원이 남는다. 미해금 도감 칸은 그림을 보이지 않는다(`src/main/portraits.ts`).
+관리 창과 첫 포켓몬 선택 창의 원형 초상은 [PokeAPI sprites](https://github.com/PokeAPI/sprites) 의 기본 그림(`sprites/pokemon/<도감>.png`, 96 × 96)이다. 이로치는 `sprites/pokemon/shiny/<도감>.png` 를 쓰고, 없으면 보통 그림을 쓴다. 저장소는 CC0 이고 그림 저작권은 The Pokémon Company 에 있다. 둘레 여백은 잘라 원을 채운다. 설치 파일에는 초상 2050장(보통·이로치)과 도구·알 그림이 미리 들어 있다(앱 안 `sprites/`). 저장소 실행과 npm 판은 처음 볼 때 받아 `~/.claude/pokebuddy/sprites/` 에 캐시한다. 받지 못하면 빈 원이 남는다. 미해금 도감 칸은 그림을 보이지 않는다(`src/main/portraits.ts`).
 
 ### 도구·알 그림, 도감 설명, 울음소리
 
@@ -832,6 +832,7 @@ npm run dist:win    # release/pokebuddy-Setup-<버전>.exe
 
 - `scripts/build-exe.cjs` 가 실행에 필요한 파일(`package.json` 의 `files`)만 `release/app/` 에 모은다. 그다음 `electron-builder` 로 묶는다.
 - 처음 만들 때 Electron 과 NSIS 를 내려받는다. 인터넷이 필요하다.
+- 만들기 전에 `scripts/fetch-sprites.cjs` 가 PokeAPI 초상·도구·알 그림을 `.cache/sprites/`(git 제외, 약 2MB)에 받는다. 이미 받은 파일은 건너뛴다. 설치 파일에는 앱 안 `sprites/` 로 들어간다.
 - 코드 서명을 하지 않는다. 설치 확인은 `release/win-unpacked/pokebuddy.exe` 를 먼저 띄워 본 뒤 설치 파일로 한다.
 
 ### 로고

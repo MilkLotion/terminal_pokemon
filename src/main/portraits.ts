@@ -5,7 +5,9 @@
 // 경로: sprites/pokemon/<도감>.png, 이로치는 sprites/pokemon/shiny/<도감>.png. 이로치 그림이 없으면 보통 그림을 쓴다.
 // 캐시: ~/.claude/pokebuddy/sprites/<4자리>.png · <4자리>-shiny.png. 못 받은 종은 이 프로세스가 끝날 때까지 다시 받지 않는다.
 // 도구·알 그림(icons)도 같은 저장소에서 받는다: sprites/items/<식별자>.png, sprites/pokemon/egg.png. 없으면(404) 빈 칸이다.
+// 설치 파일에는 그림이 미리 들어 있다(앱 안 sprites/ — scripts/fetch-sprites.cjs · build-exe.cjs). 그곳을 먼저 보고, 없으면 캐시·네트워크다.
 // 관리 창·선택 창의 CSP 는 img-src data: 만 허용한다. 그래서 파일 경로가 아니라 data URI 로 준다
+import fs from "node:fs";
 import path from "node:path";
 import { profile } from "../dex/species.js";
 
@@ -44,7 +46,8 @@ export interface Portraits {
   icons(keys: string[]): Promise<Record<string, string | null>>; // 도구·알 그림 — iconUrl 의 열쇠
 }
 
-export function createPortraits(dir: string): Portraits {
+// dir 은 사용자 캐시, bundled 는 앱에 들어 있는 그림 폴더(없어도 된다). 두 폴더의 파일 이름은 같다
+export function createPortraits(dir: string, bundled?: string): Portraits {
   const missing = new Set<string>(); // 못 받은 파일 — 다시 청하지 않는다
   const memo = new Map<string, string>(); // 이미 읽은 data URI
   let running = 0;
@@ -60,11 +63,24 @@ export function createPortraits(dir: string): Portraits {
     }
   };
 
-  // 파일 하나 — 캐시에 있으면 읽고, 없으면 받아 둔다
-  async function fileUri(file: string, url: string): Promise<string | null> {
+  // 파일 하나 — 앱에 든 그림, 캐시 순서로 읽고, 둘 다 없으면 받아 캐시에 둔다. rel 은 두 폴더 안의 이름이다
+  async function fileUri(rel: string, url: string): Promise<string | null> {
+    const file = path.join(dir, rel);
     const known = memo.get(file);
     if (known) return known;
     if (missing.has(file)) return null;
+    if (bundled) {
+      try {
+        const buf = fs.readFileSync(path.join(bundled, rel));
+        if (isPng(buf)) {
+          const uri = `data:image/png;base64,${buf.toString("base64")}`;
+          memo.set(file, uri);
+          return uri;
+        }
+      } catch {
+        // 앱에 없는 그림 — 캐시와 네트워크로 간다
+      }
+    }
     const got = await slot(() => cached(file, url, isPng));
     if (!got) {
       missing.add(file);
@@ -77,7 +93,7 @@ export function createPortraits(dir: string): Portraits {
 
   const one = (dex: number, shiny: boolean): Promise<string | null> => {
     const d = String(dex).padStart(4, "0");
-    return fileUri(path.join(dir, shiny ? `${d}-shiny.png` : `${d}.png`), portraitUrl(dex, shiny));
+    return fileUri(shiny ? `${d}-shiny.png` : `${d}.png`, portraitUrl(dex, shiny));
   };
 
   return {
@@ -100,7 +116,7 @@ export function createPortraits(dir: string): Portraits {
       await Promise.all(
         keys.map(async (key) => {
           const url = iconUrl(key);
-          out[key] = url ? await fileUri(path.join(dir, key === "egg" ? "egg.png" : `items/${key.slice(5)}.png`), url) : null;
+          out[key] = url ? await fileUri(key === "egg" ? "egg.png" : `items/${key.slice(5)}.png`, url) : null;
         }),
       );
       return out;

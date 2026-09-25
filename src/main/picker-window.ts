@@ -79,7 +79,7 @@ export function pickStarter(opts: PickerOptions): Promise<string | null> {
     const onStart = (_e: unknown, slug: unknown): void => finish(typeof slug === "string" && opts.starters.includes(slug) ? slug : null);
     ipcMain.handle(CH.list, () => pickerPayload(opts.starters));
     // 카드의 초상 — 후보 종만 받는다
-    const portraits = createPortraits(path.join(PATHS.home, "sprites"));
+    const portraits = createPortraits(path.join(PATHS.home, "sprites"), path.join(PATHS.project, "sprites"));
     ipcMain.handle(CH.portraits, (_e, slugs: unknown) =>
       portraits.get((Array.isArray(slugs) ? slugs : []).filter((s): s is string => typeof s === "string" && opts.starters.includes(s)).map((slug) => ({ slug, shiny: false }))),
     );

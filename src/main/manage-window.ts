@@ -86,12 +86,12 @@ function wire(game: GameV3, send: (req: ManageRequest) => Promise<ManageReply>):
       .filter((a): a is PortraitAsk => a != null && typeof a === "object" && typeof (a as PortraitAsk).slug === "string")
       .slice(0, 300)
       .map((a) => ({ slug: a.slug, shiny: a.shiny === true }));
-    portraits ??= createPortraits(path.join(PATHS.home, "sprites"));
+    portraits ??= createPortraits(path.join(PATHS.home, "sprites"), path.join(PATHS.project, "sprites"));
     return portraits.get(list);
   });
   ipcMain.handle(CH.icons, async (e, keys: unknown) => {
     if (!mine(e) || !Array.isArray(keys)) return {};
-    portraits ??= createPortraits(path.join(PATHS.home, "sprites"));
+    portraits ??= createPortraits(path.join(PATHS.home, "sprites"), path.join(PATHS.project, "sprites"));
     return portraits.icons(keys.filter((k): k is string => typeof k === "string").slice(0, 200));
   });
   ipcMain.on(CH.dim, (e, on: unknown) => {
