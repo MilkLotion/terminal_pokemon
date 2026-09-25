@@ -399,27 +399,135 @@
         display: flex;
         gap: 10px;
       }
-      /* 개체 상세 페이지 — Figma `Detail / Base` `217:1968`·`Detail / Box Pokemon` `389:7210` */
+      /* 개체 상세 페이지 — Figma `08 · 개체 상세 시안` 시안 C(2단) `453:946` */
       .pet-page {
         display: flex;
         flex-direction: column;
-        gap: 20px;
+        gap: 16px;
       }
-      .pet-page .page-head {
+      .pet-page .back-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
-        min-height: 52px;
+        gap: 8px;
       }
-      .pet-page .page-head .title {
-        font-size: 20px;
+      .pet-page .back-link {
+        border: 0;
+        padding: 0;
+        background: none;
+        color: var(--primary);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .pet-page .where {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .pet-cols {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+      }
+      /* 왼쪽 기둥 — 폭 220, 가운데 정렬 */
+      .pet-side {
+        flex: none;
+        width: 220px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 24px 20px 20px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+      }
+      .pet-side .portrait.big {
+        width: 112px;
+        height: 112px;
+      }
+      .pet-side .name {
+        font-size: 22px;
         line-height: 28px;
         font-weight: 700;
       }
-      .pet-page .page-head .caption {
+      .pet-side .sub {
+        margin-top: -8px;
         font-size: 12px;
         color: var(--muted);
+      }
+      .pet-side .badges {
+        display: flex;
+        gap: 6px;
+      }
+      .pet-side .bars {
+        align-self: stretch;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .pet-side .bar .head {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .pet-side .bar .head strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .pet-side .bar .track {
+        height: 6px;
+        border-radius: 999px;
+        background: var(--subtle);
+        overflow: hidden;
+      }
+      .pet-side .bar .fill {
+        height: 100%;
+        border-radius: 999px;
+        background: var(--primary);
+      }
+      .pet-side .bar .fill.mood,
+      .pet-side .bar .fill.hungry {
+        background: var(--warning);
+      }
+      .pet-side .bar .fill.starving {
+        background: var(--danger);
+      }
+      .pet-side .chip-note {
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: var(--accent-bg);
+        color: var(--primary);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      /* 오른쪽 — 돌봄·성장·표시·관리 */
+      .pet-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .pet-main .section-label {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .pet-main .care-row,
+      .pet-main .manage-row {
+        display: flex;
+        gap: 8px;
+      }
+      .pet-main .care-row .page-btn,
+      .pet-main .manage-row .page-btn {
+        flex: 1;
+        width: auto;
+      }
+      .pet-main .care-row .page-btn {
+        height: 36px;
       }
       .page-btn {
         flex: none;
@@ -450,126 +558,97 @@
         opacity: 0.5;
         cursor: default;
       }
-      .pet-page .profile {
-        display: flex;
-        align-items: center;
-        gap: 20px;
-        padding: 16px;
-      }
-      .pet-page .profile .portrait {
-        margin: 16px;
-      }
-      .pet-page .identity {
-        flex: 1;
-        min-width: 0;
+      .list-card {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        padding: 0 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
       }
-      .pet-page .level-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 12px;
-        color: var(--muted);
-      }
-      .pet-page .mini-track {
-        width: 96px;
-        height: 6px;
-        border-radius: 999px;
-        background: var(--subtle);
-        overflow: hidden;
-      }
-      .pet-page .mini-track .fill {
-        height: 100%;
-        border-radius: 999px;
-        background: var(--primary);
-      }
-      .pet-page .identity .name {
-        font-size: 20px;
-        line-height: 28px;
-        font-weight: 700;
-      }
-      .pet-page .traits {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .pet-page .traits .nature {
-        font-size: 12px;
-        color: var(--muted);
-      }
-      .pet-page .state-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 12px;
-        font-weight: 600;
-      }
-      .pet-page .status-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 999px;
-        background: var(--muted);
-      }
-      .pet-page .chip-note {
-        padding: 3px 8px;
-        border-radius: 999px;
-        background: var(--canvas);
-        color: var(--muted);
-        font-weight: 400;
-      }
-      .pet-page .meters {
-        gap: 16px;
-      }
-      .detail-section {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-      .detail-section .section-label {
-        font-size: 13px;
-        font-weight: 600;
-      }
-      .act-row {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        padding: 6px 0;
-      }
-      .act-row .copy {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-      }
-      .act-row .title {
-        font-size: 13px;
-        font-weight: 600;
-      }
-      .act-row .desc {
-        font-size: 12px;
-        color: var(--muted);
-      }
-      .care-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-      }
-      .manage-row {
-        display: flex;
-        gap: 10px;
-      }
-      /* 개체 상세의 크기 1~6 — Figma `Detail / Base` 의 크기 단추 (36 × 36) */
-      .size-row {
+      .list-row {
         display: flex;
         align-items: center;
         gap: 12px;
-        margin-top: 6px;
+        width: 100%;
+        min-height: 52px;
+        padding: 12px 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
       }
-      .size-row .label {
+      button.list-row {
+        cursor: pointer;
+      }
+      .list-row + .list-row {
+        border-top: 1px solid var(--line);
+      }
+      .list-row .copy {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .list-row .title {
+        font-size: 13px;
         font-weight: 600;
+      }
+      .list-row .desc {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .list-row .chev {
+        font-size: 18px;
+        color: var(--muted);
+      }
+      .chip-ready {
+        flex: none;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: var(--accent-bg);
+        color: var(--primary);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      /* 켬·끔 스위치 — Figma `Toggle` `299:3593` (36 × 20) */
+      .switch {
+        position: relative;
+        flex: none;
+        width: 36px;
+        height: 20px;
+        padding: 0;
+        border: 0;
+        border-radius: 999px;
+        background: var(--disabled);
+        cursor: pointer;
+      }
+      .switch::after {
+        content: "";
+        position: absolute;
+        left: 2px;
+        top: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--surface);
+        transition: left 0.15s;
+      }
+      .switch[aria-checked="true"] {
+        background: var(--primary);
+      }
+      .switch[aria-checked="true"]::after {
+        left: 18px;
+      }
+      .switch:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+      }
+      .pet-main .sizes .size {
+        width: 30px;
+        height: 30px;
       }
       .sizes {
         display: flex;

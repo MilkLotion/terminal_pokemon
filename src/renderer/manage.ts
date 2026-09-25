@@ -754,7 +754,7 @@ function draw(): void {
   // 개체 상세 페이지 — 개체가 사라졌으면 탭으로 돌아간다
   const detail = detailPet ? petOf(detailPet) : null;
   if (detail) {
-    drawPetPage(view, detail);
+    drawPetPage(detail);
     restoreSearchFocus();
     return;
   }
@@ -807,18 +807,9 @@ function actions(...items: HTMLElement[]): HTMLElement {
 const closeButton = (label = "닫기"): HTMLButtonElement => actionButton(label, false, false, close);
 
 // ── 개체 상세 페이지 ───────────────────────────────────────────────────────────
-// Figma `Detail / Base` `217:1968`(파티)·`Detail / Box Pokemon` `389:7210`(박스). 모달이 아니라 탭 본문을 차지하는 페이지다.
-// 진화 확인·성격 변경 같은 모달은 이 페이지 위에 뜨고, 끝나면 이 페이지로 돌아온다
-
-// 한 줄 — 왼쪽에 이름과 설명, 오른쪽에 단추 (Figma care/feed · setting/visibility · growth 줄)
-function actRow(title: string, desc: string, action?: HTMLElement): HTMLElement {
-  const row = el("div", "act-row");
-  const copy = el("div", "copy");
-  copy.append(el("div", "title", title), el("div", "desc", desc));
-  row.appendChild(copy);
-  if (action) row.appendChild(action);
-  return row;
-}
+// Figma `08 · 개체 상세 시안` 의 시안 C(2단) `453:946` — 2026-09-25 사용자 선택. 모달이 아니라 탭 본문을 차지하는 페이지다.
+// 왼쪽 기둥은 프로필(초상·이름·레벨·성격·타입·네 막대), 오른쪽은 돌봄·성장·표시·관리를 짧게 쌓는다.
+// 박스 개체는 돌봄·표시가 없다(계약: 박스 상세에는 표시 항목을 두지 않는다). 진화·성격 모달은 이 페이지 위에 뜨고 돌아온다
 
 function pageButton(label: string, primary: boolean, disabled: boolean, run: () => void): HTMLButtonElement {
   const b = button(primary ? "page-btn primary" : "page-btn", label);
@@ -827,128 +818,39 @@ function pageButton(label: string, primary: boolean, disabled: boolean, run: () 
   return b;
 }
 
-function section(label: string, ...rows: HTMLElement[]): HTMLElement {
-  const box = el("section", "detail-section");
-  box.appendChild(el("div", "section-label", label));
+// 목록 카드의 한 줄 — 왼쪽에 이름과 설명, 오른쪽에 딸린 것. run 이 있으면 줄 전체를 누른다
+function listRow(title: string, desc: string | null, right: HTMLElement[], run?: () => void): HTMLElement {
+  const row = run ? button("list-row") : el("div", "list-row");
+  const copy = el("div", "copy");
+  copy.appendChild(el("div", "title", title));
+  if (desc) copy.appendChild(el("div", "desc", desc));
+  row.appendChild(copy);
+  row.append(...right);
+  if (run) {
+    row.appendChild(el("span", "chev", "›"));
+    row.addEventListener("click", run);
+  }
+  return row;
+}
+
+function listCard(...rows: HTMLElement[]): HTMLElement {
+  const box = el("div", "list-card");
   box.append(...rows);
   return box;
 }
 
-const boxNameOf = (id: string): string | null => view?.boxes.find((b) => b.slots.some((p) => p?.id === id))?.name ?? null;
-
-function drawPetPage(v: Snapshot, pet: PetView): void {
-  const slot = slotOfPet(pet.id);
-  const inParty = slot != null;
-  const where = inParty ? `파티 ${slot + 1}번` : (boxNameOf(pet.id) ?? "박스");
-  const page = el("div", "pet-page");
-
-  // 머리 — 제목과 돌아가기
-  const headRow = el("div", "page-head");
-  const copy = el("div", "copy");
-  copy.append(el("div", "title", `${pet.name} 상세`), el("div", "caption", inParty ? `${where} · ${pet.hidden ? "숨긴 상태" : "표시 중"}` : `${where} · 보관 중`));
-  headRow.append(
-    copy,
-    pageButton(inParty ? "파티로" : "박스로", false, false, () => {
-      detailPet = null;
-      draw();
-    }),
-  );
-  page.appendChild(headRow);
-
-  // 프로필 — 초상, 레벨, 이름, 타입·성격, 상태, 친밀도·만복도
-  const profile = el("div", "profile");
-  const portrait = portraitOf(pet.species, pet.shiny, "portrait", pet.shiny ? "이로치" : "");
-  if (inParty && pet.hidden) {
-    const mark = el("span", "mark");
-    mark.title = "숨긴 상태";
-    portrait.appendChild(mark);
-  }
-  profile.appendChild(portrait);
-  const identity = el("div", "identity");
-  const level = el("div", "level-row");
-  const bar = el("div", "mini-track");
-  const fill = el("div", "fill");
-  fill.style.width = `${pet.percentToNext}%`;
-  bar.appendChild(fill);
-  level.append(el("span", undefined, `${where} · Lv.${pet.level}`), bar, el("span", undefined, `Lv.${pet.level + 1}까지 ${pet.percentToNext}%`));
-  identity.appendChild(level);
-  identity.appendChild(el("div", "name", pet.name));
-  const traits = el("div", "traits");
-  pet.types.forEach((name, i) => traits.appendChild(typeBadge(name, pet.typeIds[i])));
-  traits.appendChild(el("span", "nature", `성격: ${pet.nature}`));
-  identity.appendChild(traits);
-  const state = el("div", "state-row");
-  state.appendChild(el("span", "status-dot"));
-  state.appendChild(el("span", "state", inParty ? `기분 ${pet.moodWord} · ${ZONE_WORD[pet.zone] ?? pet.zone}` : "박스에 보관 중 · 친밀도·만복도·적립 멈춤"));
-  if (inParty && pet.longPlay) state.appendChild(el("span", "chip-note", "오래 놀아주기"));
-  identity.appendChild(state);
-  const meters = el("div", "meters");
-  meters.append(meter("친밀도", pet.affinity), meter("만복도", pet.fullness, pet.zone));
-  identity.appendChild(meters);
-  profile.appendChild(identity);
-  page.appendChild(profile);
-
-  if (inParty) {
-    // 돌봄 — 밥 주기·놀아주기 두 칸
-    const feedDesc = pet.fullness >= 100 ? "이미 배가 불러요." : pet.feedReady ? "무료로 배고픔을 돌봐요." : `${pet.feedInSec}초 뒤에 줄 수 있어요.`;
-    const playDesc = pet.playReady ? "기분과 친밀도를 돌봐요." : "아직 쉬는 시간이에요.";
-    const care = el("div", "care-row");
-    care.append(
-      actRow("밥 주기", feedDesc, pageButton("실행", false, !pet.feedReady || pet.fullness >= 100, () => void send("feed", pet.id))),
-      actRow("놀아주기", playDesc, pageButton("실행", false, !pet.playReady, () => void send("play", pet.id))),
-    );
-    page.appendChild(section("돌봄", care));
-
-    // 표시 설정 — 화면 표시, 크기
-    const visible = pageButton(pet.hidden ? "꺼내기" : "숨기기", false, false, () => void send(pet.hidden ? "party.show" : "party.hide", pet.id));
-    page.appendChild(section("표시 설정", actRow("화면 표시", pet.hidden ? "숨겨 둔 상태예요." : "지금 화면에 표시 중이에요.", visible), sizeRow(pet)));
-  }
-
-  // 성장·진화 — 진화, 성격, 도구 사용
-  const growth: HTMLElement[] = [];
-  const ready = pet.evolutions.filter((e) => e.ready);
-  const toEvolve = (): void => open({ kind: "evolve", petId: pet.id });
-  if (!pet.evolutions.length) growth.push(actRow("진화", "더 진화하지 않아요."));
-  else if (ready.length) growth.push(actRow(`진화 가능 · ${ready.map((e) => e.name).join(" · ")}`, "조건을 채웠어요. 한 단계씩 직접 진화해요.", pageButton("진화", true, false, toEvolve)));
-  else {
-    const need = pet.evolutions.map((e) => e.need ?? "").filter(Boolean).join(" · ");
-    growth.push(actRow(`진화 · ${pet.evolutions.map((e) => e.name).join(" · ")}`, need || "조건을 채우면 여기서 진화해요.", pageButton("진화", false, false, toEvolve)));
-  }
-  growth.push(actRow(`성격 · ${pet.nature}`, "민트로 바꿀 수 있어요 · 보정 없는 성격은 성실민트", pageButton("성격 변경", false, false, () => open({ kind: "nature", petId: pet.id }))));
-  growth.push(
-    actRow(
-      "도구 사용",
-      "경험사탕·이상한사탕·진화의돌·민트",
-      pageButton("가방 ›", false, false, () => {
-        detailPet = null;
-        tab = "bag";
-        draw();
-      }),
-    ),
-  );
-  page.appendChild(section("성장·진화", ...growth));
-
-  // 파티 관리
-  const manage = el("div", "manage-row");
-  if (inParty) {
-    manage.append(pageButton("교체", false, false, () => open({ kind: "pick-box", slotIndex: slot })), pageButton("박스에 보관", false, false, () => void send("party.keep", pet.id)));
-  } else {
-    const free = emptySlot();
-    manage.appendChild(
-      free != null
-        ? pageButton("파티에 배치", true, false, () => void send("party.place", pet.id, { slotIndex: free }))
-        : pageButton("교체", true, false, () => open({ kind: "pick-slot", petId: pet.id })),
-    );
-  }
-  page.appendChild(section("파티 관리", manage));
-  if (notice) page.appendChild(el("div", "notice bad", notice));
-  bodyEl.appendChild(page);
+// 켬·끔 스위치 — Figma `Toggle` `299:3593`
+function switchButton(on: boolean, label: string, run: () => void): HTMLButtonElement {
+  const b = button("switch");
+  b.setAttribute("role", "switch");
+  b.setAttribute("aria-checked", String(on));
+  b.setAttribute("aria-label", label);
+  b.addEventListener("click", run);
+  return b;
 }
 
 // 크기 1~6 — 누를 때마다 한 번 저장한다. 고른 단계는 채운 단추다
-function sizeRow(pet: PetView): HTMLElement {
-  const row = el("div", "size-row");
-  row.appendChild(el("span", "label", "크기"));
+function sizeButtons(pet: PetView): HTMLElement {
   const group = el("div", "sizes");
   group.setAttribute("role", "group");
   group.setAttribute("aria-label", "크기");
@@ -960,8 +862,115 @@ function sizeRow(pet: PetView): HTMLElement {
     });
     group.appendChild(b);
   }
-  row.appendChild(group);
-  return row;
+  return group;
+}
+
+const boxNameOf = (id: string): string | null => view?.boxes.find((b) => b.slots.some((p) => p?.id === id))?.name ?? null;
+
+function drawPetPage(pet: PetView): void {
+  const slot = slotOfPet(pet.id);
+  const inParty = slot != null;
+  const where = inParty ? `파티 ${slot + 1}번` : (boxNameOf(pet.id) ?? "박스");
+  const page = el("div", "pet-page");
+
+  // 돌아가기 줄 — 왼쪽 링크, 오른쪽 자리와 상태
+  const back = el("div", "back-row");
+  const link = button("back-link", inParty ? "‹  파티로" : "‹  박스로");
+  link.addEventListener("click", () => {
+    detailPet = null;
+    draw();
+  });
+  back.append(link, el("span", "where", inParty ? `${where} · ${pet.hidden ? "숨긴 상태" : "표시 중"}` : `${where} · 보관 중`));
+  page.appendChild(back);
+
+  const cols = el("div", "pet-cols");
+
+  // 왼쪽 기둥 — 초상, 이름, 레벨·성격, 타입, 네 막대
+  const side = el("div", "pet-side");
+  const portrait = portraitOf(pet.species, pet.shiny, "portrait big", pet.shiny ? "이로치" : "");
+  if (inParty && pet.hidden) {
+    const mark = el("span", "mark");
+    mark.title = "숨긴 상태";
+    portrait.appendChild(mark);
+  }
+  side.appendChild(portrait);
+  side.appendChild(el("div", "name", pet.name));
+  side.appendChild(el("div", "sub", `Lv.${pet.level} · ${pet.nature}`));
+  const badges = el("div", "badges");
+  pet.types.forEach((name, i) => badges.appendChild(typeBadge(name, pet.typeIds[i])));
+  side.appendChild(badges);
+  const bars = el("div", "bars");
+  const bar = (label: string, value: number, shown: string, cls = ""): HTMLElement => {
+    const box = el("div", "bar");
+    const head = el("div", "head");
+    head.append(el("span", undefined, label), el("strong", undefined, shown));
+    const track = el("div", "track");
+    const fill = el("div", cls ? `fill ${cls}` : "fill");
+    fill.style.width = `${Math.max(0, Math.min(100, value))}%`;
+    track.appendChild(fill);
+    box.append(head, track);
+    return box;
+  };
+  bars.append(
+    bar("경험치", pet.percentToNext, `${pet.percentToNext}%`),
+    bar("친밀도", pet.affinity, `${pet.affinity}`),
+    bar("만복도", pet.fullness, `${pet.fullness} · ${ZONE_WORD[pet.zone] ?? pet.zone}`, pet.zone === "hungry" || pet.zone === "starving" ? pet.zone : ""),
+    bar("기분", pet.mood, `${pet.mood} · ${pet.moodWord}`, "mood"),
+  );
+  side.appendChild(bars);
+  if (inParty && pet.longPlay) side.appendChild(el("span", "chip-note", "오래 놀아주기"));
+  cols.appendChild(side);
+
+  // 오른쪽 — 돌봄, 성장, 표시, 관리
+  const main = el("div", "pet-main");
+  const label = (s: string): HTMLElement => el("div", "section-label", s);
+  if (inParty) {
+    main.appendChild(label("돌봄"));
+    const care = el("div", "care-row");
+    const full = pet.fullness >= 100;
+    care.append(
+      pageButton(full ? "밥 주기 · 배부름" : pet.feedReady ? "밥 주기" : `밥 주기 · ${pet.feedInSec}초`, true, !pet.feedReady || full, () => void send("feed", pet.id)),
+      pageButton(pet.playReady ? "놀아주기" : "놀아주기 · 쉬는 중", false, !pet.playReady, () => void send("play", pet.id)),
+    );
+    main.appendChild(care);
+  }
+
+  main.appendChild(label("성장"));
+  const ready = pet.evolutions.filter((e) => e.ready);
+  const evolve = (): void => open({ kind: "evolve", petId: pet.id });
+  const evoRow = !pet.evolutions.length
+    ? listRow("진화", "더 진화하지 않아요", [])
+    : ready.length
+      ? listRow(`진화 · ${ready.map((e) => e.name).join(" · ")}`, "조건을 채웠어요. 한 단계씩 직접 진화해요", [el("span", "chip-ready", "진화 가능")], evolve)
+      : listRow(`진화 · ${pet.evolutions.map((e) => e.name).join(" · ")}`, pet.evolutions.map((e) => e.need ?? "").filter(Boolean).join(" · ") || "조건을 채우면 진화해요", [], evolve);
+  main.appendChild(listCard(evoRow, listRow(`성격 · ${pet.nature}`, "민트로 바꿀 수 있어요", [], () => open({ kind: "nature", petId: pet.id }))));
+
+  if (inParty) {
+    main.appendChild(label("표시"));
+    main.appendChild(
+      listCard(
+        listRow("화면 표시", pet.hidden ? "숨겨 둔 상태예요" : null, [switchButton(!pet.hidden, "화면 표시", () => void send(pet.hidden ? "party.show" : "party.hide", pet.id))]),
+        listRow("크기", null, [sizeButtons(pet)]),
+      ),
+    );
+  }
+
+  const manage = el("div", "manage-row");
+  if (inParty) {
+    manage.append(pageButton("교체", false, false, () => open({ kind: "pick-box", slotIndex: slot })), pageButton("박스에 보관", false, false, () => void send("party.keep", pet.id)));
+  } else {
+    const free = emptySlot();
+    manage.appendChild(
+      free != null
+        ? pageButton("파티에 배치", true, false, () => void send("party.place", pet.id, { slotIndex: free }))
+        : pageButton("교체", true, false, () => open({ kind: "pick-slot", petId: pet.id })),
+    );
+  }
+  main.appendChild(manage);
+  if (notice) main.appendChild(el("div", "notice bad", notice));
+  cols.appendChild(main);
+  page.appendChild(cols);
+  bodyEl.appendChild(page);
 }
 
 // ── 모달 · 진화 확인 ───────────────────────────────────────────────────────────
