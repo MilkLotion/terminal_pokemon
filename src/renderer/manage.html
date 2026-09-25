@@ -234,39 +234,28 @@
         font-size: 11px;
         color: var(--muted);
       }
-      /* 숨김 마커 — 닫힌 몬스터볼. 그림 예외라 색을 변수에 묶지 않는다 */
-      .mark {
-        position: absolute;
-        right: -2px;
-        top: -2px;
-        width: 18px;
-        height: 18px;
+      /* 초상 그림 — PokeAPI 기본 그림(96 × 96). 둘레 여백이 커서 가운데를 잘라 원을 채운다 */
+      .art {
+        display: block;
+        width: 100%;
+        height: 100%;
         border-radius: 50%;
-        border: 1.5px solid var(--ink);
-        background: linear-gradient(to bottom, #e35b4f 0 50%, #ffffff 50% 100%);
+        object-fit: cover;
+        object-view-box: inset(14%);
+      }
+      .cell .dot,
+      .dex-cell .dot {
         overflow: hidden;
       }
-      .mark::before {
-        content: "";
+      /* 숨김 마커 — 닫힌 몬스터볼. Figma `visibility-marker` 의 그림(16px)을 원 테두리 위 45도 자리에 둔다.
+         80 원의 45도 자리는 네모 모서리에서 약 12px 안쪽이다 — 16px 표시의 중심을 거기 맞춘다. 그림 예외라 색을 변수에 묶지 않는다 */
+      .mark {
         position: absolute;
-        left: 0;
-        right: 0;
-        top: 50%;
-        height: 1.5px;
-        margin-top: -0.75px;
-        background: var(--ink);
-      }
-      .mark::after {
-        content: "";
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: 5px;
-        height: 5px;
-        margin: -2.5px 0 0 -2.5px;
-        border-radius: 50%;
-        background: #ffffff;
-        border: 1.5px solid var(--ink);
+        right: 4px;
+        top: 4px;
+        width: 16px;
+        height: 16px;
+        background: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 13.7755 13.7728%22%3E%3Cg%3E%3Cg%3E%3Cpath d=%22M6.88638 9.14594C5.79835 9.14594 4.89076 8.37569 4.67531 7.3523H1.05571C1.31156 10.3282 3.80811 12.6632 6.84868 12.6632C9.88925 12.6632 12.3885 10.3282 12.6416 7.3523H9.09746C8.88201 8.37839 7.97442 9.14594 6.88638 9.14594Z%22 fill=%22white%22/%3E%3Cpath d=%22M8.21949 6.88638C8.2168 6.88638 8.2168 6.88638 8.21949 6.88638C8.2168 6.7221 8.18717 6.5659 8.13331 6.42047C7.94479 5.91416 7.45733 5.55597 6.88638 5.55597C6.31544 5.55597 5.82798 5.91685 5.63946 6.42047C5.58559 6.5659 5.55597 6.7221 5.55597 6.88638H5.55866C5.55866 7.05067 5.58829 7.20687 5.64215 7.3523C5.83067 7.85861 6.31813 8.2168 6.88908 8.2168C7.46002 8.2168 7.94748 7.85592 8.13601 7.3523C8.18987 7.20956 8.21949 7.05067 8.21949 6.88638Z%22 fill=%22white%22/%3E%3Cpath d=%22M6.88892 4.62952C7.97696 4.62952 8.88455 5.39976 9.1 6.42316H12.7196C12.4637 3.44454 9.96719 1.10958 6.92394 1.10958C3.88068 1.10958 1.38682 3.44454 1.13097 6.42047H4.67785C4.8933 5.39707 5.80089 4.62952 6.88892 4.62952Z%22 fill=%22%23FF1C1C%22/%3E%3C/g%3E%3Cpath d=%22M6.92409 1.10958C9.96735 1.10958 12.4639 3.44454 12.7171 6.42047H9.09746C8.88201 5.39707 7.97442 4.62683 6.88638 4.62683C5.79835 4.62683 4.89076 5.39707 4.67531 6.42047H1.13112C1.38697 3.44454 3.88352 1.10958 6.92409 1.10958ZM8.13331 6.42047C8.18717 6.5659 8.2168 6.7221 8.2168 6.88638H8.21949C8.21949 7.05067 8.18987 7.20687 8.136 7.3523C7.94748 7.85861 7.46002 8.2168 6.88908 8.2168C6.31813 8.2168 5.83067 7.85592 5.64215 7.3523C5.58829 7.20687 5.55866 7.05067 5.55866 6.88638H5.55597C5.55597 6.7221 5.58559 6.5659 5.63945 6.42047C5.82798 5.91416 6.31544 5.55597 6.88638 5.55597C7.45733 5.55597 7.94479 5.91685 8.13331 6.42047ZM6.84868 12.6659C3.80542 12.6659 1.30887 10.3309 1.05571 7.35499H4.67531C4.89076 8.37839 5.79835 9.14863 6.88638 9.14863C7.97442 9.14863 8.88201 8.37839 9.09746 7.35499H12.6443C12.3885 10.3282 9.89194 12.6659 6.84868 12.6659ZM6.88638 0C3.08366 0 0 3.08366 0 6.88638C0 10.6891 3.08366 13.7728 6.88638 13.7728C10.6891 13.7728 13.7755 10.6918 13.7755 6.88638C13.7755 3.08096 10.6918 0 6.88638 0Z%22 fill=%22black%22/%3E%3C/g%3E%3C/svg%3E") center / 14px 14px no-repeat;
       }
       .info {
         flex: 1;
@@ -287,7 +276,8 @@
       .tags {
         display: flex;
         flex-wrap: wrap;
-        gap: 4px;
+        align-items: center;
+        gap: 6px;
         margin-bottom: 8px;
       }
       .tag {
@@ -296,6 +286,89 @@
         border-radius: 999px;
         background: var(--subtle);
         color: var(--ink);
+      }
+      /* 타입 배지 — Figma `Type Badge` `118:134` (높이 22, 좌우 8, 11px Semibold, 폭 52). 색은 Scarlet·Violet 타입 팔레트다.
+         그림처럼 타입마다 정해진 색이라 변수에 묶지 않는다. 모르는 타입은 중립 회색이다 */
+      .type {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 52px;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--subtle);
+        color: var(--ink);
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .value.types {
+        display: inline-flex;
+        gap: 6px;
+      }
+      .type[data-type="electric"] {
+        background: #fac000;
+      }
+      .type[data-type="fire"] {
+        background: #e52829;
+        color: var(--inverse);
+      }
+      .type[data-type="flying"] {
+        background: #81b9ef;
+      }
+      .type[data-type="bug"] {
+        background: #91a119;
+      }
+      .type[data-type="dark"] {
+        background: #624d4e;
+        color: var(--inverse);
+      }
+      .type[data-type="dragon"] {
+        background: #5060e1;
+        color: var(--inverse);
+      }
+      .type[data-type="fairy"] {
+        background: #ef70ef;
+      }
+      .type[data-type="fighting"] {
+        background: #ff8000;
+      }
+      .type[data-type="ghost"] {
+        background: #704170;
+        color: var(--inverse);
+      }
+      .type[data-type="grass"] {
+        background: #358722;
+        color: var(--inverse);
+      }
+      .type[data-type="ground"] {
+        background: #915121;
+        color: var(--inverse);
+      }
+      .type[data-type="ice"] {
+        background: #3dcef3;
+      }
+      .type[data-type="normal"] {
+        background: #9fa19f;
+      }
+      .type[data-type="poison"] {
+        background: #9141cb;
+        color: var(--inverse);
+      }
+      .type[data-type="psychic"] {
+        background: #d53a6c;
+        color: var(--inverse);
+      }
+      .type[data-type="rock"] {
+        background: #afa981;
+      }
+      .type[data-type="steel"] {
+        background: #60a1b8;
+      }
+      .type[data-type="water"] {
+        background: #2675db;
+        color: var(--inverse);
       }
       .tag.nature {
         background: none;
@@ -850,9 +923,10 @@
         border-style: dashed;
         cursor: default;
       }
+      /* 박스 칸 초상 — Figma `Portrait` Medium 40 */
       .cell .dot {
-        width: 26px;
-        height: 26px;
+        width: 40px;
+        height: 40px;
         border-radius: 50%;
         background: var(--accent-bg);
       }

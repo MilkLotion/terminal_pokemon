@@ -58,6 +58,19 @@ function render(payload: PickerPayload) {
   chosenNote.textContent = payload.empty;
   list.setAttribute("aria-label", payload.title);
   list.replaceChildren(...payload.items.map(card));
+  // 초상 — 받는 대로 원을 채운다. 못 받으면 빈 원 그대로다
+  void window.pokebuddy.pickerPortraits(payload.items.map((i) => i.slug)).then((got) => {
+    for (const b of list.querySelectorAll<HTMLElement>(".card")) {
+      const uri = got[b.dataset.slug ?? ""];
+      const host = b.querySelector<HTMLElement>(".portrait");
+      if (!uri || !host) continue;
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = uri;
+      host.appendChild(img);
+      host.classList.add("has-art");
+    }
+  });
 }
 
 void window.pokebuddy.pickerList().then(render);

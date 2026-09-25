@@ -7,6 +7,7 @@ import assert from "node:assert";
 import { empty } from "../save/v3";
 import type { SaveV3 } from "../shared/save-v3";
 import { dexDetail } from "../tx/dex-detail";
+import { portraitKey, portraitUrl } from "../main/portraits";
 
 const T0 = new Date(2026, 8, 25, 10, 0, 0).getTime();
 
@@ -91,4 +92,15 @@ function seed(): SaveV3 {
   process.stdout.write("(7) 상점 종과 모르는 종  ok\n");
 }
 
-process.stdout.write("selftest-dex-detail: 통과 (획득·해금·최종·미해금·알 조건·경로 없음·상점)\n");
+// (8) 타입 키와 초상 경로 — 배지 색은 타입 키로, 초상은 4자리 도감 번호 경로로 고른다
+{
+  const d = dexDetail(seed(), "charmander");
+  assert.deepStrictEqual(d?.typeIds, ["fire"]);
+  assert.deepStrictEqual(dexDetail(seed(), "omanyte")?.typeIds, [], "미해금은 타입을 숨긴다");
+  assert.equal(portraitUrl(25, false), "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png");
+  assert.equal(portraitUrl(25, true), "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/25.png");
+  assert.equal(portraitKey({ slug: "eevee", shiny: true }), "eevee:shiny");
+  process.stdout.write("(8) 타입 키와 초상 경로  ok\n");
+}
+
+process.stdout.write("selftest-dex-detail: 통과 (획득·해금·최종·미해금·알 조건·경로 없음·상점·타입 키·초상 경로)\n");

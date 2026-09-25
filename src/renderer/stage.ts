@@ -361,6 +361,7 @@ function mockBridge(): StageBridge {
       else if (msg.type === "menu") note(`(mock) 메뉴 ${msg.id} — 마지막 ${last.type}`);
     },
     pickerList: () => Promise.resolve({ title: "", subtitle: "", start: "", empty: "", items: [] }),
+    pickerPortraits: () => Promise.resolve({}),
     pickerStart: () => {},
   };
 }

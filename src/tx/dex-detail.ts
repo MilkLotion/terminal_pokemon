@@ -70,6 +70,7 @@ export function dexDetail(save: SaveV3, slug: string, opts?: DexOptions): DexDet
     name: unlocked ? petName(slug) : "???",
     state,
     types: unlocked ? row.types.map((t) => typeName(t)) : [],
+    typeIds: unlocked ? [...row.types] : [],
     shiny: save.dex.shinyObtained.includes(slug),
     owned: save.pets.filter((p) => p.species === slug).length,
     methods: methods.length ? methods.join(" · ") : "획득 방법 준비 중",

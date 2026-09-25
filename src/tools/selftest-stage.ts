@@ -298,10 +298,16 @@ async function stageRuntimeTests(): Promise<void> {
   ok(stage.lastFrame()!.pets[0]!.berry, "먹이 좌표가 프레임에 있음");
   for (let n = 0; n < 90; n++) { now += 40; stage.tick(); }
   ok(!stage.lastFrame()!.pets[0]!.berry, "먹은 뒤 열매 제거");
+  // 놀기는 커서(100,100)를 따라가지 않는다 — 옆으로 조금 걸어가 폴짝 뛰고 playMs 뒤 끝난다
   stage.care("p1", "play");
-  const before = stage.lastFrame()!.pets[0]!.x;
+  const before = stage.lastFrame()!.pets[0]!;
   for (let n = 0; n < 25; n++) { now += 40; stage.tick(); }
-  ok(stage.lastFrame()!.pets[0]!.x < before, "놀기는 커서를 따라감");
+  const mid = stage.lastFrame()!.pets[0]!;
+  eq(mid.y, before.y, "놀기는 위아래로 커서 쪽에 가지 않음");
+  ok(Math.abs(mid.x - before.x) <= STAGE_RULES.care.foodOffsetPx + 1, "놀기는 옆으로 조금만 걸어감");
+  for (let n = 0; n < 150; n++) { now += 40; stage.tick(); }
+  const after = stage.lastFrame()!.pets[0]!;
+  ok(Math.hypot(after.x - 100, after.y - 100) > Math.hypot(before.x - 100, before.y - 100) - STAGE_RULES.care.foodOffsetPx - 1, "반응이 끝나도 커서 밑으로 오지 않음");
   stage.setVisible(false);
   stage.setVisible(true);
   now += 40; stage.tick();

@@ -102,7 +102,8 @@ export type StageChannel =
   | "stage:pointer" // R→M  PointerMsg
   | "stage:log" // R→M  Record<string, unknown> — 렌더러 진단(시트 디코드 실패 등)을 메인 로그로
   | "picker:list" // R→M invoke → PickerPayload
-  | "picker:start"; // R→M  slug
+  | "picker:start" // R→M  slug
+  | "picker:portraits"; // R→M invoke slug[] → slug 별 data URI (못 받으면 null)
 
 // preload 가 window.pokebuddy 로 내놓는 것 — 무대와 선택 창이 같은 preload 를 쓴다
 export interface StageBridge {
@@ -117,4 +118,5 @@ export interface StageBridge {
   log(entry: Record<string, unknown>): void;
   pickerList(): Promise<PickerPayload>;
   pickerStart(slug: string): void;
+  pickerPortraits(slugs: string[]): Promise<Record<string, string | null>>; // 선택 창 카드의 초상
 }

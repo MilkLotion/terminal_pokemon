@@ -8,6 +8,7 @@
 // `--click <선택자>` 를 주면 그 요소를 한 번 눌러 놓고 찍는다. 여러 번 주면 순서대로 누른다.
 // `--input <선택자>=<글자>` 를 주면 누른 뒤에 그 입력칸에 한 글자씩 넣는다. 다 넣은 뒤 포커스가 있는 요소의 id 를 출력한다.
 // `--click-text <글자>` 를 주면 그 글자인 첫 단추를 누른다. `--click` 과 섞어 적은 순서대로 한다.
+// `--wait <ms>` 를 주면 찍기 전에 그만큼 더 기다린다.
 // `--linger <ms>` 를 주면 찍은 뒤 창을 그만큼 열어 둔다.
 // `--route <json>` 을 주면 알림 배너의 `바로가기` 처럼 그 목적지로 연다. 예: '{"to":"pet","petId":"p1"}'
 const fs = require("node:fs");
@@ -168,7 +169,10 @@ app.whenReady().then(async () => {
         step = step.then(() => win.webContents.executeJavaScript("document.activeElement && document.activeElement.id").then((id) => process.stdout.write(`focus: ${id}
 `)));
       });
+      // --wait 는 찍기 전에 더 기다린다 — 초상처럼 네트워크로 받는 그림을 기다릴 때 쓴다
+      const wait = Number(argAfter("--wait")) || 0;
       step
+        .then(() => new Promise((r) => setTimeout(r, wait)))
         .then(() => win.webContents.capturePage())
         .then((img) => {
           fs.writeFileSync(shotFile, img.toPNG());

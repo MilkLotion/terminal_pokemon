@@ -41,6 +41,7 @@ const CH = {
   log: "stage:log",
   pickerList: "picker:list",
   pickerStart: "picker:start",
+  pickerPortraits: "picker:portraits",
 } satisfies Record<string, StageChannel>;
 
 const bridge: StageBridge = {
@@ -55,6 +56,7 @@ const bridge: StageBridge = {
   log: (entry) => ipcRenderer.send(CH.log, entry),
   pickerList: () => ipcRenderer.invoke(CH.pickerList) as Promise<PickerPayload>,
   pickerStart: (slug) => ipcRenderer.send(CH.pickerStart, slug),
+  pickerPortraits: (slugs) => ipcRenderer.invoke(CH.pickerPortraits, slugs) as Promise<Record<string, string | null>>,
 };
 
 contextBridge.exposeInMainWorld("pokebuddy", bridge);
@@ -69,6 +71,7 @@ const MANAGE = {
   route: "manage:route",
   drawRegion: "manage:draw-region",
   dim: "manage:dim",
+  portraits: "manage:portraits",
 } satisfies Record<string, ManageChannel>;
 
 const manage: ManageBridge = {
@@ -80,6 +83,7 @@ const manage: ManageBridge = {
   onRoute: (cb) => ipcRenderer.on(MANAGE.route, (_e, route: ManageRoute) => cb(route)),
   drawRegion: () => ipcRenderer.invoke(MANAGE.drawRegion) as Promise<ManageReply>,
   dim: (on) => ipcRenderer.send(MANAGE.dim, on),
+  portraits: (asks) => ipcRenderer.invoke(MANAGE.portraits, asks) as Promise<Record<string, string | null>>,
 };
 
 contextBridge.exposeInMainWorld("pokebuddyManage", manage);

@@ -2,12 +2,15 @@
 import { BrowserWindow, ipcMain } from "electron";
 import { nextOf } from "../dex/evo";
 import type { PickerPayload, StageChannel } from "../shared/stage";
-import { windowIcon } from "./paths";
+import path from "node:path";
+import { PATHS, windowIcon } from "./paths";
+import { createPortraits } from "./portraits";
 import { petName, t } from "./text";
 
 const CH = {
   list: "picker:list",
   start: "picker:start",
+  portraits: "picker:portraits",
 } satisfies Record<string, StageChannel>;
 
 export interface PickerOptions {
@@ -68,12 +71,18 @@ export function pickStarter(opts: PickerOptions): Promise<string | null> {
       done = true;
       opts.onPicking(false);
       ipcMain.removeHandler(CH.list);
+      ipcMain.removeHandler(CH.portraits);
       ipcMain.removeListener(CH.start, onStart);
       resolve(slug);
       if (!picker.isDestroyed()) picker.close();
     };
     const onStart = (_e: unknown, slug: unknown): void => finish(typeof slug === "string" && opts.starters.includes(slug) ? slug : null);
     ipcMain.handle(CH.list, () => pickerPayload(opts.starters));
+    // 카드의 초상 — 후보 종만 받는다
+    const portraits = createPortraits(path.join(PATHS.home, "sprites"));
+    ipcMain.handle(CH.portraits, (_e, slugs: unknown) =>
+      portraits.get((Array.isArray(slugs) ? slugs : []).filter((s): s is string => typeof s === "string" && opts.starters.includes(s)).map((slug) => ({ slug, shiny: false }))),
+    );
     ipcMain.on(CH.start, onStart);
     picker.removeMenu(); // 기본 File·Edit·View·Window 메뉴를 없앤다
     picker.on("closed", () => finish(null));

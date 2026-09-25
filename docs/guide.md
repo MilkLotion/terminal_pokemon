@@ -744,6 +744,10 @@ PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이다. 
 
 실측해서 정한 동작들이라 근거를 남겨 둔다.
 
+### 관리 창의 초상
+
+관리 창과 첫 포켓몬 선택 창의 원형 초상은 [PokeAPI sprites](https://github.com/PokeAPI/sprites) 의 기본 그림(`sprites/pokemon/<도감>.png`, 96 × 96)이다. 이로치는 `sprites/pokemon/shiny/<도감>.png` 를 쓰고, 없으면 보통 그림을 쓴다. 저장소는 CC0 이고 그림 저작권은 The Pokémon Company 에 있다. 둘레 여백은 잘라 원을 채운다. 받는 사람 컴퓨터의 `~/.claude/pokebuddy/sprites/` 에 캐시한다. 받지 못하면 빈 원이 남는다. 미해금 도감 칸은 그림을 보이지 않는다(`src/main/portraits.ts`).
+
 ### PMD 를 쓰는 이유
 
 애니메이션이 하나뿐인 그림으로는 상태를 그림으로 나눌 수 없다. CSS 로 누르거나 흔들어 흉내 내 보았다. 어색해서 뺐다.

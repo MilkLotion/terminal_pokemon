@@ -497,6 +497,31 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 
 **수용 검사** — 메뉴 모델 자체 검사(`selftest-stage` 의 트레이 순서), 개발용 실행기로 메뉴 창과 설정 두 줄을 찍어 Figma 와 비교, `npm run selftest`·E2E·`check-docs`.
 
+### 초상·타입 배지·숨김 표시·놀아주기의 설계
+
+날짜: 2026-09-25. 상태: 구현·검수 완료, 실제 앱 확인 대기. 설계 승인: "진행.". 사용자 지시: "커밋하고, 이슈 여러가지있어. 1. 포켓몬 이미지 없는거 추가. 2. 타입 chip미반영. 3. 숨기기 아이콘 이상함. 4. 놀아주기하면 포켓몬이 계속 마우스따라다님. 드래그드랍관련 버그같은데, 다시한번 드래그드랍해야 풀림."(파티 카드 캡처 두 장)
+
+**관측** (2026-09-25)
+1. 초상: 관리 창·선택 창의 초상은 빈 원이다. 무대 그림은 PMD SpriteCollab `sprites.zip` 을 받아 `~/.claude/pokebuddy/pmd` 에 둔다(`art/pmd-load.js`). 같은 저장소에 초상 `portrait/<4자리>/Normal.png`(40 × 40, 약 1~2KB)과 이로치 `portrait/<4자리>/0000/0001/Normal.png` 이 있다(피카츄·0906 으로 200 응답 확인). 관리 창 CSP 는 `img-src data:` 만 허용한다.
+2. 타입 배지: 관리 창은 타입을 회색 칩으로 그린다. Figma `Type Badge` `118:134` 는 18 타입별 색(Scarlet·Violet 팔레트, 높이 22, 좌우 8, 11px Semibold, 흰 글자·짙은 글자)을 쓴다. 스냅샷은 타입의 화면 이름만 준다.
+3. 숨김 표시: CSS 로 그린 몬스터볼(18px)을 80 × 80 초상의 네모 모서리(`right:-2; top:-2`)에 둔다. 원 밖으로 떨어져 보인다. Figma `visibility-marker` 는 16px 몬스터볼 그림(SVG)을 원 테두리 위 오른쪽 위에 둔다.
+4. 놀아주기: 무대의 놀아주기 반응은 12초 동안 커서를 따라간다(`src/main/stage.ts` `care`, `STAGE_RULES.care.durationMs`). 놀이공간이 화면 전체가 되면서 포켓몬이 화면 어디서든 커서까지 걸어와 커서 밑에 붙는다. 커서 밑에 그림이 있으면 무대 창이 클릭을 통과시키지 않는다. 그 사이 누른 채 움직이면 잡기(`grab`)가 되어 끌려 다니고, 놓아야(`drop`) 풀린다.
+
+**목표**
+1. 초상: 메인이 PMD 초상을 받아 `pmd/portrait/` 에 둔다. 관리 창·선택 창이 새 채널로 종 목록을 보내면 data URI 를 돌려준다. 받는 동안과 못 받으면 지금의 빈 원을 둔다. 미해금 도감 칸은 그림을 보이지 않는다(이름을 숨기는 것과 같다). 이로치는 이로치 초상을 쓴다.
+2. 타입 배지: 스냅샷·도감 상세에 타입 키를 더하고, 관리 창이 Figma `Type Badge` 색으로 그린다.
+3. 숨김 표시: Figma 몬스터볼 그림을 16px 로 원 테두리 위(45도 자리)에 둔다.
+4. 놀아주기: 커서를 따라가지 않는다. 그 자리 근처에서 폴짝 뛰는 반응(Hop, 없으면 Nod·Idle)을 약 3초 보인다. 밥 주기처럼 옆으로 조금 걸어가 반응한다.
+
+**범위 밖** — 초상 표정 바꾸기(기분별 표정), 선택 창 외 다른 창(배너)의 초상.
+
+**위험**
+- 초상은 CC BY-NC 다. 무대 그림과 같은 출처라 같은 조건이다. 저작자 표기는 `pokebuddy status` 의 PMD 저작자와 같게 둔다.
+- 도감 칸이 많다. 보이는 칸만 요청하고, 한 번에 받는 수를 제한한다.
+- 오프라인이면 빈 원으로 남는다.
+
+**수용 검사** — 자체 검사(타입 키, 초상 경로·이로치 경로), 개발용 실행기로 파티·박스·상세·도감·선택 창의 초상과 타입 배지·숨김 표시를 찍어 Figma 와 비교, 무대 놀아주기가 커서를 따라가지 않음(자체 검사 또는 무대 시험), `npm run selftest`·E2E·`check-docs`.
+
 ## 작업
 
 ### 저장 v3 전환의 작업
@@ -673,6 +698,14 @@ Figma 만 바꿨다. 코드는 바꾸지 않았다.
 - `config.js`: `PACKAGED`(Electron 이고 `process.defaultApp` 이 없음)이면 기본 모드가 `companion` 이다.
 - `src/main/app.ts`: 동반자의 `second-instance` 에서 관리 창을 연다. `syncLoginItem` 이 기동할 때와 관리 창의 `settings.set` 뒤에 `app.setLoginItemSettings` 를 부른다. 설치한 앱(`app.isPackaged`)에서만 한다.
 - 문서: `docs/guide.md` 의 "Windows 실행 파일"·"Windows 실행 파일 만들기", `README.md` 설치 절.
+
+### 초상·타입 배지·숨김 표시·놀아주기의 작업
+
+- 놀아주기: `src/main/stage.ts` 가 놀이 반응에서 커서를 목표로 삼지 않는다. 밥 주기처럼 옆(`foodOffsetPx`)으로 걸어가 도착 뒤 `STAGE_RULES.care.playMs`(3초) 동안 반응하고 끝난다(`src/main/layout.ts`).
+- 숨김 표시: `manage.html` `.mark` 를 Figma `visibility-marker` 의 몬스터볼 SVG(data URI, 16px)로, 자리는 80 원의 45도 자리(오른쪽 위 4px)로.
+- 타입 배지: `PetView.typeIds`·`DexDetail.typeIds`(`src/tx/snapshot.ts`·`dex-detail.ts`). 관리 창 `typeBadge` 와 `.type[data-type]` 18색(Figma `Type Badge` `118:134`). 파티 카드와 도감 상세의 타입 줄.
+- 초상: `src/main/portraits.ts`(`createPortraits`, `portraitUrl`, `portraitKey`) — `art/fetch.js` 의 `cached` 로 받아 `pmd/portrait/` 에 캐시하고 data URI 로 준다. 한 번에 4개, 못 받은 파일은 다시 청하지 않는다. 채널 `manage:portraits`(한 번에 300개까지), `picker:portraits`(후보 종만). 관리 창 `portraitOf` 가 파티 카드·박스 칸(40px 로 키움, Figma Portrait Medium)·성격 카드·칸 고르기·도감 칸(보일 때만, 미해금 제외)을 채운다. 선택 창 카드도 채운다.
+- 검사: `selftest-stage` 의 놀기 기대를 "커서를 따라가지 않음"으로, `selftest-dex-detail` (8) 타입 키와 초상 경로. 개발용 실행기 `dev-manage.cjs --wait <ms>`.
 
 ### 트레이 메뉴와 표시 설정의 작업
 
@@ -862,6 +895,15 @@ SSOT: `docs/specs/s5.md` 의 종료와 재개, `docs/specs/modules.md` 의 저�
 - `npm run selftest` 전체, `node scripts/e2e-companion.cjs`(종료 코드 0), `check-docs` 통과.
 - 문서: 바뀐 문장(`guide.md`·`README.md`·진행표·이력·이 기록)을 쓰기 점검표로 다시 읽었다.
 - 자동 검사가 없는 것: 실제 설치·바로가기·제거, 두 번째 실행 때 관리 창이 열리는지, 로그인 시 시작 등록, 트레이 종료. 설치는 사용자 PC 를 바꾸므로 사용자 확인으로 남겼다.
+
+### 초상·타입 배지·숨김 표시·놀아주기의 검수
+
+- `selftest-stage` 125건: 놀기 뒤 y 가 그대로, x 는 `foodOffsetPx` 안, 반응이 끝나도 커서(100,100) 쪽으로 오지 않음. `selftest-dex-detail` (8) 통과. `npm run selftest` 전체·E2E(종료 코드 0) 통과.
+- 개발용 실행기 화면: 선택 창 29종 초상, 관리 창 파티(피카츄·파이리 초상, 전기 노랑·불꽃 빨강 배지, 원 테두리 위 몬스터볼), 박스 40px 초상(이로치 이브이는 이로치 초상), 도감(해금 종만 초상).
+- 수정 둘: (1) 관리 창 초상이 비었다 — 보이는지 알아보는 IntersectionObserver 가 창이 가려진 동안 반응하지 않았다(`win.isVisible()` false 에서 확인). 칸이 적은 곳은 바로 청하게 했다. (2) 도감이 일부만 채워졌다 — 같은 원인이라 lazy 칸을 그린 뒤·스크롤 때 위치를 재서 고르게 바꿨다.
+- 선택 창 개발용 실행기는 임시 HOME 을 쓰지 않아 초상 29장이 실제 캐시 폴더(`~/.claude/pokebuddy/pmd/portrait`)에 저장됐다. 앱이 같은 곳에 두는 그림 캐시다.
+- 자동 검사가 없는 것: 실제 무대에서 놀아주기 반응, 실제 사용 중 도감 스크롤.
+- 사용자 정정(2026-09-25): "초상화이거말고 기본 초상화 있지않아? https://github.com/PokeAPI/sprites 이거." — 초상 출처를 PMD 초상에서 PokeAPI 기본 그림(`sprites/pokemon/<도감>.png`, 이로치 `shiny/<도감>.png`, 1025번까지 200 응답 확인)으로 바꿨다. 캐시는 `~/.claude/pokebuddy/sprites/`. 96 × 96 둘레 여백은 `object-view-box: inset(14%)` 로 잘라 원을 채우고, 9세대 그림이 도트가 아니라 `pixelated` 를 뺐다. 선택 창·파티·박스를 다시 찍어 확인했다. `selftest-dex-detail` (8) 의 주소 기대도 바꿨다. 앞서 선택 창 실행기가 남긴 PMD 초상 캐시(`~/.claude/pokebuddy/pmd/portrait`)는 더 쓰지 않는다.
 
 ### 트레이 메뉴와 표시 설정의 검수
 

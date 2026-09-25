@@ -7,7 +7,9 @@ import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
 import type { AgentAction, DisplayView, ManageChannel, ManageReply, ManageRequest, ManageRoute } from "../shared/manage";
 import { WINDOW_V3_RULES } from "../save/rules.js";
 import { createGame, type GameV3 } from "./game.js";
-import { windowIcon } from "./paths.js";
+import { PATHS, windowIcon } from "./paths.js";
+import { createPortraits, type PortraitAsk, type Portraits } from "./portraits.js";
+import path from "node:path";
 
 const CH = {
   snapshot: "manage:snapshot",
@@ -18,6 +20,7 @@ const CH = {
   route: "manage:route",
   drawRegion: "manage:draw-region",
   dim: "manage:dim",
+  portraits: "manage:portraits",
 } satisfies Record<string, ManageChannel>;
 
 // 창 조작 단추가 앉는 자리. 색은 헤더와 같아야 이어져 보인다 (`--surface` 와 `--muted`)
@@ -73,6 +76,17 @@ function wire(game: GameV3, send: (req: ManageRequest) => Promise<ManageReply>):
   ipcMain.handle(CH.agents, (e, req: unknown) => {
     if (!mine(e)) return { ...DENIED, list: [] };
     return game.agents(isAgentRequest(req) ? req : undefined);
+  });
+  // 초상 — 요청 모양을 검사하고 한 번에 너무 많이 받지 않는다 (도감 한 화면 분량)
+  let portraits: Portraits | null = null;
+  ipcMain.handle(CH.portraits, async (e, asks: unknown) => {
+    if (!mine(e) || !Array.isArray(asks)) return {};
+    const list = asks
+      .filter((a): a is PortraitAsk => a != null && typeof a === "object" && typeof (a as PortraitAsk).slug === "string")
+      .slice(0, 300)
+      .map((a) => ({ slug: a.slug, shiny: a.shiny === true }));
+    portraits ??= createPortraits(path.join(PATHS.home, "sprites"));
+    return portraits.get(list);
   });
   ipcMain.on(CH.dim, (e, on: unknown) => {
     if (!win || win.isDestroyed() || e.sender !== win.webContents) return;

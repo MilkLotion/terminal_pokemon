@@ -29,6 +29,7 @@ export interface PetView {
   level: number;
   percentToNext: number; // 다음 레벨까지 백분율
   types: string[]; // 화면에 보이는 타입 이름
+  typeIds: string[]; // types 와 같은 순서의 타입 키 (grass 등) — 타입 배지 색을 고른다
   nature: string; // 화면에 보이는 성격 이름
   size: number; // 그림 크기 1~6
   natureId: string; // 성격 id — 성격 변경 창이 지금 성격을 막을 때 쓴다
@@ -119,6 +120,7 @@ export interface DexDetail {
   name: string; // 미해금이면 "???"
   state: DexState;
   types: string[]; // 미해금이면 비어 있다
+  typeIds: string[]; // types 와 같은 순서의 타입 키
   shiny: boolean; // 이로치를 얻었는가
   owned: number; // 가진 개체 수
   methods: string; // 입수 방법 — 경로가 없으면 "획득 방법 준비 중"
@@ -209,7 +211,8 @@ export interface ManageReply {
 // manage:route 는 메인 → 렌더러 한 방향이다. 알림 배너의 `바로가기` 가 관리 창을 어디로 옮길지 알린다
 // manage:draw-region 은 설정의 `영역 그리기` — 영역 그리기 창을 열고, 적용·취소가 끝나면 답한다
 // manage:dim 은 렌더러 → 메인 — 모달 가림막을 켜고 끈다. OS 가 그리는 창 단추 자리도 같은 색으로 어둡게 한다
-export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:dex-detail" | "manage:agents" | "manage:route" | "manage:draw-region" | "manage:dim";
+// manage:portraits 는 초상 — 종과 이로치 여부를 보내면 열쇠(slug 또는 slug:shiny)별 data URI 를 돌려준다. 못 받으면 null
+export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:dex-detail" | "manage:agents" | "manage:route" | "manage:draw-region" | "manage:dim" | "manage:portraits";
 
 // 관리 창 안의 목적지. 부화는 돌보미집, 진화는 개체 상세, 업적은 업적 창 (docs/specs/s5.md "알림 배너의 개별 표시")
 export type ManageRoute = { to: "daycare" } | { to: "pet"; petId: string } | { to: "achievements"; id: string };
@@ -223,6 +226,7 @@ export interface ManageBridge {
   onRoute: (cb: (route: ManageRoute) => void) => void; // 배너의 `바로가기` 로 옮겨 갈 곳
   drawRegion: () => Promise<ManageReply>; // 적용하면 ok, 취소하면 reason "cancelled"
   dim: (on: boolean) => void; // 모달 가림막이 켜졌다·꺼졌다
+  portraits: (asks: PortraitAsk[]) => Promise<Record<string, string | null>>;
 }
 
 // 놀이공간 영역 그리기 창 — Figma `Playground / Region Draw` `396:8541`. 좌표는 창 안 좌표(DIP)다
@@ -280,4 +284,10 @@ export interface MenuBridge {
   onShow: (cb: (items: MenuView[]) => void) => void;
   size: (w: number, h: number) => void; // 그린 뒤의 크기 — 메인이 창 크기와 자리를 정한다
   pick: (id: number | null) => void;
+}
+
+// 초상 요청 한 건 — 열쇠는 slug, 이로치면 `slug:shiny`
+export interface PortraitAsk {
+  slug: string;
+  shiny: boolean;
 }

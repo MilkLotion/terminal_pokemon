@@ -14,6 +14,7 @@ import type {
   ManageReply,
   ManageRoute,
   PetView,
+  PortraitAsk,
   ShopItemView,
   SlotView,
   Snapshot,
@@ -225,12 +226,97 @@ function head(title: string, sub: string): HTMLElement {
   return box;
 }
 
+// ── 초상 ───────────────────────────────────────────────────────────────────────
+// PMD 초상을 메인에서 data URI 로 받아 원 안에 채운다 (src/main/portraits.ts). 받기 전·못 받으면 빈 원 그대로다.
+// 도감은 1000 칸이 넘어 보이는 칸만 청한다(lazy). 파티·박스처럼 칸이 적은 곳은 바로 청한다.
+// 보이는 칸은 그린 뒤와 스크롤할 때 위치를 재서 고른다 — IntersectionObserver 는 창이 가려져 있으면 반응하지 않았다.
+// 받은 것은 창이 떠 있는 동안 기억한다
+
+const portraitCache = new Map<string, string | null>();
+const portraitWant = new Map<string, PortraitAsk>();
+let portraitTimer: ReturnType<typeof setTimeout> | null = null;
+
+function paintPortrait(host: HTMLElement, uri: string): void {
+  if (host.classList.contains("has-art")) return;
+  for (const n of [...host.childNodes]) if (n.nodeType === Node.TEXT_NODE) n.remove(); // "이로치" 같은 자리 글자는 그림이 대신한다
+  const img = document.createElement("img");
+  img.className = "art";
+  img.alt = "";
+  img.src = uri;
+  host.prepend(img);
+  host.classList.add("has-art");
+}
+
+function askPortraits(): void {
+  if (portraitTimer) return;
+  portraitTimer = setTimeout(() => {
+    portraitTimer = null;
+    const asks = [...portraitWant.values()];
+    portraitWant.clear();
+    if (!asks.length) return;
+    void window.pokebuddyManage.portraits(asks).then((got) => {
+      for (const [key, uri] of Object.entries(got)) portraitCache.set(key, uri);
+      for (const host of document.querySelectorAll<HTMLElement>("[data-portrait]")) {
+        const uri = portraitCache.get(host.dataset.portrait ?? "");
+        if (uri) paintPortrait(host, uri);
+      }
+    });
+  }, 30);
+}
+
+function wantPortrait(key: string): void {
+  if (portraitCache.has(key)) return;
+  const [slug = "", shiny] = key.split(":");
+  portraitWant.set(key, { slug, shiny: shiny === "shiny" });
+  askPortraits();
+}
+
+// 화면에 들어온 lazy 칸을 청한다. 위아래로 한 화면씩 미리 받는다
+let lazyTimer: ReturnType<typeof setTimeout> | null = null;
+function askVisiblePortraits(): void {
+  if (lazyTimer) return;
+  lazyTimer = setTimeout(() => {
+    lazyTimer = null;
+    const view = window.innerHeight;
+    for (const host of document.querySelectorAll<HTMLElement>("[data-portrait-lazy]")) {
+      const r = host.getBoundingClientRect();
+      if (r.bottom < -view || r.top > view * 2) continue;
+      host.removeAttribute("data-portrait-lazy");
+      wantPortrait(host.dataset.portrait ?? "");
+    }
+  }, 60);
+}
+document.addEventListener("scroll", askVisiblePortraits, true); // 스크롤은 거품이 없어 잡는 단계에서 받는다
+
+// 초상 자리 하나 — cls 는 크기(portrait 80 · dot 26 등)를 정하는 기존 클래스다. lazy 면 보일 때 청한다
+function portraitOf(slug: string, shiny: boolean, cls: string, text = "", lazy = false): HTMLElement {
+  const host = el("div", cls, text);
+  const key = shiny ? `${slug}:shiny` : slug;
+  host.dataset.portrait = key;
+  const uri = portraitCache.get(key);
+  if (uri) paintPortrait(host, uri);
+  else if (uri === undefined) {
+    if (lazy) {
+      host.dataset.portraitLazy = "";
+      askVisiblePortraits();
+    } else wantPortrait(key);
+  }
+  return host;
+}
+
 // ── 파티 ───────────────────────────────────────────────────────────────────────
+
+// 타입 배지 — Figma `Type Badge` `118:134`. 색은 manage.html 의 `.type[data-type]` 이 타입 키로 고른다
+function typeBadge(name: string, id: string | undefined): HTMLElement {
+  const badge = el("span", "type", name);
+  if (id) badge.dataset.type = id;
+  return badge;
+}
 
 function petCard(pet: PetView): HTMLElement {
   const card = button("slot");
 
-  const portrait = el("div", "portrait", pet.shiny ? "이로치" : "");
+  const portrait = portraitOf(pet.species, pet.shiny, "portrait", pet.shiny ? "이로치" : "");
   if (pet.hidden) {
     const mark = el("span", "mark");
     mark.title = "숨긴 상태";
@@ -245,7 +331,7 @@ function petCard(pet: PetView): HTMLElement {
   info.appendChild(el("div", "name", pet.name));
 
   const tags = el("div", "tags");
-  for (const t of pet.types) tags.appendChild(el("span", "tag", t));
+  pet.types.forEach((name, i) => tags.appendChild(typeBadge(name, pet.typeIds[i])));
   tags.appendChild(el("span", "tag nature", pet.nature));
   if (pet.longPlay) tags.appendChild(el("span", "tag", "오래 놀아주기"));
   info.appendChild(tags);
@@ -359,7 +445,7 @@ function matchesDex(row: DexEntry, q: string): boolean {
 
 function boxCell(pet: PetView, onPick: () => void): HTMLButtonElement {
   const cell = button("cell");
-  cell.append(el("div", "dot"), el("div", "who", pet.name), el("div", "note", pet.shiny ? `Lv.${pet.level} · 이로치` : `Lv.${pet.level}`));
+  cell.append(portraitOf(pet.species, pet.shiny, "dot"), el("div", "who", pet.name), el("div", "note", pet.shiny ? `Lv.${pet.level} · 이로치` : `Lv.${pet.level}`));
   cell.addEventListener("click", onPick);
   return cell;
 }
@@ -452,7 +538,8 @@ function dexCell(row: DexEntry): HTMLElement {
   const cell = button(row.state === "locked" ? "dex-cell locked" : "dex-cell");
   cell.setAttribute("aria-pressed", String(row.slug === dexPick));
   cell.addEventListener("click", () => void pickDex(row.slug));
-  cell.append(el("div", "no", `#${String(row.dex).padStart(4, "0")}`), el("div", "dot"));
+  // 미해금 종은 그림을 보이지 않는다 — 이름을 숨기는 것과 같다
+  cell.append(el("div", "no", `#${String(row.dex).padStart(4, "0")}`), row.state === "locked" ? el("div", "dot") : portraitOf(row.slug, false, "dot", "", true));
   cell.appendChild(el("div", undefined, row.state === "locked" ? "???" : row.name));
   if (row.state === "obtained") cell.appendChild(el("div", "no", row.shiny ? "이로치 획득" : "획득"));
   if (row.condition) cell.title = `발견한 조건: ${row.condition}`;
@@ -476,7 +563,13 @@ function dexPanel(d: DexDetail): HTMLElement {
     ["알 행동 조건", d.eggCondition],
     ["특수 기믹", d.gimmick],
   ];
-  if (d.types.length) rows.unshift(["타입", d.types.join(" · ")]);
+  if (d.types.length) {
+    const row = el("div", "row");
+    const badges = el("span", "value types");
+    d.types.forEach((name, i) => badges.appendChild(typeBadge(name, d.typeIds[i])));
+    row.append(el("span", "key", "타입"), badges);
+    panel.appendChild(row);
+  }
   for (const [key, value] of rows) {
     const row = el("div", "row");
     row.append(el("span", "key", key), el("span", "value", value));
@@ -815,7 +908,7 @@ function drawNature(petId: string, pick: string | undefined, itemId: string | un
   const redraw = (next: { pick?: string; listOpen?: boolean }): void => open({ kind: "nature", petId, ...(itemId ? { itemId } : {}), ...(chosen ? { pick: chosen } : {}), listOpen: false, ...next });
 
   const before = el("div", "nat-card");
-  before.append(el("div", "portrait"), el("div", "name", pet.name), el("div", "note", pet.nature), el("div", "note", "지금"));
+  before.append(portraitOf(pet.species, pet.shiny, "portrait"), el("div", "name", pet.name), el("div", "note", pet.nature), el("div", "note", "지금"));
 
   const mid = el("div", "mint-mid");
   mid.append(el("div", undefined, picked ? picked.mintName : "민트"), el("div", undefined, "→"));
@@ -840,7 +933,7 @@ function drawNature(petId: string, pick: string | undefined, itemId: string | un
     select.appendChild(list);
   }
   const after = el("div", "nat-card");
-  after.append(el("div", "portrait"), el("div", "name", pet.name), select, el("div", "note", "바꾼 후"));
+  after.append(portraitOf(pet.species, pet.shiny, "portrait"), el("div", "name", pet.name), select, el("div", "note", "바꾼 후"));
 
   const row = el("div", "compare");
   row.append(before, mid, after);
@@ -1009,7 +1102,7 @@ function drawPickSlot(petId: string): void {
       continue;
     }
     const cell = button("cell");
-    cell.append(el("div", "dot"), el("div", "who", slot.pet ? slot.pet.name : "빈 칸"), el("div", "note", `${slot.index + 1}번`));
+    cell.append(slot.pet ? portraitOf(slot.pet.species, slot.pet.shiny, "dot") : el("div", "dot"), el("div", "who", slot.pet ? slot.pet.name : "빈 칸"), el("div", "note", `${slot.index + 1}번`));
     cell.addEventListener("click", () => void send(slot.pet ? "party.swap" : "party.place", petId, { slotIndex: slot.index }));
     grid.appendChild(cell);
   }

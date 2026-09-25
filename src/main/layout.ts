@@ -35,7 +35,8 @@ export interface Home {
 export const STAGE_RULES = {
   tickMs: 40, // 무대 틱 — 25fps (옛 buddy/body.js TICK_MS)
   statePollMs: 500, // 훅 상태 폴링 (옛 STATE_POLL_MS)
-  care: { maxStepMs: 80, speedPerZoom: 0.075, arrivalPx: 3, eatMs: 2000, durationMs: 12_000, foodOffsetPx: 80 },
+  // playMs — 놀아주기는 옆으로 걸어가 그 자리에서 폴짝 뛴다. 커서를 따라가지 않는다 (화면 전체 놀이공간에서 커서 밑에 붙어 클릭을 막았다)
+  care: { maxStepMs: 80, speedPerZoom: 0.075, arrivalPx: 3, eatMs: 2000, playMs: 3000, durationMs: 12_000, foodOffsetPx: 80 },
   stackRatio: 0.8, // 여러 마리를 나란히 둘 때 몸 너비 대비 간격 (옛 STACK_RATIO)
 
 };

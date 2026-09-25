@@ -63,6 +63,7 @@ export function petView(save: SaveV3, pet: PetV3, hidden: boolean, dayPart: DayP
     level: pet.level,
     percentToNext: percent,
     types: profile(pet.species).types.map((t) => typeName(t)),
+    typeIds: [...profile(pet.species).types],
     nature: natureName(pet.nature),
     natureId: pet.nature,
     size: pet.size,

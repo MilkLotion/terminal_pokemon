@@ -237,7 +237,6 @@ export function createStage(opts: StageOptions): Stage {
         if (action && !p.held && visible) {
           const dt = Math.max(0, Math.min(STAGE_RULES.care.maxStepMs, t - action.last));
           action.last = t;
-          if (action.action === "play" && cursor) action.target = clampInStage(cursor.x - p.body.w / 2, cursor.y - p.body.h / 2, p.body, size);
           action.target = clampInStage(action.target.x, action.target.y, p.body, size);
           const dx = action.target.x - p.pos.x, dy = action.target.y - p.pos.y;
           const distance = Math.hypot(dx, dy);
@@ -254,7 +253,9 @@ export function createStage(opts: StageOptions): Stage {
           const home = spotOf(p);
           p.offset = { x: p.pos.x - home.x - p.roam.x, y: p.pos.y - home.y - p.roam.y };
           p.phase = walking ? "walk" : "fidget";
-          if (t >= action.until || (action.action === "feed" && action.eatingAt != null && t - action.eatingAt >= STAGE_RULES.care.eatMs)) {
+          // 도착한 뒤 밥은 eatMs, 놀이는 playMs 만큼 반응하고 끝난다. until 은 걸어가다 막혔을 때의 상한이다
+          const doneMs = action.action === "feed" ? STAGE_RULES.care.eatMs : STAGE_RULES.care.playMs;
+          if (t >= action.until || (action.eatingAt != null && t - action.eatingAt >= doneMs)) {
             p.care = null;
             p.motion?.rehome(t);
             p.roam = { x: 0, y: 0 };
