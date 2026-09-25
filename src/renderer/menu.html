@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'" />
+    <title>pokebuddy</title>
+    <style>
+      /* 앱이 그리는 메뉴 — Figma `Context Menu` `338:738`, 항목 `Menu Item` `337:319`. 색은 관리 창과 같은 `PB / Color` 변수다 */
+      :root {
+        --surface: #ffffff;
+        --accent-bg: #ebf4f1;
+        --ink: #1a3330;
+        --muted: #4a6663;
+        --disabled: #9ca3af;
+        --line: #dde1db;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+        overflow: hidden;
+      }
+      /* 여백 8 은 그림자 자리다 — src/main/menu-window.ts SHADOW 와 같다 */
+      body {
+        padding: 8px;
+        display: inline-block;
+        color: var(--ink);
+        font: 13px/18px "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      #menu {
+        width: 200px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+        box-shadow: 0 4px 12px rgba(26, 51, 48, 0.16);
+        outline: none;
+      }
+      .item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: 34px;
+        padding: 8px 12px;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .item .label {
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .item .hint {
+        flex: none;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 16px;
+      }
+      .item.on {
+        background: var(--accent-bg);
+      }
+      .item:disabled {
+        color: var(--disabled);
+        cursor: default;
+      }
+      /* 맨 위 이름·상태 — 굵은 이름과 흐린 상태 두 줄 */
+      .status {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 12px;
+      }
+      .status .title {
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .status .caption {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 16px;
+      }
+      .separator {
+        padding: 4px 0;
+      }
+      .separator::before {
+        content: "";
+        display: block;
+        height: 1px;
+        background: var(--line);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="menu" role="menu" tabindex="-1"></div>
+    <script type="module" src="../../dist/renderer/menu.js"></script>
+  </body>
+</html>

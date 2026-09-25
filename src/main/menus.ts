@@ -1,8 +1,9 @@
 // 우클릭·트레이 메뉴의 항목 — Electron 을 import 하지 않고 MenuItemConstructorOptions 모양의 객체만 돌려준다 (node 시험 가능).
 // 문구는 언어 파일(lib/i18n)에서. 호칭(펫·동반자)은 쓰지 않고 동사만 (사용자 결정 2026-09-17).
 // S2 우클릭 = 그 마리의 "이름 · 성격" 한 줄(비활성) · 잠시 숨기기/다시 보이기 · 종료. 밥·놀기는 S3 에서 핸들러와 함께 들어온다 (s2-plan 2.2 j)
-// 고스트 모드(클릭 통과)는 트레이에만 — 켜면 펫을 우클릭할 수 없어 우클릭 메뉴에 있어도 끌 수 없다. 트레이가 없는 세션·창 펫은 단축키로 끈다
+// 클릭 통과는 트레이와 관리 창 설정에 — 켜면 펫을 우클릭할 수 없어 우클릭 메뉴에 있어도 끌 수 없다. 트레이가 없는 세션·창 펫은 단축키로 끈다
 import type { MenuItemConstructorOptions } from "electron";
+import type { MenuView } from "../shared/manage";
 import { t } from "./text";
 
 export interface PetMenuModel {
@@ -14,15 +15,13 @@ export interface PetMenuModel {
   play?: { enabled: boolean; reason?: string };
 }
 export interface TrayMenuModel {
-  name: string;
   hidden: boolean;
-  ghost: boolean;
+  ghost: boolean; // 클릭 통과
 }
 export interface MenuActions {
   toggleHidden(): void;
   quit(): void;
   toggleGhost?(): void;
-  openConfig?(): void;
   feed?(): void;
   play?(): void;
 }
@@ -31,11 +30,13 @@ export interface MenuActions {
 export const petLine = (model: Pick<PetMenuModel, "name" | "nature">): string =>
   model.nature ? t("menu.pet", { name: model.name, nature: model.nature }) : model.name;
 
+// 첫 항목은 이름·상태 두 줄이다 (sublabel 이 둘째 줄). 밥 주기·놀아주기를 못 하면 흐리게 두고 이유를 오른쪽에 붙인다 (Figma `Context Menu` `338:738`)
 export function petMenu(model: PetMenuModel, act: MenuActions): MenuItemConstructorOptions[] {
   return [
-    { label: [petLine(model), model.status].filter(Boolean).join(" · "), enabled: false },
-    ...(model.feed ? [{ label: t("menu.feed") + (model.feed.reason ? ` · ${model.feed.reason}` : ""), enabled: model.feed.enabled, click: () => act.feed?.() }] : []),
-    ...(model.play ? [{ label: t("menu.play") + (model.play.reason ? ` · ${model.play.reason}` : ""), enabled: model.play.enabled, click: () => act.play?.() }] : []),
+    { label: petLine(model), ...(model.status ? { sublabel: model.status } : {}), enabled: false },
+    { type: "separator" },
+    ...(model.feed ? [{ label: t("menu.feed"), ...(model.feed.reason ? { sublabel: model.feed.reason } : {}), enabled: model.feed.enabled, click: () => act.feed?.() }] : []),
+    ...(model.play ? [{ label: t("menu.play"), ...(model.play.reason ? { sublabel: model.play.reason } : {}), enabled: model.play.enabled, click: () => act.play?.() }] : []),
     { type: "separator" },
     { label: t(model.hidden ? "menu.show" : "menu.hide"), click: () => act.toggleHidden() },
     { type: "separator" },
@@ -43,15 +44,35 @@ export function petMenu(model: PetMenuModel, act: MenuActions): MenuItemConstruc
   ];
 }
 
+// 트레이 — 잠시 숨기기 / 클릭 통과 / 종료. 관리 창 열기는 부르는 쪽이 맨 위에 붙인다.
+// 이름 줄과 설정 파일 열기는 뺐다 — 관리 창이 그 일을 한다 (docs/work/game-runtime/record.md "트레이 메뉴와 표시 설정의 설계")
 export function trayMenu(model: TrayMenuModel, act: MenuActions): MenuItemConstructorOptions[] {
-  const items: MenuItemConstructorOptions[] = [
-    { label: model.name, enabled: false },
-    { type: "separator" },
+  return [
     { label: t(model.hidden ? "menu.show" : "menu.hide"), click: () => act.toggleHidden() },
     { label: t("menu.ghost"), type: "checkbox", checked: model.ghost, click: () => act.toggleGhost?.() },
-    { label: t("menu.openConfig"), click: () => act.openConfig?.() },
     { type: "separator" },
     { label: t("menu.quit"), click: () => act.quit() },
   ];
-  return items;
+}
+
+// 메뉴 모델 → 화면 모양. 체크 항목은 켜졌을 때 오른쪽에 `켜짐` 을 붙인다. 글이 없는 항목은 뺀다.
+// 누를 수 없고 동작도 없는 항목은 상태 줄이다 — sublabel 을 둘째 줄로 보인다. 누르는 항목의 sublabel 은 오른쪽 짧은 글이다
+export function menuView(template: MenuItemConstructorOptions[], on: string): MenuView[] {
+  const out: MenuView[] = [];
+  template.forEach((m, id) => {
+    if (m.type === "separator") {
+      // 맨 앞·연속 구분선은 두지 않는다
+      if (out.length && out[out.length - 1]?.kind !== "separator") out.push({ kind: "separator" });
+      return;
+    }
+    if (!m.label || m.visible === false) return;
+    if (m.enabled === false && !m.click) {
+      out.push({ kind: "status", title: m.label, ...(m.sublabel ? { caption: m.sublabel } : {}) });
+      return;
+    }
+    const hint = m.type === "checkbox" && m.checked ? on : m.sublabel || undefined;
+    out.push({ kind: "item", id, label: m.label, disabled: m.enabled === false || !m.click, ...(hint ? { hint } : {}) });
+  });
+  while (out.length && out[out.length - 1]?.kind === "separator") out.pop();
+  return out;
 }

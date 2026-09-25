@@ -1066,6 +1066,13 @@ function drawGeneral(scroll: HTMLElement): void {
   const s = view.settings;
   const set = (key: string, value: unknown): void => void send("settings.set", key, { value });
 
+  // 포켓몬 표시·클릭 통과 — 이 앱의 창 상태다. 앱이 값을 줄 때만 둔다 (docs/specs/s5.md 설정 계약의 첫 두 항목)
+  if (view.display) {
+    const d = view.display;
+    scroll.appendChild(settingRow("포켓몬 표시", "끄면 포켓몬을 잠시 숨깁니다. 트레이에서도 바꿀 수 있습니다.", toggle(!d.hidden, ["켬", "끔"], (on) => set("hidden", !on))));
+    scroll.appendChild(settingRow("클릭 통과", "켜면 포켓몬을 눌러도 뒤의 창이 눌립니다.", toggle(d.clickThrough, ["켬", "끔"], (on) => set("clickThrough", on))));
+  }
+
   scroll.appendChild(
     settingRow(
       "놀이공간",
@@ -1098,7 +1105,6 @@ function drawGeneral(scroll: HTMLElement): void {
   guide.addEventListener("click", () => open({ kind: "guide" }));
   scroll.appendChild(guide);
 
-  scroll.appendChild(el("div", "hint", "포켓몬 표시와 클릭 통과는 아직 이 창에 없습니다."));
 }
 
 // CLI 한 줄 — 상태를 네 가지로 나눈다 (docs/specs/s5.md "설정과 연결")
@@ -1179,12 +1185,21 @@ const SHAPE: Record<Dialog["kind"], string> = {
   guide: "dialog tall",
 };
 
+// 가림막 — 켜고 끌 때 메인에도 알린다. OS 가 그리는 창 단추 자리는 CSS 가 덮지 못한다
+let dimmed = false;
+function setScrim(on: boolean): void {
+  scrimEl.classList.toggle("open", on);
+  if (on === dimmed) return;
+  dimmed = on;
+  window.pokebuddyManage.dim(on);
+}
+
 function drawDialog(): void {
   if (!dialog) {
-    scrimEl.classList.remove("open");
+    setScrim(false);
     return;
   }
-  scrimEl.classList.add("open");
+  setScrim(true);
   dialogEl.className = SHAPE[dialog.kind];
   dialogEl.replaceChildren();
 
@@ -1215,7 +1230,7 @@ function open(next: Dialog): void {
 function close(): void {
   dialog = null;
   notice = "";
-  scrimEl.classList.remove("open");
+  setScrim(false);
 }
 
 const openPet = (id: string): void => open({ kind: "pet", petId: id });

@@ -23,6 +23,9 @@ type BannerView = import("../shared/manage").BannerView;
 type RegionBridge = import("../shared/manage").RegionBridge;
 type RegionChannel = import("../shared/manage").RegionChannel;
 type RegionInit = import("../shared/manage").RegionInit;
+type MenuBridge = import("../shared/manage").MenuBridge;
+type MenuChannel = import("../shared/manage").MenuChannel;
+type MenuView = import("../shared/manage").MenuView;
 
 const { contextBridge, ipcRenderer } = require("electron") as typeof import("electron");
 
@@ -65,6 +68,7 @@ const MANAGE = {
   agents: "manage:agents",
   route: "manage:route",
   drawRegion: "manage:draw-region",
+  dim: "manage:dim",
 } satisfies Record<string, ManageChannel>;
 
 const manage: ManageBridge = {
@@ -75,6 +79,7 @@ const manage: ManageBridge = {
   agents: (req) => ipcRenderer.invoke(MANAGE.agents, req) as Promise<AgentReply>,
   onRoute: (cb) => ipcRenderer.on(MANAGE.route, (_e, route: ManageRoute) => cb(route)),
   drawRegion: () => ipcRenderer.invoke(MANAGE.drawRegion) as Promise<ManageReply>,
+  dim: (on) => ipcRenderer.send(MANAGE.dim, on),
 };
 
 contextBridge.exposeInMainWorld("pokebuddyManage", manage);
@@ -106,3 +111,18 @@ const region: RegionBridge = {
 };
 
 contextBridge.exposeInMainWorld("pokebuddyRegion", region);
+
+// 앱이 그리는 메뉴 창 — 항목을 받고, 그린 크기와 고른 항목을 돌려준다
+const MENU = {
+  show: "menu:show",
+  size: "menu:size",
+  pick: "menu:pick",
+} satisfies Record<string, MenuChannel>;
+
+const menu: MenuBridge = {
+  onShow: (cb) => ipcRenderer.on(MENU.show, (_e, items: MenuView[]) => cb(items)),
+  size: (w, h) => ipcRenderer.send(MENU.size, w, h),
+  pick: (id) => ipcRenderer.send(MENU.pick, id),
+};
+
+contextBridge.exposeInMainWorld("pokebuddyMenu", menu);

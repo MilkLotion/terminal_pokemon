@@ -5,6 +5,8 @@ export interface TrayOptions {
   icon: string | null; // 공식 앱 로고 PNG 경로
   tooltip: string;
   template: () => MenuItemConstructorOptions[];
+  // 앱이 그리는 메뉴를 띄운다 (src/main/menu-window.ts). 있으면 OS 기본 메뉴를 쓰지 않는다 — Windows 기본 메뉴는 왼쪽을 크게 비운다
+  popup?: () => void;
 }
 
 export interface TrayHandle {
@@ -31,16 +33,23 @@ export function createTray(opts: TrayOptions): TrayHandle | null {
   try {
     tray = new Tray(trayIcon(opts.icon));
     tray.setToolTip(opts.tooltip);
-    tray.setContextMenu(Menu.buildFromTemplate(opts.template()));
     // Windows 는 왼쪽 클릭에 메뉴가 열리지 않는다 — 어느 버튼이든 메뉴
-    tray.on("click", () => tray?.popUpContextMenu());
+    const popup = opts.popup;
+    if (popup) {
+      tray.on("click", () => popup());
+      tray.on("right-click", () => popup());
+    } else {
+      tray.setContextMenu(Menu.buildFromTemplate(opts.template()));
+      tray.on("click", () => tray?.popUpContextMenu());
+    }
   } catch (e) {
     process.stderr.write(`트레이 아이콘을 만들지 못함 — ${e instanceof Error ? e.message : String(e)}. 우클릭 메뉴나 pokebuddy companion stop 으로 내린다\n`);
     return null;
   }
   return {
     refresh() {
-      tray?.setContextMenu(Menu.buildFromTemplate(opts.template()));
+      // 앱이 그리는 메뉴는 띄울 때마다 새로 만든다
+      if (!opts.popup) tray?.setContextMenu(Menu.buildFromTemplate(opts.template()));
     },
     setIcon(file) {
       tray?.setImage(trayIcon(file));

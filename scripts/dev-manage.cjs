@@ -8,6 +8,7 @@
 // `--click <선택자>` 를 주면 그 요소를 한 번 눌러 놓고 찍는다. 여러 번 주면 순서대로 누른다.
 // `--input <선택자>=<글자>` 를 주면 누른 뒤에 그 입력칸에 한 글자씩 넣는다. 다 넣은 뒤 포커스가 있는 요소의 id 를 출력한다.
 // `--click-text <글자>` 를 주면 그 글자인 첫 단추를 누른다. `--click` 과 섞어 적은 순서대로 한다.
+// `--linger <ms>` 를 주면 찍은 뒤 창을 그만큼 열어 둔다.
 // `--route <json>` 을 주면 알림 배너의 `바로가기` 처럼 그 목적지로 연다. 예: '{"to":"pet","petId":"p1"}'
 const fs = require("node:fs");
 const os = require("node:os");
@@ -135,7 +136,7 @@ app.whenReady().then(async () => {
     if (!rect) return { ok: false, reason: "cancelled" };
     return game.send({ cmd: "settings.set", target: "playRegion", args: { value: rect } }, "settings");
   };
-  const win = openManage({ preload: paths.preloadFile(), html: paths.rendererFile("manage.html"), game, drawRegion, ...(route ? { route } : {}) });
+  const win = openManage({ preload: paths.preloadFile(), html: paths.rendererFile("manage.html"), game, drawRegion, display: () => ({ hidden: false, clickThrough: false }), ...(route ? { route } : {}) });
   if (!shotFile) return;
 
   // 탭 전환과 개체 상세는 그려진 뒤에야 누를 수 있다. 누른 뒤에도 다시 그릴 틈을 준다
@@ -172,7 +173,9 @@ app.whenReady().then(async () => {
         .then((img) => {
           fs.writeFileSync(shotFile, img.toPNG());
           process.stdout.write(`shot: ${shotFile}\n`);
-          app.exit(0);
+          // --linger 는 찍은 뒤 창을 그만큼 열어 둔다 — OS 가 그리는 창 단추는 페이지 캡처에 없어 밖에서 찍을 때 쓴다
+          const linger = Number(argAfter("--linger")) || 0;
+          setTimeout(() => app.exit(0), linger);
         })
         .catch((e) => {
           process.stderr.write(`capture failed: ${String(e)}\n`);

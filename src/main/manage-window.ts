@@ -4,7 +4,7 @@
 // 창을 열 때 흐른 시간을 먼저 적용한다. 그래야 만복도와 쿨타임이 지금 값으로 보인다.
 // 창은 하나만 둔다. 다시 열면 이미 떠 있는 창을 앞으로 가져온다.
 import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
-import type { AgentAction, ManageChannel, ManageReply, ManageRequest, ManageRoute } from "../shared/manage";
+import type { AgentAction, DisplayView, ManageChannel, ManageReply, ManageRequest, ManageRoute } from "../shared/manage";
 import { WINDOW_V3_RULES } from "../save/rules.js";
 import { createGame, type GameV3 } from "./game.js";
 import { windowIcon } from "./paths.js";
@@ -17,10 +17,14 @@ const CH = {
   agents: "manage:agents",
   route: "manage:route",
   drawRegion: "manage:draw-region",
+  dim: "manage:dim",
 } satisfies Record<string, ManageChannel>;
 
 // 창 조작 단추가 앉는 자리. 색은 헤더와 같아야 이어져 보인다 (`--surface` 와 `--muted`)
-const CHROME = { color: "#ffffff", symbolColor: "#4a6663", height: 40 };
+// 높이는 헤더(40)보다 1 작다 — 헤더 맨 아래 1px 테두리를 덮지 않아야 단추 아래까지 선이 이어진다
+const CHROME = { color: "#ffffff", symbolColor: "#4a6663", height: 39 };
+// 모달이 열리면 가림막(`--scrim` rgba(26,51,48,0.45))이 헤더를 덮는다. 창 단추 자리도 그 색을 겹친 값으로 바꾼다
+const CHROME_DIM = { color: "#98a3a2", symbolColor: "#344f4c" };
 
 export interface ManageOptions {
   preload: string;
@@ -32,11 +36,13 @@ export interface ManageOptions {
   route?: ManageRoute; // 열면서 옮겨 갈 곳 — 알림 배너의 `바로가기`
   // 설정의 `영역 그리기`. 영역 그리기 창을 열고 적용한 영역을 저장한다. 없으면 이 기능을 쓸 수 없다
   drawRegion?: () => Promise<ManageReply>;
+  display?: () => DisplayView; // 포켓몬 표시·클릭 통과의 지금 값. 저장 밖이라 앱이 준다
 }
 
 let win: BrowserWindow | null = null;
 let wired = false;
 let drawRegion: ManageOptions["drawRegion"] = undefined; // 창을 열 때마다 새로 받는다 — 처리기는 한 번만 건다
+let display: ManageOptions["display"] = undefined;
 
 const isRequest = (v: unknown): v is ManageRequest =>
   v != null && typeof v === "object" && typeof (v as { cmd?: unknown }).cmd === "string";
@@ -59,13 +65,23 @@ function wire(game: GameV3, send: (req: ManageRequest) => Promise<ManageReply>):
   ipcMain.handle(CH.snapshot, (e) => {
     if (!mine(e)) return null;
     game.tick(); // 본 값이 지금 값이 되도록 먼저 시간을 적용한다
-    return game.view();
+    const view = game.view();
+    return view && display ? { ...view, display: display() } : view;
   });
   ipcMain.handle(CH.dex, (e) => (mine(e) ? game.dex() : []));
   ipcMain.handle(CH.dexDetail, (e, slug: unknown) => (mine(e) && typeof slug === "string" ? game.dexDetail(slug) : null));
   ipcMain.handle(CH.agents, (e, req: unknown) => {
     if (!mine(e)) return { ...DENIED, list: [] };
     return game.agents(isAgentRequest(req) ? req : undefined);
+  });
+  ipcMain.on(CH.dim, (e, on: unknown) => {
+    if (!win || win.isDestroyed() || e.sender !== win.webContents) return;
+    const c = on === true ? CHROME_DIM : CHROME;
+    try {
+      win.setTitleBarOverlay({ color: c.color, symbolColor: c.symbolColor, height: CHROME.height });
+    } catch {
+      // 창 단추를 OS 가 그리지 않는 곳(mac 등)에서는 할 일이 없다
+    }
   });
   ipcMain.handle(CH.drawRegion, async (e): Promise<ManageReply> => {
     if (!mine(e)) return DENIED;
@@ -82,6 +98,7 @@ function wire(game: GameV3, send: (req: ManageRequest) => Promise<ManageReply>):
 
 export function openManage(opts: ManageOptions): BrowserWindow {
   drawRegion = opts.drawRegion;
+  display = opts.display;
   if (win && !win.isDestroyed()) {
     if (win.isMinimized()) win.restore();
     win.show();

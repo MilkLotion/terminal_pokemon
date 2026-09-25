@@ -6,7 +6,7 @@
 // 설정·경로는 config.js에서 읽음. 육성과 해금은 writer만 갱신
 import fs from "node:fs";
 import path from "node:path";
-import { app, nativeImage, screen, shell, Notification } from "electron";
+import { app, nativeImage, screen, Notification } from "electron";
 import { starters, unlockRules } from "../dex/unlocks";
 import type { HelperWindow, SelfMark } from "../follow/types";
 import { pidAlive } from "../save/writer";
@@ -30,6 +30,7 @@ import { createStage, type Stage } from "./stage";
 import { createStageWindow, type StageWindow } from "./stage-window";
 import { langOf, natureName, petLabel, setLang, t } from "./text";
 import { createTray, type TrayHandle } from "./tray";
+import { popupMenu } from "./menu-window";
 import { STATE_RULES } from "../state/rules";
 import { createNotifier, type Notifier } from "../notify/notifier";
 import type { ManageRoute } from "../shared/manage";
@@ -268,6 +269,7 @@ const openManageWindow = (route?: ManageRoute): void => {
       }
       return reply;
     },
+    display: () => ({ hidden: userHidden, clickThrough: !!config.clickThrough }),
     // 설정의 `영역 그리기` — 그린 영역을 저장하면 영역 지정으로 바뀐다. 취소하면 아무것도 바꾸지 않는다
     drawRegion: async () => {
       const current = game?.read()?.settings.playArea.rect ?? null;
@@ -286,13 +288,12 @@ const trayTemplate = () => [
   { label: "관리 창 열기", click: () => openManageWindow() },
   { type: "separator" as const },
   ...trayMenu(
-    { name: displayName(), hidden: userHidden, ghost: !!config.clickThrough },
+    { hidden: userHidden, ghost: !!config.clickThrough },
     {
       toggleHidden,
       quit: () => app.quit(),
-      // 동반자의 토글은 저장하지 않는다 — 전역 설정이라 세션 펫의 다음 실행까지 번진다. 모드별 설정은 설정창(S5)에서
+      // 동반자의 토글은 저장하지 않는다 — 전역 설정이라 세션 펫의 다음 실행까지 번진다
       toggleGhost: () => applyClickThrough(!config.clickThrough, mode !== "companion"),
-      openConfig: () => void shell.openPath(PATHS.config),
     },
   ),
 ];
@@ -326,7 +327,8 @@ function showPetMenu(id: string): void {
     { type: "separator" as const },
     { label: "관리 창 열기", click: () => openManageWindow() },
   );
-  stageWin.popup(items);
+  // OS 기본 메뉴는 Windows 에서 왼쪽을 크게 비운다 — 앱이 그리는 메뉴를 커서 자리에 띄운다 (docs/specs/ui-components.md C-21)
+  popupMenu({ preload: preloadFile(), html: rendererFile("menu.html") }, items, t("menu.on"));
 }
 
 // 파티 목록 → 무대. 그림을 받는 동안 기다린다. 트레이는 공식 앱 로고를 유지한다
@@ -561,7 +563,12 @@ async function main(): Promise<void> {
   }
 
   if (mode === "companion") {
-    tray = createTray({ icon: logoFile(256), tooltip: t("tray.title", { name: displayName() }), template: trayTemplate });
+    tray = createTray({
+      icon: logoFile(256),
+      tooltip: t("tray.title", { name: displayName() }),
+      template: trayTemplate,
+      popup: () => popupMenu({ preload: preloadFile(), html: rendererFile("menu.html") }, trayTemplate(), t("menu.on")),
+    });
   } else {
     // 전역 단축키 — 동반자는 잡지 않는다 (shortcuts.ts 머리 주석)
     shortcuts = createShortcuts(

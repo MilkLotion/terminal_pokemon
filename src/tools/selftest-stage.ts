@@ -11,7 +11,7 @@ import path from "node:path";
 import { ANCHOR_RULES, createAnchor, type AnchorUpdate } from "../main/anchor";
 import { ART_RULES, zoomOf } from "../main/art";
 import { STAGE_RULES, clampInStage, homeOf, homeSpot, isDefaultHome, petSpot, roamBox, stackShift, stageOf, toLocal } from "../main/layout";
-import { petLine, petMenu, trayMenu } from "../main/menus";
+import { menuView, petLine, petMenu, trayMenu } from "../main/menus";
 import { t } from "../main/text";
 import { SAVE_RULES, SAVE_V3_RULES } from "../save/rules";
 import * as legacy from "../save/legacy";
@@ -134,22 +134,37 @@ ok(frame.pets[0]?.play?.mode === "loop" && sheets.clips.idle?.anim === "Idle" &&
   let hid = 0;
   let quit = 0;
   let ghost = 0;
-  let opened = 0;
-  const act = { toggleHidden: () => void (hid += 1), quit: () => void (quit += 1), toggleGhost: () => void (ghost += 1), openConfig: () => void (opened += 1) };
+  const act = { toggleHidden: () => void (hid += 1), quit: () => void (quit += 1), toggleGhost: () => void (ghost += 1) };
   const menu = petMenu({ name: "이브이", nature: "용감", hidden: false }, act);
-  eq(menu.map((m) => m.label ?? m.type), [t("menu.pet", { name: "이브이", nature: "용감" }), "separator", t("menu.hide"), "separator", t("menu.quit")], "petMenu 순서·라벨");
+  eq(menu.map((m) => m.label ?? m.type), [t("menu.pet", { name: "이브이", nature: "용감" }), "separator", "separator", t("menu.hide"), "separator", t("menu.quit")], "petMenu 순서·라벨");
   ok(menu[0]?.enabled === false, "petMenu 첫 줄은 비활성");
-  eq(petMenu({ name: "이브이", nature: "용감", hidden: true }, act)[2]?.label, t("menu.show"), "petMenu 숨긴 상태면 다시 보이기");
+  eq(petMenu({ name: "이브이", nature: "용감", hidden: true }, act)[3]?.label, t("menu.show"), "petMenu 숨긴 상태면 다시 보이기");
   eq(petLine({ name: "이브이", nature: null }), "이브이", "petLine 성격 없으면 이름만");
-  (menu[2]!.click as () => void)();
-  (menu[4]!.click as () => void)();
+  (menu[3]!.click as () => void)();
+  (menu[5]!.click as () => void)();
   eq([hid, quit], [1, 1], "petMenu 클릭이 동작을 부른다");
-  const tray = trayMenu({ name: "이브이", hidden: false, ghost: true }, act);
-  eq(tray.map((m) => m.label ?? m.type), ["이브이", "separator", t("menu.hide"), t("menu.ghost"), t("menu.openConfig"), "separator", t("menu.quit")], "trayMenu 순서·라벨");
-  ok(tray[3]?.type === "checkbox" && tray[3]?.checked === true, "trayMenu 고스트 체크");
+  // 앱이 그리는 모양 — 이름·상태 두 줄, 못 하는 돌봄은 흐리게 이유를 오른쪽에, 겹친 구분선은 하나로
+  const cared = menuView(petMenu({ name: "이브이", nature: "용감", hidden: false, status: "배부름 · 기분 좋음", feed: { enabled: false, reason: "0:40" }, play: { enabled: true } }, act), "켜짐");
+  eq(cared[0], { kind: "status", title: t("menu.pet", { name: "이브이", nature: "용감" }), caption: "배부름 · 기분 좋음" }, "menuView 상태 줄");
+  const feedView = cared.find((v) => v.kind === "item" && v.label === t("menu.feed"));
+  eq(feedView?.kind === "item" ? [feedView.disabled, feedView.hint] : null, [true, "0:40"], "menuView 밥 주기 흐림과 남은 시간");
+  eq(menuView(menu, "켜짐").filter((v) => v.kind === "separator").length, 2, "menuView 겹친 구분선은 하나");
+  // 트레이 — 이름 줄과 설정 파일 열기는 없다. 관리 창 열기는 app.ts 가 맨 위에 붙인다
+  const tray = trayMenu({ hidden: false, ghost: true }, act);
+  eq(tray.map((m) => m.label ?? m.type), [t("menu.hide"), t("menu.ghost"), "separator", t("menu.quit")], "trayMenu 순서·라벨");
+  ok(tray[1]?.type === "checkbox" && tray[1]?.checked === true, "trayMenu 클릭 통과 체크");
+  (tray[1]!.click as () => void)();
   (tray[3]!.click as () => void)();
-  (tray[4]!.click as () => void)();
-  eq([ghost, opened], [1, 1], "trayMenu 클릭이 동작을 부른다");
+  eq([ghost, quit], [1, 2], "trayMenu 클릭이 동작을 부른다");
+  // 앱이 그리는 메뉴의 모양 — 체크 항목은 켜짐 글을 붙이고, 앞·뒤·연속 구분선은 뺀다
+  const view = menuView([{ type: "separator" }, ...tray, { type: "separator" }, { label: "누를 수 없음", enabled: false }], "켜짐");
+  eq(
+    view.map((v) => (v.kind === "item" ? `${v.label}${v.hint ? `(${v.hint})` : ""}${v.disabled ? "!" : ""}` : v.kind === "status" ? `[${v.title}]` : "separator")),
+    [t("menu.hide"), `${t("menu.ghost")}(켜짐)`, "separator", t("menu.quit"), "separator", "[누를 수 없음]"],
+    "menuView 모양",
+  );
+  const quitView = view.find((v) => v.kind === "item" && v.label === t("menu.quit"));
+  eq(quitView?.kind === "item" ? quitView.id : -1, 4, "menuView 번호는 모델 안의 자리");
 }
 
 // ── party — 파일 · writer/reader · 옛 저장 · 첫 실행 (저장 v3) ─────────────────────

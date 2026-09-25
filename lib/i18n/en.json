@@ -1,8 +1,8 @@
 {
   "menu.hide": "Hide for now",
   "menu.show": "Show again",
-  "menu.ghost": "Ghost mode",
-  "menu.openConfig": "Open config file",
+  "menu.ghost": "Click-through",
+  "menu.on": "On",
   "menu.quit": "Quit",
   "menu.pet": "{name} · {nature}",
   "menu.feed": "Feed",

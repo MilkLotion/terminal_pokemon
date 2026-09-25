@@ -159,6 +159,13 @@ export interface Snapshot {
   achievements: { total: number; unclaimed: number; list: AchievementView[] };
   settings: SettingsView;
   natures: NatureOption[];
+  // 포켓몬 표시·클릭 통과 — 저장이 아니라 이 앱 프로세스의 창 상태다. 앱이 채운다. 없으면 설정에 두 줄을 두지 않는다
+  display?: DisplayView;
+}
+
+export interface DisplayView {
+  hidden: boolean; // 잠시 숨김 (트레이의 잠시 숨기기와 같다)
+  clickThrough: boolean; // 클릭 통과
 }
 
 // ── CLI 연결 ───────────────────────────────────────────────────────────────────
@@ -201,7 +208,8 @@ export interface ManageReply {
 // CLI 연결은 저장 밖을 보므로 역시 따로 부른다
 // manage:route 는 메인 → 렌더러 한 방향이다. 알림 배너의 `바로가기` 가 관리 창을 어디로 옮길지 알린다
 // manage:draw-region 은 설정의 `영역 그리기` — 영역 그리기 창을 열고, 적용·취소가 끝나면 답한다
-export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:dex-detail" | "manage:agents" | "manage:route" | "manage:draw-region";
+// manage:dim 은 렌더러 → 메인 — 모달 가림막을 켜고 끈다. OS 가 그리는 창 단추 자리도 같은 색으로 어둡게 한다
+export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:dex-detail" | "manage:agents" | "manage:route" | "manage:draw-region" | "manage:dim";
 
 // 관리 창 안의 목적지. 부화는 돌보미집, 진화는 개체 상세, 업적은 업적 창 (docs/specs/s5.md "알림 배너의 개별 표시")
 export type ManageRoute = { to: "daycare" } | { to: "pet"; petId: string } | { to: "achievements"; id: string };
@@ -214,6 +222,7 @@ export interface ManageBridge {
   agents: (req?: { name: string; action: AgentAction }) => Promise<AgentReply>; // 인자가 없으면 읽기만 한다
   onRoute: (cb: (route: ManageRoute) => void) => void; // 배너의 `바로가기` 로 옮겨 갈 곳
   drawRegion: () => Promise<ManageReply>; // 적용하면 ok, 취소하면 reason "cancelled"
+  dim: (on: boolean) => void; // 모달 가림막이 켜졌다·꺼졌다
 }
 
 // 놀이공간 영역 그리기 창 — Figma `Playground / Region Draw` `396:8541`. 좌표는 창 안 좌표(DIP)다
@@ -256,4 +265,19 @@ export interface BannerBridge {
   onShow: (cb: (banner: BannerView) => void) => void;
   go: (key: string) => void; // `바로가기` 를 눌렀다
   hover: (on: boolean) => void; // 커서가 배너 위에 있는 동안 사라지지 않는다
+}
+
+// 앱이 그리는 메뉴 창 — Figma `Context Menu` `338:738`. 메인이 메뉴 모델을 이 모양으로 바꿔 보낸다
+export type MenuView =
+  | { kind: "separator" }
+  | { kind: "status"; title: string; caption?: string } // 맨 위 이름·상태 두 줄 — 누를 수 없다
+  | { kind: "item"; id: number; label: string; disabled: boolean; hint?: string }; // hint 는 오른쪽의 짧은 글 — 체크 항목의 `켜짐`
+
+// menu:show 는 메인 → 렌더러, 나머지는 렌더러 → 메인. menu:pick 이 null 이면 닫기만 한다
+export type MenuChannel = "menu:show" | "menu:size" | "menu:pick";
+
+export interface MenuBridge {
+  onShow: (cb: (items: MenuView[]) => void) => void;
+  size: (w: number, h: number) => void; // 그린 뒤의 크기 — 메인이 창 크기와 자리를 정한다
+  pick: (id: number | null) => void;
 }
