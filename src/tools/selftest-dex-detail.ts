@@ -7,7 +7,8 @@ import assert from "node:assert";
 import { empty } from "../save/v3";
 import type { SaveV3 } from "../shared/save-v3";
 import { dexDetail } from "../tx/dex-detail";
-import { portraitKey, portraitUrl } from "../main/portraits";
+import { iconUrl, portraitKey, portraitUrl } from "../main/portraits";
+import { cryUrl } from "../main/cries";
 
 const T0 = new Date(2026, 8, 25, 10, 0, 0).getTime();
 
@@ -100,7 +101,26 @@ function seed(): SaveV3 {
   assert.equal(portraitUrl(25, false), "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png");
   assert.equal(portraitUrl(25, true), "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/25.png");
   assert.equal(portraitKey({ slug: "eevee", shiny: true }), "eevee:shiny");
+  assert.equal(iconUrl("item:rare-candy"), "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/rare-candy.png");
+  assert.equal(iconUrl("egg"), "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/egg.png");
+  assert.equal(iconUrl("item:../x"), null, "식별자 모양이 아니면 받지 않는다");
+  assert.equal(cryUrl(25), "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/25.ogg");
   process.stdout.write("(8) 타입 키와 초상 경로  ok\n");
 }
 
-process.stdout.write("selftest-dex-detail: 통과 (획득·해금·최종·미해금·알 조건·경로 없음·상점·타입 키·초상 경로)\n");
+// (9) 공식 분류와 설명 — 해금한 종만. 한국어 설명이 없는 종은 영어로 대신한다
+{
+  const d = dexDetail(seed(), "charmander");
+  assert.equal(d?.genus, "도롱뇽포켓몬");
+  assert.ok((d?.flavor ?? "").length > 10, d?.flavor);
+  const locked = dexDetail(seed(), "omanyte");
+  assert.deepStrictEqual([locked?.genus, locked?.flavor], ["", ""], "미해금은 숨긴다");
+  const late = seed();
+  late.dex.unlocked.push("pecharunt");
+  const p = dexDetail(late, "pecharunt");
+  assert.equal(p?.genus, "지배포켓몬");
+  assert.ok(/[A-Za-z]/.test(p?.flavor ?? ""), "899번부터는 영어 설명");
+  process.stdout.write("(9) 공식 분류와 설명  ok\n");
+}
+
+process.stdout.write("selftest-dex-detail: 통과 (획득·해금·최종·미해금·알 조건·경로 없음·상점·타입 키·그림·소리 주소·공식 설명)\n");

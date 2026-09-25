@@ -97,6 +97,7 @@ export type StageChannel =
   | "stage:frame" // M→R  StageFrame
   | "stage:hover" // M→R  HoverQuery
   | "stage:click-through" // M→R  boolean
+  | "stage:cry" // M→R  울음소리 data URI (audio/ogg)
   | "stage:ready" // R→M  없음
   | "stage:hit" // R→M  HitReply
   | "stage:pointer" // R→M  PointerMsg
@@ -113,6 +114,7 @@ export interface StageBridge {
   onFrame(cb: (frame: StageFrame) => void): void;
   onHover(cb: (q: HoverQuery) => void): void;
   onClickThrough(cb: (on: boolean) => void): void;
+  onCry(cb: (uri: string) => void): void; // 울음소리 한 번 — 놀아주기가 성공했을 때
   hit(id: HitReply): void;
   pointer(msg: PointerMsg): void;
   log(entry: Record<string, unknown>): void;

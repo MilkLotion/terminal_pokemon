@@ -749,6 +749,12 @@ PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이다. 
 
 관리 창과 첫 포켓몬 선택 창의 원형 초상은 [PokeAPI sprites](https://github.com/PokeAPI/sprites) 의 기본 그림(`sprites/pokemon/<도감>.png`, 96 × 96)이다. 이로치는 `sprites/pokemon/shiny/<도감>.png` 를 쓰고, 없으면 보통 그림을 쓴다. 저장소는 CC0 이고 그림 저작권은 The Pokémon Company 에 있다. 둘레 여백은 잘라 원을 채운다. 받는 사람 컴퓨터의 `~/.claude/pokebuddy/sprites/` 에 캐시한다. 받지 못하면 빈 원이 남는다. 미해금 도감 칸은 그림을 보이지 않는다(`src/main/portraits.ts`).
 
+### 도구·알 그림, 도감 설명, 울음소리
+
+- 가방·상점의 도구 그림은 PokeAPI `sprites/items/<식별자>.png` 다. 우리 도구 중 이상한사탕과 진화의 돌 10종만 있다. 없는 도구는 빈 칸이다. 돌보미집과 상점 랜덤알은 `sprites/pokemon/egg.png` 를 쓴다. 캐시는 `~/.claude/pokebuddy/sprites/`.
+- 도감 상세의 분류(쥐포켓몬)와 설명문은 `data/dex-text.json` 이다. `npm run data:build` 의 `build-dex-text` 가 PokeAPI CSV 로 만든다. 한국어 설명문은 898번까지만 있어 그 뒤는 영어 설명을 보인다. 미해금 종은 보이지 않는다.
+- 놀아주기가 성공하면 PokeAPI cries 의 울음소리(`cries/pokemon/latest/<도감>.ogg`)를 무대에서 한 번 낸다. 설정의 "알림 소리"가 꺼져 있으면 내지 않는다. 경로는 `.ogg` 지만 옛 종은 내용이 MP3 라 둘 다 받는다. 캐시는 `~/.claude/pokebuddy/cries/`.
+
 ### PMD 를 쓰는 이유
 
 애니메이션이 하나뿐인 그림으로는 상태를 그림으로 나눌 수 없다. CSS 로 누르거나 흔들어 흉내 내 보았다. 어색해서 뺐다.

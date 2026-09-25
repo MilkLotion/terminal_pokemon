@@ -215,6 +215,13 @@ bridge.onHover((q: HoverQuery) => {
   if (debugOn) renderDebug();
 });
 
+// 울음소리 — 메인이 받은 PokeAPI 울음소리(ogg)를 한 번 낸다. 원본이 커서 소리를 줄인다
+bridge.onCry((uri) => {
+  const audio = new Audio(uri);
+  audio.volume = 0.35;
+  void audio.play().catch(() => undefined); // 재생을 막는 환경이면 소리 없이 넘어간다
+});
+
 // 클릭 통과를 켜면 이후 마우스는 아래로 간다 — 누르고 있던 것도 놓는다 (메인도 따로 놓는다)
 bridge.onClickThrough((on) => {
   if (on) {
@@ -346,6 +353,7 @@ function mockBridge(): StageBridge {
     onFrame: (cb) => void cbs.frame.push(cb),
     onHover: (cb) => void cbs.hover.push(cb),
     onClickThrough: (cb) => void cbs.ct.push(cb),
+    onCry: () => {},
     hit: () => {},
     log: () => {}, // mock 은 진단을 #debug 로만 본다
     pointer(msg) {

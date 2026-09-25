@@ -575,6 +575,33 @@
         color: inherit;
         cursor: pointer;
       }
+      /* 도구 그림 칸 — Figma 가방 카드·상점 줄의 28 칸. 그림이 없으면 빈 회색 칸이다 */
+      .thumb {
+        flex: none;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: var(--subtle);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+      .thumb.round {
+        border-radius: 50%;
+        background: var(--accent-bg);
+      }
+      .thumb.has-art:not(.round) {
+        background: var(--accent-bg);
+      }
+      /* 도구·알 그림은 작은 도트다(도구 30 × 30). 흐려지지 않게 확대 보간을 끈다 */
+      .icon-art {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        image-rendering: pixelated;
+      }
       .row-card:disabled {
         color: var(--disabled);
         cursor: default;
@@ -798,6 +825,18 @@
         background: var(--accent-bg);
         border: 1px solid var(--line);
       }
+      /* PokeAPI 알 그림(96 × 96, 둘레 여백이 크다)이 오면 테두리를 지우고 가운데를 잘라 보인다 */
+      .egg .shell.has-art {
+        width: 44px;
+        height: 44px;
+        border: 0;
+        background: none;
+      }
+      .thumb[data-icon="egg"] .icon-art,
+      .egg .shell .icon-art {
+        object-fit: cover;
+        object-view-box: inset(25%);
+      }
       .egg .acts {
         display: flex;
         gap: 4px;
@@ -972,6 +1011,11 @@
         background: var(--primary);
       }
       /* 도감 상세 패널 — 격자 아래 (Figma Dex / Base) */
+      .dex-detail .flavor {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
       .dex-detail {
         grid-column: 1 / -1;
         margin: 4px 0;

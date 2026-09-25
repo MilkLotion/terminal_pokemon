@@ -31,6 +31,7 @@ import { createStageWindow, type StageWindow } from "./stage-window";
 import { langOf, natureName, petLabel, setLang, t } from "./text";
 import { createTray, type TrayHandle } from "./tray";
 import { popupMenu } from "./menu-window";
+import { createCries, type Cries } from "./cries";
 import { STATE_RULES } from "../state/rules";
 import { createNotifier, type Notifier } from "../notify/notifier";
 import type { ManageRoute } from "../shared/manage";
@@ -298,6 +299,19 @@ const trayTemplate = () => [
   ),
 ];
 
+// 울음소리 — 놀아주기가 성공하면 그 포켓몬의 PokeAPI 울음소리를 무대에서 한 번 낸다.
+// 설정의 "알림 소리" 가 꺼져 있으면 내지 않는다. 받은 소리는 ~/.claude/pokebuddy/cries/ 에 캐시한다 (src/main/cries.ts)
+let cries: Cries | null = null;
+async function playCry(id: string): Promise<void> {
+  const save = game?.read();
+  if (!save || save.settings.sound === false) return;
+  const pet = save.pets.find((p) => p.id === id);
+  if (!pet) return;
+  cries ??= createCries(path.join(PATHS.home, "cries"));
+  const uri = await cries.get(pet.species);
+  if (uri) stageWin?.sendCry(uri);
+}
+
 function notifyGame(body: string): void {
   try {
     if (Notification.isSupported()) new Notification({ title: "pokebuddy", body }).show();
@@ -525,7 +539,10 @@ async function main(): Promise<void> {
     },
     stage: {
       poke: (id) => !!stage?.poke(id),
-      care: (id, action) => stage?.care(id, action),
+      care: (id, action) => {
+        stage?.care(id, action);
+        if (action === "play") void playCry(id);
+      },
       petIds: () => stage?.petIds() ?? [],
       size: () => stageWin?.size() ?? { w: 0, h: 0 },
       visible: () => !!stageWin?.isVisible(),

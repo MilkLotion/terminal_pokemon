@@ -21,6 +21,7 @@ const CH = {
   drawRegion: "manage:draw-region",
   dim: "manage:dim",
   portraits: "manage:portraits",
+  icons: "manage:icons",
 } satisfies Record<string, ManageChannel>;
 
 // 창 조작 단추가 앉는 자리. 색은 헤더와 같아야 이어져 보인다 (`--surface` 와 `--muted`)
@@ -87,6 +88,11 @@ function wire(game: GameV3, send: (req: ManageRequest) => Promise<ManageReply>):
       .map((a) => ({ slug: a.slug, shiny: a.shiny === true }));
     portraits ??= createPortraits(path.join(PATHS.home, "sprites"));
     return portraits.get(list);
+  });
+  ipcMain.handle(CH.icons, async (e, keys: unknown) => {
+    if (!mine(e) || !Array.isArray(keys)) return {};
+    portraits ??= createPortraits(path.join(PATHS.home, "sprites"));
+    return portraits.icons(keys.filter((k): k is string => typeof k === "string").slice(0, 200));
   });
   ipcMain.on(CH.dim, (e, on: unknown) => {
     if (!win || win.isDestroyed() || e.sender !== win.webContents) return;

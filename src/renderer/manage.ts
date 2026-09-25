@@ -236,11 +236,11 @@ const portraitCache = new Map<string, string | null>();
 const portraitWant = new Map<string, PortraitAsk>();
 let portraitTimer: ReturnType<typeof setTimeout> | null = null;
 
-function paintPortrait(host: HTMLElement, uri: string): void {
+function paintPortrait(host: HTMLElement, uri: string, cls = "art"): void {
   if (host.classList.contains("has-art")) return;
   for (const n of [...host.childNodes]) if (n.nodeType === Node.TEXT_NODE) n.remove(); // "이로치" 같은 자리 글자는 그림이 대신한다
   const img = document.createElement("img");
-  img.className = "art";
+  img.className = cls;
   img.alt = "";
   img.src = uri;
   host.prepend(img);
@@ -300,6 +300,35 @@ function portraitOf(slug: string, shiny: boolean, cls: string, text = "", lazy =
       host.dataset.portraitLazy = "";
       askVisiblePortraits();
     } else wantPortrait(key);
+  }
+  return host;
+}
+
+// 도구·알 그림 — PokeAPI 에 그림이 있는 것만 채운다(이상한사탕·진화의 돌·알). 없으면 Figma 처럼 빈 칸이다
+const iconCache = new Map<string, string | null>();
+const iconWant = new Set<string>();
+let iconTimer: ReturnType<typeof setTimeout> | null = null;
+
+function iconOf(key: string | null, cls: string): HTMLElement {
+  const host = el("div", cls);
+  if (!key) return host;
+  host.dataset.icon = key;
+  const uri = iconCache.get(key);
+  if (uri) paintPortrait(host, uri, "icon-art");
+  else if (uri === undefined) {
+    iconWant.add(key);
+    iconTimer ??= setTimeout(() => {
+      iconTimer = null;
+      const keys = [...iconWant];
+      iconWant.clear();
+      void window.pokebuddyManage.icons(keys).then((got) => {
+        for (const [k, u] of Object.entries(got)) iconCache.set(k, u);
+        for (const h of document.querySelectorAll<HTMLElement>("[data-icon]")) {
+          const u = iconCache.get(h.dataset.icon ?? "");
+          if (u) paintPortrait(h, u, "icon-art");
+        }
+      });
+    }, 30);
   }
   return host;
 }
@@ -370,7 +399,7 @@ function drawParty(v: Snapshot): void {
 
 function eggCard(egg: EggView): HTMLElement {
   const card = el("div", "egg");
-  card.appendChild(el("div", "shell"));
+  card.appendChild(iconOf("egg", "shell"));
   card.appendChild(el("div", undefined, egg.name));
   card.appendChild(el("div", "note", egg.ready ? "준비 완료" : `${egg.percent}% · ${egg.remainSec}초`));
   card.appendChild(el("div", "note", `쓰다듬기 ${egg.actions.pat} · 노래 ${egg.actions.song}`));
@@ -555,8 +584,10 @@ function dexPanel(d: DexDetail): HTMLElement {
   const meta = d.state === "locked"
     ? "미해금 · 이름과 진화는 해금하면 보여요"
     : `${DEX_STATE_WORD[d.state] ?? d.state} · 이로치 ${d.shiny ? "획득" : "미획득"} · 보유 ${d.owned}마리`;
-  headRow.append(el("strong", undefined, `#${String(d.dex).padStart(4, "0")} ${d.name}`), el("span", "meta", meta));
+  headRow.append(el("strong", undefined, `#${String(d.dex).padStart(4, "0")} ${d.name}`), el("span", "meta", d.genus ? `${d.genus} · ${meta}` : meta));
   panel.appendChild(headRow);
+  // 공식 도감 설명 — 해금한 종만 온다
+  if (d.flavor) panel.appendChild(el("p", "flavor", d.flavor));
   const rows: [string, string][] = [
     ["입수 방법", d.methods],
     ["진화", d.evolution],
@@ -633,8 +664,17 @@ function drawDex(v: Snapshot): void {
 
 // ── 상점 ───────────────────────────────────────────────────────────────────────
 
+// 상점 줄의 그림 — 포켓몬 상품은 초상, 랜덤알은 알, 도구는 도구 그림. 칸 늘리기처럼 그림이 없는 상품은 빈 칸
+function shopThumb(item: ShopItemView): HTMLElement {
+  if (item.category === "pokemon") return portraitOf(item.id, false, "thumb round");
+  if (item.category === "egg") return iconOf(item.id === "random" ? "egg" : null, "thumb");
+  if (item.category === "slot") return iconOf(null, "thumb");
+  return iconOf(`item:${item.id}`, "thumb");
+}
+
 function shopRow(item: ShopItemView): HTMLElement {
   const card = button("row-card");
+  card.appendChild(shopThumb(item));
   const body = el("div", "body");
   body.append(el("div", "title", item.name), el("div", "note", item.blocked ?? item.note));
   card.append(body, el("div", "price", point(item.price)));
@@ -665,6 +705,7 @@ function drawShop(v: Snapshot): void {
 
 function bagRow(item: BagItemView): HTMLElement {
   const card = button("row-card");
+  card.appendChild(iconOf(`item:${item.id}`, "thumb"));
   const body = el("div", "body");
   const note = item.evolution ? "눌러서 진화할 포켓몬 고르기" : item.natures ? "눌러서 성격을 바꿀 포켓몬 고르기" : "눌러서 사용";
   body.append(el("div", "title", item.name), el("div", "note", note));

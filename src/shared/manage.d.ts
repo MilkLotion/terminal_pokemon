@@ -127,6 +127,8 @@ export interface DexDetail {
   evolution: string; // 다음 단계와 조건 — 미해금이면 "해금하면 보여요"
   eggCondition: string; // "없음" · "미발견 · …" · "발견 · <조건>"
   gimmick: string;
+  genus: string; // 공식 분류 — "쥐포켓몬". 미해금이면 빈 문자열
+  flavor: string; // 공식 도감 설명문. 한국어가 없으면 영어. 미해금이면 빈 문자열
 }
 
 // 달성 전 · 달성했고 보상이 남음 · 보상까지 받음
@@ -212,7 +214,7 @@ export interface ManageReply {
 // manage:draw-region 은 설정의 `영역 그리기` — 영역 그리기 창을 열고, 적용·취소가 끝나면 답한다
 // manage:dim 은 렌더러 → 메인 — 모달 가림막을 켜고 끈다. OS 가 그리는 창 단추 자리도 같은 색으로 어둡게 한다
 // manage:portraits 는 초상 — 종과 이로치 여부를 보내면 열쇠(slug 또는 slug:shiny)별 data URI 를 돌려준다. 못 받으면 null
-export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:dex-detail" | "manage:agents" | "manage:route" | "manage:draw-region" | "manage:dim" | "manage:portraits";
+export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:dex-detail" | "manage:agents" | "manage:route" | "manage:draw-region" | "manage:dim" | "manage:portraits" | "manage:icons";
 
 // 관리 창 안의 목적지. 부화는 돌보미집, 진화는 개체 상세, 업적은 업적 창 (docs/specs/s5.md "알림 배너의 개별 표시")
 export type ManageRoute = { to: "daycare" } | { to: "pet"; petId: string } | { to: "achievements"; id: string };
@@ -227,6 +229,7 @@ export interface ManageBridge {
   drawRegion: () => Promise<ManageReply>; // 적용하면 ok, 취소하면 reason "cancelled"
   dim: (on: boolean) => void; // 모달 가림막이 켜졌다·꺼졌다
   portraits: (asks: PortraitAsk[]) => Promise<Record<string, string | null>>;
+  icons: (keys: string[]) => Promise<Record<string, string | null>>; // 도구·알 그림 — 열쇠는 "egg" 또는 "item:<식별자>"
 }
 
 // 놀이공간 영역 그리기 창 — Figma `Playground / Region Draw` `396:8541`. 좌표는 창 안 좌표(DIP)다

@@ -15,7 +15,8 @@ import { unlockRules } from "../dex/unlocks.js";
 import { nextOf, prevOf, type EvoStep } from "../dex/evo.js";
 import type { DexOptions } from "../dex/data";
 import { conditionOf, textOf } from "../egg/conditions.js";
-import { petName, typeName } from "../main/text.js";
+import { getLang, petName, typeName } from "../main/text.js";
+import { loadJson } from "../dex/data.js";
 import { eggName, eggPool, speciesPrice } from "../shop/catalog.js";
 import type { DexDetail } from "../shared/manage";
 import type { SaveV3 } from "../shared/save-v3";
@@ -31,6 +32,13 @@ export function stepText(step: EvoStep, opts?: DexOptions): string {
   if (need.kind === "affinity") return `${time}친밀도 ${need.value}로 ${to}`;
   return `${time}${nameOfItem(need.item, opts)}로 ${to}`;
 }
+
+// 공식 분류와 설명문 — data/dex-text.json (src/tools/build-dex-text.ts 가 PokeAPI CSV 로 만든다)
+interface DexText {
+  genus: { ko?: string; en?: string };
+  flavor: { ko?: string; en?: string };
+}
+const dexTexts = (opts?: DexOptions): Record<string, DexText> => loadJson<Record<string, DexText>>("dex-text.json", opts);
 
 export function dexDetail(save: SaveV3, slug: string, opts?: DexOptions): DexDetail | null {
   const row = profile(slug, opts);
@@ -77,5 +85,14 @@ export function dexDetail(save: SaveV3, slug: string, opts?: DexOptions): DexDet
     evolution,
     eggCondition,
     gimmick: "없음", // 특수 기믹은 아직 없다
+    // 미해금 종은 분류·설명을 숨긴다 — 이름을 숨기는 것과 같다. 한국어 설명문이 없는 종(899번부터)은 영어로 대신한다
+    ...officialText(unlocked ? dexTexts(opts)[String(row.dex)] : undefined),
   };
+}
+
+function officialText(t: DexText | undefined): { genus: string; flavor: string } {
+  if (!t) return { genus: "", flavor: "" };
+  const lang = getLang();
+  const other = lang === "ko" ? "en" : "ko";
+  return { genus: t.genus[lang] ?? t.genus[other] ?? "", flavor: t.flavor[lang] ?? t.flavor[other] ?? "" };
 }

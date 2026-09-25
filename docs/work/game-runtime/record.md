@@ -542,6 +542,26 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 
 **수용 검사** — `npm run data:build` 결과 대조(새 21종, 기존 값 변화), 이전 자체 검사(옛 민트 키), `npm run selftest`·E2E·`check-docs`.
 
+### 공식 그림·도감 설명·울음소리의 설계
+
+날짜: 2026-09-25. 상태: 구현·검수 완료, 실제 소리 확인 대기. 사용자 지시: "커밋 후 진행"(공식 데이터 조사의 5~8번).
+
+**관측** (2026-09-25)
+- 도구 그림: PokeAPI `sprites/items/<식별자>.png` 에 우리 도구 중 이상한사탕과 진화의 돌 10종만 있다. 경험사탕·민트·최근 진화 도구(사과·갑옷 등)와 게임 고유 도구는 없다(404). Figma 가방 카드·상점 줄은 이름 왼쪽에 작은 도구 그림 칸이 있다. 지금 앱에는 칸이 없다.
+- 알 그림: `sprites/pokemon/egg.png` 가 있다. 돌보미집 알 카드는 CSS 타원이다.
+- 도감 설명: `pokemon_species_names.csv` 의 분류(genus, 예: 쥐포켓몬)와 `pokemon_species_flavor_text.csv` 의 설명문. 한국어 설명문은 898번까지만 있다.
+- 울음소리: `PokeAPI/cries` 의 `cries/pokemon/latest/<도감>.ogg`.
+
+**목표**
+5. 가방 카드·상점 줄에 도구 그림 칸(28, Figma)을 두고, PokeAPI 그림이 있으면 채운다. 상점의 포켓몬 상품은 초상, 랜덤알은 알 그림.
+6. 돌보미집 알 카드의 모양을 PokeAPI 알 그림으로.
+7. 새 빌드 도구 `build-dex-text.ts` 로 `data/dex-text.json`(종별 분류·설명문, 한국어·영어)을 만든다. 도감 상세에 분류와 설명을 보인다. 한국어 설명이 없으면 영어 설명을 보인다. 미해금 종은 보이지 않는다.
+8. 놀아주기가 성공하면 그 포켓몬의 울음소리를 낸다. 설정의 `알림 소리` 가 꺼져 있으면 내지 않는다. 받은 소리는 `~/.claude/pokebuddy/cries/` 에 캐시한다.
+
+**위험** — 그림·소리를 받지 못하면 칸은 빈 채로, 소리는 나지 않는다. 울음소리가 거슬릴 수 있어 소리 설정을 따른다.
+
+**수용 검사** — 자체 검사(도감 설명 표·주소), 개발용 실행기로 가방·상점·돌보미집·도감 상세를 찍어 Figma 와 비교, `npm run selftest`·E2E·`check-docs`.
+
 ## 작업
 
 ### 저장 v3 전환의 작업
@@ -718,6 +738,13 @@ Figma 만 바꿨다. 코드는 바꾸지 않았다.
 - `config.js`: `PACKAGED`(Electron 이고 `process.defaultApp` 이 없음)이면 기본 모드가 `companion` 이다.
 - `src/main/app.ts`: 동반자의 `second-instance` 에서 관리 창을 연다. `syncLoginItem` 이 기동할 때와 관리 창의 `settings.set` 뒤에 `app.setLoginItemSettings` 를 부른다. 설치한 앱(`app.isPackaged`)에서만 한다.
 - 문서: `docs/guide.md` 의 "Windows 실행 파일"·"Windows 실행 파일 만들기", `README.md` 설치 절.
+
+### 공식 그림·도감 설명·울음소리의 작업
+
+- 도구·알 그림: `src/main/portraits.ts` 에 `iconUrl`(열쇠 `egg`·`item:<식별자>`)과 `icons()`, 채널 `manage:icons`. 관리 창 `iconOf` 가 가방 카드·상점 줄의 28 칸(`.thumb`, Figma)과 돌보미집 알(`.shell`)을 채운다. 상점의 포켓몬 상품은 초상, 랜덤알은 알 그림. 알 그림(96 × 96)은 가운데를 잘라 보인다.
+- 도감 설명: `src/tools/build-dex-text.ts` → `data/dex-text.json`(분류 1025 · 설명 한국어 898 · 영어 1025, `data:build` 끝에). `DexDetail.genus`·`flavor`(`src/tx/dex-detail.ts`, 지금 언어가 없으면 다른 언어). 도감 상세 머리 줄에 분류, 그 아래에 설명문.
+- 울음소리: `src/main/cries.ts`(`createCries`, `cryUrl`), 채널 `stage:cry`, 무대 렌더러가 `Audio` 로 한 번(소리 0.35). `stage.html` CSP 에 `media-src data:`. `src/main/app.ts` 의 무대 `care` 가 놀아주기 성공 때 `playCry` 를 부른다(알림 소리 설정을 따른다).
+- 검사: `selftest-dex-detail` (8)에 그림·소리 주소, (9) 공식 분류·설명.
 
 ### 포켓몬 요소의 공식 데이터 맞춤의 작업
 
@@ -922,6 +949,13 @@ SSOT: `docs/specs/s5.md` 의 종료와 재개, `docs/specs/modules.md` 의 저�
 - `npm run selftest` 전체, `node scripts/e2e-companion.cjs`(종료 코드 0), `check-docs` 통과.
 - 문서: 바뀐 문장(`guide.md`·`README.md`·진행표·이력·이 기록)을 쓰기 점검표로 다시 읽었다.
 - 자동 검사가 없는 것: 실제 설치·바로가기·제거, 두 번째 실행 때 관리 창이 열리는지, 로그인 시 시작 등록, 트레이 종료. 설치는 사용자 PC 를 바꾸므로 사용자 확인으로 남겼다.
+
+### 공식 그림·도감 설명·울음소리의 검수
+
+- 개발용 실행기 화면: 가방(이상한사탕·불꽃의돌 그림, 나머지 빈 칸), 상점(랜덤알 알 그림·이상한사탕), 박스 돌보미집(알 그림 둘), 도감 상세(파이리 — 도롱뇽포켓몬, 설명문, 불꽃 배지).
+- 울음소리 수정: 처음에 받지 못했다(null). PokeAPI `latest` 울음소리가 경로는 `.ogg` 인데 옛 종은 내용이 MP3(첫 바이트 FF FB)라 Ogg 검사에서 버려졌다. 두 형식을 받고 형식에 맞는 MIME 을 붙였다. 임시 폴더로 피카츄(MP3)·테라파고스·복숭악동(Ogg)을 받고, Electron 에서 둘 다 풀리는 것(0.93초·1.71초)을 확인했다.
+- `npm run selftest` 전체, E2E(종료 코드 0), `check-docs` 통과.
+- 자동 검사가 없는 것: 실제 무대에서 울음소리가 들리는지.
 
 ### 포켓몬 요소의 공식 데이터 맞춤의 검수
 

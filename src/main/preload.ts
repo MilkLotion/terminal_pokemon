@@ -35,6 +35,7 @@ const CH = {
   frame: "stage:frame",
   hover: "stage:hover",
   clickThrough: "stage:click-through",
+  cry: "stage:cry",
   ready: "stage:ready",
   hit: "stage:hit",
   pointer: "stage:pointer",
@@ -51,6 +52,7 @@ const bridge: StageBridge = {
   onFrame: (cb) => ipcRenderer.on(CH.frame, (_e, frame: StageFrame) => cb(frame)),
   onHover: (cb) => ipcRenderer.on(CH.hover, (_e, q: HoverQuery) => cb(q)),
   onClickThrough: (cb) => ipcRenderer.on(CH.clickThrough, (_e, on: boolean) => cb(on)),
+  onCry: (cb) => ipcRenderer.on(CH.cry, (_e, uri: string) => cb(uri)),
   hit: (id) => ipcRenderer.send(CH.hit, id),
   pointer: (msg) => ipcRenderer.send(CH.pointer, msg),
   log: (entry) => ipcRenderer.send(CH.log, entry),
@@ -72,6 +74,7 @@ const MANAGE = {
   drawRegion: "manage:draw-region",
   dim: "manage:dim",
   portraits: "manage:portraits",
+  icons: "manage:icons",
 } satisfies Record<string, ManageChannel>;
 
 const manage: ManageBridge = {
@@ -84,6 +87,7 @@ const manage: ManageBridge = {
   drawRegion: () => ipcRenderer.invoke(MANAGE.drawRegion) as Promise<ManageReply>,
   dim: (on) => ipcRenderer.send(MANAGE.dim, on),
   portraits: (asks) => ipcRenderer.invoke(MANAGE.portraits, asks) as Promise<Record<string, string | null>>,
+  icons: (keys) => ipcRenderer.invoke(MANAGE.icons, keys) as Promise<Record<string, string | null>>,
 };
 
 contextBridge.exposeInMainWorld("pokebuddyManage", manage);

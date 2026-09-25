@@ -18,6 +18,7 @@ const CH = {
   frame: "stage:frame",
   hover: "stage:hover",
   clickThrough: "stage:click-through",
+  cry: "stage:cry",
   ready: "stage:ready",
   hit: "stage:hit",
   pointer: "stage:pointer",
@@ -54,6 +55,7 @@ export interface StageWindow {
   sendSheets(sheets: LookSheets): void;
   sendFrame(frame: StageFrame): void;
   sendClickThrough(on: boolean): void;
+  sendCry(uri: string): void; // 울음소리 한 번
   popup(template: MenuItemConstructorOptions[]): void;
   close(): void;
 }
@@ -255,6 +257,7 @@ export function createStageWindow(opts: StageWindowOptions): StageWindow {
     sendSheets: (sheets) => send(CH.sheets, sheets),
     sendFrame: (frame) => send(CH.frame, frame),
     sendClickThrough: (on) => send(CH.clickThrough, on),
+    sendCry: (uri) => send(CH.cry, uri),
 
     // 우클릭 — 네이티브 메뉴. 프레임 없는 창이라 렌더러가 그리지 않고 메인이 띄운다
     popup(template) {
