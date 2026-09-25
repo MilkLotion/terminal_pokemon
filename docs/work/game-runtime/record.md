@@ -581,6 +581,12 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 - `npm run selftest` 전체, E2E(종료 코드 0), `check-docs` 통과.
 - 자동 검사가 없는 것: 실제 무대에서 클릭 때 울음소리가 들리는지.
 
+**후속** (사용자: "울음소리 조금 줄이고, 커밋. 스크롤때문에 왼쪽으로 살짝 치우쳐진거같아서 좀 보기별로네. 스크롤 너비를 많이 줄여서 얇게 만들어. 도감도 전체 다 보이게 하고. (200종말고 전체)")
+- 울음소리 음량 0.35 → 0.2. 여기까지 커밋 `a77c3cc`.
+- 스크롤 막대: 창 안 모든 스크롤에 6px 막대(`::-webkit-scrollbar`), 본문 오른쪽 여백을 20 → 14 로 줄여 막대 포함 좌우 20 이 되게 했다.
+- 도감: 200종 제한(`DEX_SHOWN`)을 없애고 전부 그린다. `.dex-cell` 에 `content-visibility: auto` 와 `contain-intrinsic-block-size: auto 108px`. 처음에 `contain-intrinsic-size: auto 108px` 로 두어 칸 폭까지 108 로 잡혀 가로로 넘쳤다 — 높이 축만 어림하게 고쳤다. 임시 저장으로 1025칸을 다시 그리는 데 3ms.
+- 검수: 도감·상점 화면을 찍어 좌우 여백과 가로 넘침 없음을 확인했다. `npm run selftest`·E2E 통과.
+
 ## 작업
 
 ### 저장 v3 전환의 작업

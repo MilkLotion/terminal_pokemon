@@ -58,8 +58,6 @@ const SLEEP_CHOICES = [
   { id: "0", label: "잠들지 않음" },
 ];
 
-// 한 번에 다 그리면 무겁다. 도감은 앞에서부터 이만큼만 보여 준다
-const DEX_SHOWN = 200;
 const DEX_COLUMNS = 5; // manage.html 의 .dex-grid 열 수와 같다
 
 // 한 번에 살 수 있는 최대 수량. `[스펙 미확정]` 정식 상한이 정해지면 여기를 고친다
@@ -651,7 +649,8 @@ function drawDex(v: Snapshot): void {
     return;
   }
   // 상세 패널은 고른 칸이 있는 줄 바로 아래에 격자 폭으로 끼운다. 목록이 길어도 눈앞에 열린다
-  const shown = rows.slice(0, DEX_SHOWN);
+  // 전부 그린다(2026-09-25 사용자 요청). 화면 밖 칸은 CSS content-visibility 로 그리기를 미루고, 초상은 보이는 칸만 받는다
+  const shown = rows;
   const picked = dexDetail && dexDetail.slug === dexPick ? shown.findIndex((r) => r.slug === dexPick) : -1;
   const panelAfter = picked < 0 ? -1 : Math.min(Math.floor(picked / DEX_COLUMNS) * DEX_COLUMNS + DEX_COLUMNS - 1, shown.length - 1);
   const grid = el("div", "dex-grid");
@@ -660,7 +659,6 @@ function drawDex(v: Snapshot): void {
     if (i === panelAfter && dexDetail) grid.appendChild(dexPanel(dexDetail));
   });
   bodyEl.appendChild(grid);
-  if (rows.length > DEX_SHOWN) bodyEl.appendChild(el("div", "empty-note", `${rows.length}종 가운데 앞 ${DEX_SHOWN}종을 보여 줍니다.`));
 }
 
 // ── 상점 ───────────────────────────────────────────────────────────────────────

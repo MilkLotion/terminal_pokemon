@@ -159,12 +159,31 @@
         gap: 4px;
       }
 
-      /* 본문 — 여기만 스크롤한다. 스크롤 막대 자리를 늘 비워 둔다 — 탭마다 막대가 생겼다 없어지면 카드 폭이 흔들린다 */
+      /* 본문 — 여기만 스크롤한다. 스크롤 막대 자리를 늘 비워 둔다 — 탭마다 막대가 생겼다 없어지면 카드 폭이 흔들린다.
+         막대는 6px 로 얇게 하고, 그만큼 오른쪽 여백을 줄여 내용이 가운데에 오게 한다(20 - 6 = 14) */
       main {
         flex: 1;
         overflow-y: auto;
         scrollbar-gutter: stable;
-        padding: 16px 20px 32px;
+        padding: 16px 14px 32px 20px;
+      }
+      /* 스크롤 막대 — 창 안의 모든 스크롤(본문·모달)에 얇은 막대를 쓴다 */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        border-radius: 3px;
+        background: var(--line);
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--disabled);
+      }
+      ::-webkit-scrollbar-button {
+        display: none;
       }
       .head {
         display: flex;
@@ -1147,6 +1166,9 @@
       }
       .dex-cell {
         position: relative;
+        /* 1110 칸을 모두 그린다 — 화면 밖 칸은 그리기를 미룬다. 크기는 칸 높이 어림값이다 */
+        content-visibility: auto;
+        contain-intrinsic-block-size: auto 108px;
         border-radius: 10px;
         border: 1px solid var(--line);
         background: var(--surface);
