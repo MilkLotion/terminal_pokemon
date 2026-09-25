@@ -5,6 +5,7 @@
 //   companion  기기당 하나, 항상 위. 맨 앞 터미널 창을 따르고 그 창의 활성 터미널 상태를 따른다 (follow/front). 트레이로 끝낸다
 // 설정·경로는 config.js에서 읽음. 육성과 해금은 writer만 갱신
 import fs from "node:fs";
+import path from "node:path";
 import { app, nativeImage, screen, shell, Notification } from "electron";
 import { starters, unlockRules } from "../dex/unlocks";
 import type { HelperWindow, SelfMark } from "../follow/types";
@@ -20,6 +21,7 @@ import { createSaveParty, type SaveParty } from "./save-party";
 import { createGame, type GameV3 } from "./game";
 import { careItem, petStatus } from "./status";
 import { openManage } from "./manage-window";
+import { createBannerWindow, type BannerWindow } from "./banner-window";
 import { PATHS, loadConfig, logoFile, preloadFile, rendererFile, saveConfig } from "./paths";
 import { pickStarter } from "./picker-window";
 import { createShortcuts, type Shortcuts } from "./shortcuts";
@@ -28,8 +30,8 @@ import { createStageWindow, type StageWindow } from "./stage-window";
 import { langOf, natureName, petLabel, setLang, t } from "./text";
 import { createTray, type TrayHandle } from "./tray";
 import { STATE_RULES } from "../state/rules";
-import { defOf } from "../achievement/core";
-import type { TickEvents } from "../state/time";
+import { createNotifier, type Notifier } from "../notify/notifier";
+import type { ManageRoute } from "../shared/manage";
 import type { Command } from "../shared/types";
 
 let lastTick = 0;
@@ -81,6 +83,7 @@ const log = debug ? (o: Record<string, unknown>) => void process.stdout.write(`$
 const duplicate = mode === "companion" && !app.requestSingleInstanceLock();
 if (duplicate) app.quit();
 
+
 // 펫 자신을 가리는 표 — 세션·창 펫은 전부 같은 Electron 이라 이름으로 함께 걸러야 맨 앞 창에서 빠진다 (follow/front frontWindow)
 const SELF: SelfMark = { pid: process.pid, appNames: new Set(["electron", String(app.getName() || "").toLowerCase()]) };
 
@@ -96,6 +99,9 @@ const intervals: NodeJS.Timeout[] = [];
 
 // 저장을 쓰는 곳은 하나다 — 거래 실행기. 무대·메뉴·관리 창이 모두 이 하나를 본다
 let game: GameV3 | null = null;
+// 알림 배너 — 줄은 notifier 가, 창은 bannerWin 이 맡는다. 저장을 쓰는 프로세스만 배너를 띄운다
+let notifier: Notifier | null = null;
+let bannerWin: BannerWindow | null = null;
 let party: PartySource | SaveParty | null = null;
 const saveParty = (): SaveParty | null => (party?.kind === "save" ? party : null);
 let lifetime: Lifetime | null = null;
@@ -209,9 +215,11 @@ const displayName = (): string => {
 
 // 관리 창의 명령도 커맨드 처리기를 거친다. reader 면 mailbox 로 writer 에 보내고,
 // 진화 그림 준비와 무대 반응도 다른 표면과 같은 길로 간다
-const openManageWindow = (): void => {
+// route — 알림 배너의 `바로가기` 가 옮겨 갈 곳
+const openManageWindow = (route?: ManageRoute): void => {
   if (!game) return;
   openManage({
+    ...(route ? { route } : {}),
     preload: preloadFile(),
     html: rendererFile("manage.html"),
     game,
@@ -224,7 +232,7 @@ const openManageWindow = (): void => {
 
 // 상점·도감·가방은 관리 창이 맡는다. 트레이에는 창을 여는 자리만 둔다 (docs/specs/s5.md "화면 구조")
 const trayTemplate = () => [
-  { label: "관리 창 열기", click: openManageWindow },
+  { label: "관리 창 열기", click: () => openManageWindow() },
   { type: "separator" as const },
   ...trayMenu(
     { name: displayName(), hidden: userHidden, ghost: !!config.clickThrough },
@@ -243,15 +251,6 @@ function notifyGame(body: string): void {
     if (Notification.isSupported()) new Notification({ title: "pokebuddy", body }).show();
   } catch (e) { log?.({ notification: "failed", message: String(e) }); }
 }
-
-// 시간이 흐르며 생긴 일을 알린다. 배너 화면이 생기기 전까지는 OS 알림으로 보인다
-// (docs/specs/s5.md "알림 배너" — 같은 순간이면 부화 → 진화 → 업적 순서다)
-function notifyTick(events: TickEvents): void {
-  if (events.hatchReady.length) notifyGame(t("game.hatchReady"));
-  for (const id of events.achieved) notifyGame(t("game.achieved", { name: achievementName(id) }));
-}
-
-const achievementName = (id: string): string => defOf(id)?.ko ?? id;
 
 function runGameCommand(command: Command): void {
   void commands?.dispatcher.dispatch(command).then((result) => {
@@ -274,7 +273,7 @@ function showPetMenu(id: string): void {
   });
   if (pet) items.splice(items.length - 2, 0,
     { type: "separator" as const },
-    { label: "관리 창 열기", click: openManageWindow },
+    { label: "관리 창 열기", click: () => openManageWindow() },
   );
   stageWin.popup(items);
 }
@@ -308,7 +307,7 @@ function stateTick(): void {
       const events = game.tick({ workMs });
       if (events) workMs = 0; // 쓰지 못했으면 다음 틱에 흐른 시간과 함께 다시 넘긴다
       worker.refresh();
-      if (events) notifyTick(events);
+      notifier?.tick(); // 부화 준비·진화 가능·업적 미수령을 배너 줄에 세운다 (src/notify)
       const points = Math.floor(worker.save()?.points.balance ?? 0);
       if (points !== lastMenuPoints) {
         lastMenuPoints = points;
@@ -340,6 +339,15 @@ async function main(): Promise<void> {
   } else {
     // 저장을 쓰는 것은 잠금을 잡은 프로세스 하나다. 실행기에 그 조건을 걸어 reader 는 쓰지 못하게 한다
     game = createGame({ file: PATHS.save, canWrite: () => saveParty()?.isWriter() ?? false });
+    const reader = game;
+    bannerWin = createBannerWindow({
+      preload: preloadFile(),
+      html: rendererFile("banner.html"),
+      sound: () => reader.read()?.settings.sound ?? true,
+      onGo: (route) => openManageWindow(route),
+      onDone: () => notifier?.done(),
+    });
+    notifier = createNotifier({ file: path.join(path.dirname(PATHS.save), "notify.json"), read: reader.read, show: (b) => bannerWin?.show(b) });
     party = createSaveParty({ game, paths: PATHS, mode, log });
   }
 
@@ -549,6 +557,8 @@ app.on("before-quit", () => {
   tray?.destroy();
   tray = null;
   commands?.stop();
+  bannerWin?.close();
+  bannerWin = null;
   party?.stop(); // 저장 잠금을 놓는다
 });
 

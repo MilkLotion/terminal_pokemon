@@ -12,6 +12,7 @@ import type {
   DexEntry,
   EggView,
   ManageReply,
+  ManageRoute,
   PetView,
   ShopItemView,
   SlotView,
@@ -999,6 +1000,7 @@ function drawPickSlot(petId: string): void {
 
 function achievementRow(a: AchievementView): HTMLElement {
   const row = el("div", `achievement ${a.state}`);
+  row.dataset.id = a.id; // 알림 배너의 `바로가기` 가 이 줄로 옮겨 온다
   row.appendChild(el("span", "state"));
   const body = el("div", "body");
   body.append(el("div", "label", a.name), el("div", "hint", a.desc));
@@ -1307,6 +1309,23 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && dialog) close();
 });
 
-void refresh();
+// 알림 배너의 `바로가기` — 부화는 돌보미집, 진화는 개체 상세, 업적은 업적 창의 그 줄 (docs/specs/s5.md "알림 배너의 개별 표시")
+function goTo(route: ManageRoute): void {
+  if (route.to === "daycare") {
+    close();
+    tab = "box";
+    draw();
+    bodyEl.querySelector(".daycare")?.scrollIntoView({ block: "start" });
+  } else if (route.to === "pet") {
+    if (petOf(route.petId)) openPet(route.petId);
+  } else {
+    open({ kind: "achievements" });
+    dialogEl.querySelector(`.achievement[data-id="${CSS.escape(route.id)}"]`)?.scrollIntoView({ block: "nearest" });
+  }
+}
+
+// 첫 화면을 그린 뒤에 옮긴다 — 창을 새로 열면서 온 목적지는 스냅샷보다 먼저 올 수 있다
+const firstDraw = refresh();
+window.pokebuddyManage.onRoute((route) => void firstDraw.then(() => refresh()).then(() => goTo(route)));
 // 시간이 흐르면 만복도·쿨타임·알 준비가 바뀐다. 창이 떠 있는 동안 주기적으로 다시 읽는다
 setInterval(() => void refresh().then(drawDialog), 5000);

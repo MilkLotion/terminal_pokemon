@@ -198,7 +198,11 @@ export interface ManageReply {
 
 // 도감은 종이 1000개를 넘어 스냅샷에 담지 않는다. 탭을 열 때만 따로 부른다.
 // CLI 연결은 저장 밖을 보므로 역시 따로 부른다
-export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:dex-detail" | "manage:agents";
+// manage:route 는 메인 → 렌더러 한 방향이다. 알림 배너의 `바로가기` 가 관리 창을 어디로 옮길지 알린다
+export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:dex-detail" | "manage:agents" | "manage:route";
+
+// 관리 창 안의 목적지. 부화는 돌보미집, 진화는 개체 상세, 업적은 업적 창 (docs/specs/s5.md "알림 배너의 개별 표시")
+export type ManageRoute = { to: "daycare" } | { to: "pet"; petId: string } | { to: "achievements"; id: string };
 
 export interface ManageBridge {
   snapshot: () => Promise<Snapshot | null>; // 저장이 없으면 null
@@ -206,4 +210,26 @@ export interface ManageBridge {
   dex: () => Promise<DexEntry[]>;
   dexDetail: (slug: string) => Promise<DexDetail | null>; // 도감 칸 하나의 상세
   agents: (req?: { name: string; action: AgentAction }) => Promise<AgentReply>; // 인자가 없으면 읽기만 한다
+  onRoute: (cb: (route: ManageRoute) => void) => void; // 배너의 `바로가기` 로 옮겨 갈 곳
+}
+
+// 알림 배너 창 — 배너 하나의 문구와 `바로가기` 목적지. 문구는 src/notify/banner.ts 가 만든다
+export type BannerKind = "hatch" | "evolve" | "achievement";
+
+export interface BannerView {
+  key: string;
+  kind: BannerKind;
+  title: string; // 부화 준비 완료 · 진화 가능 · 업적 달성
+  target: string; // 돌보미집 알 N · <이름> Lv.N · 업적 이름
+  go: string; // 바로가기
+  route: ManageRoute;
+}
+
+// banner:show 는 메인 → 렌더러, 나머지는 렌더러 → 메인
+export type BannerChannel = "banner:show" | "banner:go" | "banner:hover";
+
+export interface BannerBridge {
+  onShow: (cb: (banner: BannerView) => void) => void;
+  go: (key: string) => void; // `바로가기` 를 눌렀다
+  hover: (on: boolean) => void; // 커서가 배너 위에 있는 동안 사라지지 않는다
 }

@@ -7,6 +7,7 @@
 // `--detail` 을 주면 첫 칸을 눌러 개체 상세까지 찍는다.
 // `--click <선택자>` 를 주면 그 요소를 한 번 눌러 놓고 찍는다. 여러 번 주면 순서대로 누른다.
 // `--input <선택자>=<글자>` 를 주면 누른 뒤에 그 입력칸에 한 글자씩 넣는다. 다 넣은 뒤 포커스가 있는 요소의 id 를 출력한다.
+// `--route <json>` 을 주면 알림 배너의 `바로가기` 처럼 그 목적지로 연다. 예: '{"to":"pet","petId":"p1"}'
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -37,6 +38,7 @@ const argAfter = (flag) => {
 const argsAfter = (flag) => process.argv.map((v, i) => (v === flag ? process.argv[i + 1] : null)).filter((v) => v != null);
 const shotFile = argAfter("--shot");
 const tabLabel = argAfter("--tab");
+const routeArg = argAfter("--route");
 
 // 보기용 저장 — 꺼낸 마리, 숨긴 마리, 빈 칸, 잠긴 칸, 박스, 알, 가방이 한 번에 보이게 만든다
 function seed(empty, now) {
@@ -123,7 +125,8 @@ app.whenReady().then(async () => {
   const { createGame, openManage, paths, store, empty } = loadApp();
   store.write(file, seed(empty, Date.now()));
 
-  const win = openManage({ preload: paths.preloadFile(), html: paths.rendererFile("manage.html"), game: createGame({ file }) });
+  const route = routeArg ? JSON.parse(routeArg) : undefined;
+  const win = openManage({ preload: paths.preloadFile(), html: paths.rendererFile("manage.html"), game: createGame({ file }), ...(route ? { route } : {}) });
   if (!shotFile) return;
 
   // 탭 전환과 개체 상세는 그려진 뒤에야 누를 수 있다. 누른 뒤에도 다시 그릴 틈을 준다

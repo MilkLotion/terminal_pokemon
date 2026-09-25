@@ -4,7 +4,7 @@
 // 창을 열 때 흐른 시간을 먼저 적용한다. 그래야 만복도와 쿨타임이 지금 값으로 보인다.
 // 창은 하나만 둔다. 다시 열면 이미 떠 있는 창을 앞으로 가져온다.
 import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
-import type { AgentAction, ManageChannel, ManageReply, ManageRequest } from "../shared/manage";
+import type { AgentAction, ManageChannel, ManageReply, ManageRequest, ManageRoute } from "../shared/manage";
 import { WINDOW_V3_RULES } from "../save/rules.js";
 import { createGame, type GameV3 } from "./game.js";
 import { windowIcon } from "./paths.js";
@@ -15,6 +15,7 @@ const CH = {
   dex: "manage:dex",
   dexDetail: "manage:dex-detail",
   agents: "manage:agents",
+  route: "manage:route",
 } satisfies Record<string, ManageChannel>;
 
 // 창 조작 단추가 앉는 자리. 색은 헤더와 같아야 이어져 보인다 (`--surface` 와 `--muted`)
@@ -27,6 +28,7 @@ export interface ManageOptions {
   // 명령을 보내는 길. 앱은 커맨드 처리기를 준다 — writer 면 실행기로, reader 면 mailbox 로 간다.
   // 없으면 실행기를 바로 부른다 (개발용 실행기)
   send?: (req: ManageRequest) => Promise<ManageReply>;
+  route?: ManageRoute; // 열면서 옮겨 갈 곳 — 알림 배너의 `바로가기`
 }
 
 let win: BrowserWindow | null = null;
@@ -71,7 +73,10 @@ function wire(game: GameV3, send: (req: ManageRequest) => Promise<ManageReply>):
 
 export function openManage(opts: ManageOptions): BrowserWindow {
   if (win && !win.isDestroyed()) {
+    if (win.isMinimized()) win.restore();
+    win.show();
     win.focus();
+    if (opts.route) win.webContents.send(CH.route, opts.route);
     return win;
   }
   const game = opts.game ?? createGame();
@@ -97,6 +102,9 @@ export function openManage(opts: ManageOptions): BrowserWindow {
   win.on("closed", () => {
     win = null;
   });
+  const route = opts.route;
+  // 문서를 다 읽은 뒤에 보낸다. 렌더러는 첫 화면을 그린 뒤에 옮긴다
+  if (route) win.webContents.once("did-finish-load", () => win?.webContents.send(CH.route, route));
   void win.loadFile(opts.html);
   return win;
 }
