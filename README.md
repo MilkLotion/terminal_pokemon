@@ -22,6 +22,9 @@ Claude Code · Codex CLI · Gemini CLI 안에서 띄우면 그 CLI 가 일하는
 
 ## 설치
 
+Windows 는 설치 파일 `pokebuddy-Setup-<버전>.exe` 로도 설치한다. 누르면 동반자로 뜬다 — [Windows 실행 파일](docs/guide.md#windows-실행-파일).
+만드는 방법은 `npm run dist:win` 이다.
+
 ```bash
 npm install -g pokebuddy
 pokebuddy setup

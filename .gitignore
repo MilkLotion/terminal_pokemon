@@ -4,6 +4,7 @@ helpers/winbounds
 .DS_Store
 *.tgz
 dist/
+release/
 
 # PC Settings
 .playwright-mcp/

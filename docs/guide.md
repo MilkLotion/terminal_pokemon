@@ -77,6 +77,24 @@ PMD 스프라이트는 **CC BY-NC 4.0** 이다 — [라이선스](#라이선스)
 
 ## 설치
 
+두 가지 판이 있다. 두 판은 같은 저장 폴더(`~/.claude/pokebuddy`)를 쓴다. 파티와 포인트가 같다.
+
+### Windows 실행 파일
+
+`pokebuddy-Setup-<버전>.exe` 를 실행한다. Node.js 는 필요 없다.
+
+- 묻지 않고 바로 설치한다(원클릭). 설치 위치는 `%LOCALAPPDATA%\Programs\pokebuddy` 다. 관리자 권한이 필요 없다.
+- 설치가 끝나면 동반자로 뜬다. 처음이면 첫 포켓몬 선택 창이 뜬다.
+- 시작 메뉴와 바탕화면에 바로가기를 만든다.
+- 떠 있을 때 바로가기를 다시 누르면 관리 창을 연다.
+- 설정의 "로그인 시 시작"을 켜면 Windows 에 로그인할 때 함께 뜬다.
+- 코드 서명이 없다. 처음 실행하면 SmartScreen 경고가 뜬다. "추가 정보 → 실행"을 누른다.
+- 끝내기는 트레이 아이콘의 메뉴에서 한다. 제거는 Windows 설정의 앱 목록에서 한다. 제거해도 저장 폴더는 남는다.
+- 세션 펫(`!pokebuddy eevee`)과 VS Code 창 펫은 npm 판으로 쓴다.
+- CLI 상태 연동(관리 창 설정의 "연결")은 훅을 `node` 로 실행한다. 쓰려면 Node.js 가 있어야 한다.
+
+### npm
+
 ```bash
 npm install -g pokebuddy
 pokebuddy setup
@@ -794,6 +812,16 @@ npm install -g ./pokebuddy-<버전>.tgz   # 올리기 전에 이 파일로 설�
 - 확장을 고쳤으면 `vscode-extension/package.json` 의 버전도 올린다. `pokebuddy setup` 은 같은 버전도 덮어 설치한다. 하지만 버전이 같으면 사용자가 어느 쪽인지 구분할 수 없다
 - Electron 은 시험한 버전으로 고정해 두었다(`dependencies.electron`). 올릴 때는 펫 실행·드래그·산책을 다시 확인한다
 - PMD 그림은 패키지에 들어가지 않는다(CC BY-NC). 받는 사람 컴퓨터에서 실행할 때 내려받는다
+
+### Windows 실행 파일 만들기
+
+```powershell
+npm run dist:win    # release/pokebuddy-Setup-<버전>.exe
+```
+
+- `scripts/build-exe.cjs` 가 실행에 필요한 파일(`package.json` 의 `files`)만 `release/app/` 에 모은다. 그다음 `electron-builder` 로 묶는다.
+- 처음 만들 때 Electron 과 NSIS 를 내려받는다. 인터넷이 필요하다.
+- 코드 서명을 하지 않는다. 설치 확인은 `release/win-unpacked/pokebuddy.exe` 를 먼저 띄워 본 뒤 설치 파일로 한다.
 
 ### 로고
 

@@ -82,7 +82,21 @@ const log = debug ? (o: Record<string, unknown>) => void process.stdout.write(`$
 // pokebuddy companion 이 lock 파일로 먼저 가리지만 동시에 두 번 치면 둘 다 통과한다 — 둘째는 창을 만들기 전에 끝난다
 const duplicate = mode === "companion" && !app.requestSingleInstanceLock();
 if (duplicate) app.quit();
+// 떠 있는 동반자를 다시 실행했다(설치한 앱의 바로가기를 한 번 더 누름 등) — 새로 띄우지 않고 관리 창을 연다
+else if (mode === "companion") app.on("second-instance", () => openManageWindow());
 
+// 로그인 시 시작 — 설정 값을 OS 에 적용한다. 설치한 앱에서만 한다.
+// 저장소의 `electron .` 을 등록하면 다음 로그인 때 앱 없는 빈 Electron 이 뜨기 때문이다
+let loginItem: boolean | null = null;
+function syncLoginItem(): void {
+  if (!app.isPackaged || !game) return;
+  const on = game.read()?.settings.startOnLogin;
+  if (on == null || on === loginItem) return;
+  try {
+    app.setLoginItemSettings({ openAtLogin: on });
+    loginItem = on;
+  } catch (e) { log?.({ loginItem: "failed", message: String(e) }); }
+}
 
 // 펫 자신을 가리는 표 — 세션·창 펫은 전부 같은 Electron 이라 이름으로 함께 걸러야 맨 앞 창에서 빠진다 (follow/front frontWindow)
 const SELF: SelfMark = { pid: process.pid, appNames: new Set(["electron", String(app.getName() || "").toLowerCase()]) };
@@ -225,7 +239,9 @@ const openManageWindow = (route?: ManageRoute): void => {
     game,
     send: async (req) => {
       if (!commands) return { ok: false, reason: "not-ready" };
-      return commands.dispatcher.dispatch({ cmd: req.cmd as Command["cmd"], target: req.target, args: req.args, from: "settings" });
+      const reply = await commands.dispatcher.dispatch({ cmd: req.cmd as Command["cmd"], target: req.target, args: req.args, from: "settings" });
+      if (req.cmd === "settings.set") syncLoginItem();
+      return reply;
     },
   });
 };
@@ -525,6 +541,7 @@ async function main(): Promise<void> {
   }
 
   applyClickThrough(!!config.clickThrough, false);
+  syncLoginItem();
   bootReady = true;
   lifetime.check(); // 창이 생겼으니 pid 파일에 ready 를 적는다 — pokebuddy 명령이 이걸 보고 기다림을 끝낸다
 

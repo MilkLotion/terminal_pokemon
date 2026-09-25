@@ -40,6 +40,9 @@ const PATHS = {
 //   window     VS Code 확장이 창마다 띄운 펫 — 그 창 위에만, 그 창의 활성 터미널 상태를 따른다. 확장 호스트와 함께 끝난다
 //   companion  pokebuddy companion — 기기당 하나, 항상 위. 맨 앞 터미널 창을 따른다. 트레이로 끝낸다
 const MODES = new Set(["session", "window", "companion"]);
+// 설치한 실행 파일(pokebuddy.exe)인가 — 저장소의 `electron .` 과 npm 판은 process.defaultApp 이 true 다.
+// 설치한 앱은 부른 세션이 없으므로 모드를 주지 않으면 동반자로 뜬다
+const PACKAGED = !!process.versions.electron && !process.defaultApp;
 
 // 사용자가 손대는 값 — PATHS.config 에 저장된다. 그림은 PMD 한 가지라 그림 고르는 값은 없다
 // 여기 없는 키(옛 그림·위치 옵션 art · pos · fps 등)는 읽을 때 버리고, 다음에 저장할 때 파일에서도 빠진다 (load · save)
@@ -111,7 +114,7 @@ function load() {
   const config = { ...USER_DEFAULTS, ...INTERNAL, ...known };
   if (env.POKEBUDDY_SLUG) config.slug = env.POKEBUDDY_SLUG; // 위치 키를 만들기 전에 펫 이름부터 확정
 
-  const mode = MODES.has(env.POKEBUDDY_MODE) ? env.POKEBUDDY_MODE : "session";
+  const mode = MODES.has(env.POKEBUDDY_MODE) ? env.POKEBUDDY_MODE : PACKAGED ? "companion" : "session";
 
   // 창 위치는 드래그할 때 자동 저장되는 값 — 사용자가 적을 일은 없다
   // 펫마다 따로 기억한다. 한 칸만 두면 두 마리를 띄웠을 때 한 마리를 옮기는 순간 다른 마리 자리가 덮인다.

@@ -369,6 +369,56 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 3. 개발용 관리 창 실행기로 세 `바로가기` 이동을 찍는다.
 4. `npm run selftest`, `node scripts/e2e-companion.cjs`, `node scripts/check-docs.cjs` 통과.
 
+### Windows 실행 파일의 설계
+
+날짜: 2026-09-25. 상태: 구현·검수 완료, 실제 설치는 사용자 확인 대기. 사용자 요청: "exe파일같은 실행파일로 있음 좋을거같은데". 새 패키지 `electron-builder`(개발용) 추가 승인: "진행". 설계 승인: "진행". 작업 후보 10번(S6 배포)의 첫 부분이다.
+
+**관측** (2026-09-25)
+- 지금 설치는 `npm install -g pokebuddy` 뿐이다. Node.js 22.12 이상이 필요하다. 동반자는 `pokebuddy companion` 으로 띄운다.
+- 실행 모드는 `POKEBUDDY_MODE` 환경 변수로 정한다. 없으면 `session` 이다(`config.js`). 세션 펫은 부른 터미널이 끝나면 함께 끝나므로 더블클릭 실행에 맞지 않는다.
+- 동반자를 직접 실행하면 앱이 `companion.lock` 을 스스로 만든다(`src/main/lifetime.ts` `claim`). 두 번째 실행은 단일 인스턴스 잠금으로 바로 끝난다.
+- 앱은 파일을 `config.js` 가 있는 폴더 기준으로 찾는다(`PATHS.project`). 그림·데이터·HTML·`helpers/winbounds.ps1`·`cli/setup.js`·`dist/hooks` 가 모두 그 아래에 있어야 한다.
+- 로그인 시 시작 설정(`settings.startOnLogin`)은 저장만 되고 OS 에 적용하는 코드가 없다.
+- 상태 훅은 `node "<경로>"` 로 등록된다(`cli/setup.js` `hookCommand`). 훅을 쓰려면 Node.js 가 필요하다.
+- `electron` 은 `dependencies` 에 있다. npm 판 CLI 가 실행 때 쓰기 때문이다. `electron-builder` 는 앱의 `dependencies` 에 `electron` 이 있으면 묶기를 거부한다.
+- 로고 `assets/logo/out/logo.ico` 가 있다.
+
+**목표**
+1. `npm run dist:win` 한 번으로 `release/pokebuddy-Setup-<버전>.exe` 를 만든다.
+2. 설치 파일: 사용자 폴더에 설치(관리자 권한 없음), 설치 위치 선택 가능, 시작 메뉴·바탕화면 바로가기, 제거 프로그램 등록. 제거해도 저장 폴더(`~/.claude/pokebuddy`)는 지우지 않는다.
+3. 설치한 앱을 실행하면 동반자 모드로 뜬다. 첫 실행이면 포켓몬 선택 창이 뜬다. 트레이 아이콘이 생긴다.
+4. 앱이 이미 떠 있을 때 다시 실행하면 새로 띄우지 않고 관리 창을 연다.
+5. 설정의 "로그인 시 시작"을 OS 에 적용한다. 설치한 앱에서만 적용한다 — 저장소에서 `electron .` 으로 띄운 앱을 등록하면 빈 Electron 이 뜨기 때문이다.
+6. 저장 폴더는 npm 판과 같다. 두 판이 같은 파티와 포인트를 본다.
+
+**방법**
+- `scripts/build-exe.cjs`(신규): ① `npm run build` ② `release/app/` 에 실행에 필요한 파일만 복사하고, 의존성이 없는 작은 `package.json`(이름·버전·`main`)을 만든다 ③ `electron-builder` API 로 `release/app` 을 묶는다. Electron 버전은 루트 `package.json` 의 `electron` 값을 쓴다. 이렇게 하면 루트의 `dependencies` 를 바꾸지 않는다.
+- 복사할 파일은 루트 `package.json` 의 `files` 목록과 같다. `vscode-extension`·`*.tgz`·빌드 도구는 뺀다.
+- asar 로 묶지 않는다. 훅 원본 복사, PowerShell 도우미, `cli/setup.js` 가 실제 파일 경로를 쓰기 때문이다.
+- `config.js`: 설치한 앱(`process.defaultApp` 이 없는 Electron)이고 `POKEBUDDY_MODE` 가 없으면 기본 모드를 `companion` 으로 한다. 저장소 실행과 npm 판은 지금과 같다.
+- `src/main/app.ts`: 동반자의 `second-instance` 에서 관리 창을 연다. 설치한 앱이면 시작할 때와 설정이 바뀔 때 `app.setLoginItemSettings({ openAtLogin })` 를 부른다.
+- `package.json`: `devDependencies` 에 `electron-builder`, 스크립트 `dist:win`. `.gitignore` 에 `release/`.
+
+**범위 밖**
+- 코드 서명. 서명하지 않은 exe 는 처음 실행 때 SmartScreen 경고가 뜬다("추가 정보 → 실행").
+- mac dmg, 자동 업데이트, 배포 사이트 게시.
+- exe 판에서 세션 펫(`!pokebuddy eevee`)과 VS Code 창 펫. 이 둘은 npm 판으로 쓴다.
+- Node.js 없이 도는 상태 훅. 첫 판은 훅에 Node.js 가 필요하다. 없는 경우의 안내는 따로 정한다.
+- 로그인 시 시작의 기본값(계약은 켜짐, 저장 기본값은 꺼짐). 작업 후보 7번에서 정한다.
+
+**SSOT 파일** — `scripts/build-exe.cjs`(신규), `package.json`, `package-lock.json`, `.gitignore`, `config.js`, `src/main/app.ts`, `docs/guide.md`(설치 안내), `README.md`(설치 절).
+
+**위험**
+- `electron-builder` 는 빌드할 때 NSIS 와 Electron 파일을 인터넷에서 받는다. 오프라인에서는 빌드가 실패한다.
+- 실제 설치는 사용자 PC 의 프로그램 목록·바로가기·레지스트리를 바꾼다. 설치 확인은 사용자 승인 뒤에 한다.
+- 설치 폴더를 바꿔 다시 설치하면 등록된 훅 경로는 영향을 받지 않는다. 훅은 `~/.claude/scripts/hooks` 로 복사해서 쓰기 때문이다.
+
+**수용 검사**
+1. `npm run dist:win` 이 설치 파일과 `release/win-unpacked/pokebuddy.exe` 를 만든다.
+2. 임시 HOME 으로 `win-unpacked/pokebuddy.exe` 를 띄우면 동반자로 뜨고, 임시 폴더에 저장과 `companion.lock` 이 생긴다(`POKEBUDDY_SLUG` 로 선택 창을 건너뛴다). 두 번째 실행은 바로 끝난다.
+3. `npm run selftest`, `node scripts/e2e-companion.cjs`, `check-docs` 통과.
+4. 사용자 확인: 설치 파일로 설치 → 바로가기 실행 → 제거.
+
 ## 작업
 
 ### 저장 v3 전환의 작업
@@ -537,6 +587,15 @@ Figma 만 바꿨다. 코드는 바꾸지 않았다.
 - 개발용 실행기: `scripts/dev-banner.cjs`(배너 한 장 찍기, `--go` 로 바로가기 확인), `scripts/dev-manage.cjs --route <json>`.
 - 새 자체 검사 `src/tools/selftest-notify.ts` 를 `npm run selftest` 에 더했다.
 
+### Windows 실행 파일의 작업
+
+- `electron-builder` 26.15.3 을 `devDependencies` 에 더했다(`package-lock.json` 갱신).
+- `scripts/build-exe.cjs`: `files` 목록을 `release/app/` 에 모으고(`vscode-extension` vsix·`postinstall.js`·`dist/tools` 제외), 의존성 없는 `package.json` 을 만든 뒤 NSIS 설치 파일로 묶는다. asar 끔, 화면 언어 `ko`·`en-US` 만 남김, 게시 안 함.
+- `package.json` 스크립트 `dist:win`, `.gitignore` 에 `release/`.
+- `config.js`: `PACKAGED`(Electron 이고 `process.defaultApp` 이 없음)이면 기본 모드가 `companion` 이다.
+- `src/main/app.ts`: 동반자의 `second-instance` 에서 관리 창을 연다. `syncLoginItem` 이 기동할 때와 관리 창의 `settings.set` 뒤에 `app.setLoginItemSettings` 를 부른다. 설치한 앱(`app.isPackaged`)에서만 한다.
+- 문서: `docs/guide.md` 의 "Windows 실행 파일"·"Windows 실행 파일 만들기", `README.md` 설치 절.
+
 ## 검수
 
 ### 저장 v3 전환의 첫 검증
@@ -685,6 +744,14 @@ SSOT: `docs/specs/s5.md` 의 종료와 재개, `docs/specs/modules.md` 의 저�
 - 문서: `check-docs`·`git diff --check` 통과. 바뀐 문장(`specs/s5.md`·`ui-components.md` 의 정한 값, 진행표, 이력, 이 기록)을 쓰기 점검표로 다시 읽었다. 정한 값과 미정 항목을 나눠 적었다.
 - 자동 검사가 없는 것: 실제 앱에서 배너가 뜨는 흐름과 OS 클릭(포커스 없는 창의 누르기), 알림음. 사용자의 저장과 `notify.json` 을 건드리지 않으려고 실제 앱은 띄우지 않았다.
 
+### Windows 실행 파일의 검수
+
+- `npm run dist:win` 종료 코드 0. `release/pokebuddy-Setup-0.3.0.exe` 104MB, `release/win-unpacked` 324MB. 크기는 거의 Electron 본체다(`pokebuddy.exe` 235MB). 우리 파일은 약 3MB 다. 언어 파일을 줄이기 전에는 113MB 였다.
+- 설치하지 않은 `release/win-unpacked/pokebuddy.exe` 를 임시 HOME·`POKEBUDDY_SLUG=pikachu` 로 두 번 띄웠다(점검 스크립트는 세션 임시 폴더). 결과: 동반자로 떴다(`companion.lock` 에 `ready`). 저장·`notify.json`·`mailbox` 가 임시 폴더에 생겼다. `last-error.json` 이 없다. 두 번째 실행은 0.18초 만에 종료 코드 0 으로 끝났고 첫 앱은 살아 있었다. lock 을 지우자 첫 앱이 끝났다.
+- `npm run selftest` 전체, `node scripts/e2e-companion.cjs`(종료 코드 0), `check-docs` 통과.
+- 문서: 바뀐 문장(`guide.md`·`README.md`·진행표·이력·이 기록)을 쓰기 점검표로 다시 읽었다.
+- 자동 검사가 없는 것: 실제 설치·바로가기·제거, 두 번째 실행 때 관리 창이 열리는지, 로그인 시 시작 등록, 트레이 종료. 설치는 사용자 PC 를 바꾸므로 사용자 확인으로 남겼다.
+
 ## 피드백과 수정
 
 ### 저장 v3 전환의 피드백과 수정
@@ -737,3 +804,10 @@ SSOT: `docs/specs/s5.md` 의 종료와 재개, `docs/specs/modules.md` 의 저�
 1. 새 배너를 받을 때 `:hover` 이면 멈춤을 알린다.
 2. 두 메뉴 모두 `() => openManageWindow()` 로 감쌌다.
 3·4. 남겨 둔다.
+
+### Windows 실행 파일의 피드백
+
+1. 상태 훅은 `node` 로 실행된다. Node.js 가 없는 PC 에서 "연결"을 누르면 등록은 되지만 훅이 돌지 않는다. 첫 판의 범위 밖으로 두었다. 안내 또는 Node 없이 도는 방법은 따로 정한다.
+2. `electron-builder` 가 서명 단계(signtool)를 지나지만 인증서가 없어 서명하지 않는다. SmartScreen 경고가 뜬다.
+3. `bin/pokebuddy`·`scripts/build-helper.js`·`helpers/winbounds.swift` 는 exe 판에서 쓰지 않지만 `files` 목록을 따라 들어간다. 합쳐 수십 KB 라 두었다.
+4. 실제 설치 확인(설치 → 바로가기 → 다시 누름 → 로그인 시 시작 → 제거)은 사용자가 한다.
