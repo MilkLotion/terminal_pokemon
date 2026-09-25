@@ -5,123 +5,200 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:" />
     <title>pokebuddy</title>
     <style>
-      /* 첫 실행 — 함께 다닐 포켓몬을 고르는 창. 문구·이름은 메인이 언어에 맞춰 넘긴다 (picker.ts) */
+      /* 첫 포켓몬 선택 — Figma `First Run / Starter Selected` `402:9417`, `Starter Empty` `402:9579`.
+         색은 관리 창과 같은 `PB / Color` 변수다. 문구·이름은 메인이 언어에 맞춰 넘긴다 (picker.ts) */
       :root {
-        --ground: #f2f4f6;
+        --canvas: #f1f2ee;
         --surface: #ffffff;
-        --ink: #182130;
-        --muted: #61707f;
-        --line: #d3dae2;
-        --accent: #d9463b;
-        --accent-soft: #fbe7e4;
+        --accent-bg: #ebf4f1;
+        --ink: #1a3330;
+        --muted: #4a6663;
+        --inverse: #ffffff;
+        --line: #dde1db;
+        --primary: #0f766e;
+        --primary-hover: #0a5f56;
       }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --ground: #12181f;
-          --surface: #1a222c;
-          --ink: #e8eef4;
-          --muted: #98a6b6;
-          --line: #2b3642;
-          --accent: #f26b60;
-          --accent-soft: #3a2320;
-        }
+      * {
+        box-sizing: border-box;
       }
       html,
       body {
         margin: 0;
         height: 100%;
-        background: var(--ground);
-        color: var(--ink);
-        font: 14px/1.5 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
-        -webkit-user-select: none;
-        user-select: none;
       }
       body {
         display: grid;
         grid-template-rows: auto 1fr auto;
-        padding: 20px 20px 16px;
-        box-sizing: border-box;
-        gap: 12px;
+        gap: 20px;
+        padding: 24px 20px 20px;
+        background: var(--canvas);
+        color: var(--ink);
+        font: 13px/1.5 "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+        overflow: hidden;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      header {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
       }
       h1 {
         margin: 0;
-        font-size: 18px;
-        font-weight: 700;
+        font-size: 20px;
+        line-height: normal;
+        font-weight: 500;
       }
+      #subtitle {
+        color: var(--muted);
+      }
+      /* 카드 목록만 스크롤한다. Figma 는 5열 × 112 + 사이 10 = 600 이다. 스크롤 막대 자리만큼 열이 조금 좁아진다 */
       #list {
-        overflow-y: auto;
         display: grid;
-        gap: 6px;
-        align-content: start;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         padding-right: 4px;
+        margin-right: -10px;
+        scrollbar-gutter: stable;
+        grid-auto-rows: 104px;
+        gap: 10px;
+        align-content: start;
+        overflow-y: auto;
+        min-height: 0;
       }
-      .gen {
-        color: var(--muted);
-        font-size: 11px;
-        letter-spacing: 0.04em;
-        margin-top: 8px;
+      #list::-webkit-scrollbar {
+        width: 6px;
       }
-      .row {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 6px;
+      #list::-webkit-scrollbar-thumb {
+        border-radius: 3px;
+        background: var(--line);
       }
-      .cell {
+      .card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px;
         border: 1px solid var(--line);
+        border-radius: 12px;
         background: var(--surface);
-        border-radius: 8px;
-        padding: 10px 8px;
-        text-align: center;
+        color: inherit;
+        font: inherit;
         cursor: pointer;
-        font-size: 13px;
       }
-      .cell:hover {
-        border-color: var(--muted);
+      .card:hover {
+        background: var(--accent-bg);
       }
-      .cell.pick {
-        border-color: var(--accent);
-        background: var(--accent-soft);
-        font-weight: 600;
+      .card:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
       }
-      .cell small {
-        display: block;
-        color: var(--muted);
-        font-size: 11px;
-        font-family: ui-monospace, Menlo, Consolas, monospace;
+      /* 고른 카드 — 왼쪽 막대(blade)와 옅은 배경. 색 테두리로 강조하지 않는다 */
+      .card[aria-pressed="true"] {
+        background: var(--accent-bg);
+      }
+      .card[aria-pressed="true"]::before {
+        content: "";
+        position: absolute;
+        left: -1px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
+        height: 20px;
+        border-radius: 0 2px 2px 0;
+        background: var(--primary);
+      }
+      /* 초상 자리 — 관리 창과 같은 원. 그림은 아직 넣지 않는다 */
+      .portrait {
+        width: 52px;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--accent-bg);
+      }
+      .portrait::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--ink);
+      }
+      .name {
+        font-size: 12px;
+        line-height: normal;
+        font-weight: 500;
+        white-space: nowrap;
       }
       footer {
         display: flex;
-        justify-content: flex-end;
         align-items: center;
         gap: 12px;
+        min-height: 36px;
       }
       #chosen {
-        color: var(--muted);
-        font-size: 13px;
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
       }
-      button {
-        appearance: none;
+      #chosen-name {
+        font-size: 14px;
+        line-height: normal;
+        font-weight: 500;
+      }
+      #chosen-note {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: normal;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #start {
+        flex: none;
+        width: 120px;
+        height: 36px;
+        padding: 0 16px;
         border: 0;
         border-radius: 8px;
-        padding: 9px 22px;
+        background: var(--primary);
+        color: var(--inverse);
         font: inherit;
+        font-size: 13px;
+        line-height: 18px;
         font-weight: 600;
-        color: #fff;
-        background: var(--accent);
         cursor: pointer;
       }
-      button:disabled {
-        opacity: 0.4;
+      #start:hover:not(:disabled) {
+        background: var(--primary-hover);
+      }
+      #start:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+      }
+      #start:disabled {
+        opacity: 0.5;
         cursor: default;
       }
     </style>
   </head>
   <body>
-    <h1 id="title"></h1>
-    <div id="list"></div>
+    <header>
+      <h1 id="title"></h1>
+      <div id="subtitle"></div>
+    </header>
+    <div id="list" role="group"></div>
     <footer>
-      <span id="chosen"></span>
-      <button id="start" disabled></button>
+      <div id="chosen" aria-live="polite">
+        <div id="chosen-name" hidden></div>
+        <div id="chosen-note"></div>
+      </div>
+      <button id="start" type="button" disabled></button>
     </footer>
     <script type="module" src="../../dist/renderer/picker.js"></script>
   </body>

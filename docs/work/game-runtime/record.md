@@ -419,6 +419,24 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 3. `npm run selftest`, `node scripts/e2e-companion.cjs`, `check-docs` 통과.
 4. 사용자 확인: 설치 파일로 설치 → 바로가기 실행 → 제거.
 
+### 설치 창과 첫 포켓몬 선택 창의 설계
+
+날짜: 2026-09-25. 상태: 구현·검수 완료. 사용자 요청: "설치창 ui 개선, 스타팅 고르는 ui 개선"(선택 창 캡처 첨부). 설치 방식은 사용자가 "원클릭 설치 (권장)" 을 골랐다.
+
+**관측** (2026-09-25)
+- 설치 창은 NSIS 기본 마법사다. 첫 화면이 "모든 사용자/전용" 선택이다. `electron-builder` 의 단계식 설치는 `perMachine: false` 일 때 이 화면을 끌 수 없다.
+- 선택 창은 560×640 이고 Electron 기본 메뉴(File·Edit·View·Window)가 보인다. 세대 이름 아래 3열 칸에 영어 슬러그를 적고, 빨강 `시작` 단추를 쓴다. 관리 창과 색·모양이 다르다.
+- Figma 에 설계가 이미 있다: `First Run / Starter Selected` `402:9417`, `First Run / Starter Empty` `402:9579`, 부품 `Candidate Card` `401:315`. 폭 640, 5열 카드(112×104), 원형 초상 52, 고른 카드는 왼쪽 막대와 옅은 배경, 아래 줄에 이름·진화 문구와 `함께하기`.
+
+**목표**
+1. 설치: 원클릭. 묻지 않고 사용자 폴더에 설치한 뒤 앱을 띄운다. 설치·제거 파일 아이콘은 로고다.
+2. 선택 창: Figma 대로. 제목 `첫 포켓몬 선택`, 부제, 5열 카드, 고른 카드 표시, 아래 줄(고르기 전 `포켓몬을 고르세요`, 고른 뒤 이름과 `진화: …`), `함께하기`. 기본 메뉴를 없앤다. 창은 640×780 이고 카드 목록만 스크롤한다.
+3. 진화 문구: 한 갈래면 끝까지 `리자드 → 리자몽`, 여러 갈래면 그 단계 이름을 모두 적는다.
+
+**범위 밖** — 카드 초상의 실제 그림(관리 창도 원만 그린다), 다크 모드(관리 창과 맞춰 뺐다).
+
+**수용 검사** — 개발용 실행기로 빈 상태·고른 상태를 찍어 Figma 와 비교, E2E 의 첫 선택 흐름 통과, 설치 파일이 `oneClick=true` 로 만들어짐.
+
 ## 작업
 
 ### 저장 v3 전환의 작업
@@ -596,6 +614,16 @@ Figma 만 바꿨다. 코드는 바꾸지 않았다.
 - `src/main/app.ts`: 동반자의 `second-instance` 에서 관리 창을 연다. `syncLoginItem` 이 기동할 때와 관리 창의 `settings.set` 뒤에 `app.setLoginItemSettings` 를 부른다. 설치한 앱(`app.isPackaged`)에서만 한다.
 - 문서: `docs/guide.md` 의 "Windows 실행 파일"·"Windows 실행 파일 만들기", `README.md` 설치 절.
 
+### 설치 창과 첫 포켓몬 선택 창의 작업
+
+- `scripts/build-exe.cjs`: `nsis.oneClick: true`, `runAfterFinish`, 설치·제거·머리 아이콘을 `logo.ico` 로. 설치 위치 고르기는 원클릭에서 쓸 수 없어 뺐다.
+- `src/shared/stage.d.ts`: `PickerPayload` 를 `title`·`subtitle`·`start`·`empty`·`items[]`(이름·슬러그·진화 문구)로 바꿨다. 세대 묶음을 없앴다.
+- `src/main/picker-window.ts`: `evolutionLine`, 창 640×780(`useContentSize`), `removeMenu()`, 최대화 끔.
+- `src/renderer/picker.html`·`picker.ts`: Figma 카드·아래 줄. 카드는 `button` 과 `aria-pressed` 다. 두 번 누르면 바로 시작한다. 카드에 `data-slug` 를 달았다(화면에는 보이지 않고 E2E 가 쓴다).
+- `lib/i18n`: `starter.title`·`subtitle`·`start`·`empty`·`evolution` 을 새 문구로, 쓰지 않게 된 `starter.gen`·`starter.others` 를 지웠다.
+- `scripts/e2e/companion-observer.cjs`: 옛 `.cell`·슬러그 글자 대신 `.card`·`data-slug` 로 찾는다.
+- 개발용 실행기 `scripts/dev-picker.cjs`(`--shot`, `--pick <번호>`).
+
 ## 검수
 
 ### 저장 v3 전환의 첫 검증
@@ -751,6 +779,14 @@ SSOT: `docs/specs/s5.md` 의 종료와 재개, `docs/specs/modules.md` 의 저�
 - `npm run selftest` 전체, `node scripts/e2e-companion.cjs`(종료 코드 0), `check-docs` 통과.
 - 문서: 바뀐 문장(`guide.md`·`README.md`·진행표·이력·이 기록)을 쓰기 점검표로 다시 읽었다.
 - 자동 검사가 없는 것: 실제 설치·바로가기·제거, 두 번째 실행 때 관리 창이 열리는지, 로그인 시 시작 등록, 트레이 종료. 설치는 사용자 PC 를 바꾸므로 사용자 확인으로 남겼다.
+
+### 설치 창과 첫 포켓몬 선택 창의 검수
+
+- 개발용 실행기: 빈 상태(흐린 `함께하기`, `포켓몬을 고르세요`), 파이리를 고른 상태(왼쪽 막대, `진화: 리자드 → 리자몽`), 이브이를 고른 상태(`진화: 샤미드 · 쥬피썬더 · …` 여덟 갈래)가 Figma `402:9417`·`402:9579` 와 같은 배치다. 캡처가 세 번 `UnknownVizError` 로 실패했고 다시 찍어 통과했다.
+- E2E 가 처음에 실패했다(대기 실패: 포켓몬 인자 없는 첫 선택창). 관찰 스크립트가 옛 `.cell` 을 셌기 때문이다. `.card`·`data-slug` 로 고친 뒤 통과했다(종료 코드 0).
+- 설치 파일: `oneClick=true perMachine=false` 로 만들어졌다(104MB). 설치하지 않은 exe 를 임시 HOME 으로 띄워 동반자 기동과 두 번째 실행 종료(0.17초)를 다시 확인했다.
+- `npm run selftest` 전체 통과.
+- 원클릭 설치 파일은 실행하면 바로 설치하고 사용자 저장으로 앱을 띄운다. 그래서 실제 설치 창은 직접 띄우지 않았다. 사용자 확인으로 남긴다.
 
 ## 피드백과 수정
 

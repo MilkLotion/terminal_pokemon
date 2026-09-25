@@ -76,14 +76,18 @@ export interface PointerMsg {
   y: number;
 }
 
+// 첫 포켓몬 선택 창 — Figma `First Run / Starter Selected` `402:9417`, `Starter Empty` `402:9579`
 export interface PickerItem {
   slug: string;
   name: string;
+  evolution: string; // 고르면 아래 줄에 보이는 진화 문구 — "진화: 리자드 → 리자몽"
 }
 export interface PickerPayload {
-  title: string;
-  start: string;
-  groups: { label: string; items: PickerItem[] }[];
+  title: string; // 첫 포켓몬 선택
+  subtitle: string; // 함께 시작할 포켓몬을 한 마리 고르세요
+  start: string; // 함께하기
+  empty: string; // 고르기 전 아래 줄 문구
+  items: PickerItem[]; // data/unlocks.json 의 starter 순서 (세대별 3종 × 9 + 피카츄·이브이)
 }
 
 // 채널 이름 — preload 와 메인이 같은 문자열을 쓰도록 유니언으로 묶는다 (런타임 상수는 양쪽이 각자 satisfies 로 검사)

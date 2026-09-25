@@ -23,7 +23,7 @@ if (process.versions.electron && process.type === 'browser' && process.env.PB_E2
           emit({ event: 'picker-dom', state: await win.webContents.executeJavaScript('({bridge:typeof window.pokebuddy,text:document.body.innerText})') });
           const timer = setInterval(async () => {
             if (win.isDestroyed()) return clearInterval(timer);
-            const count = await win.webContents.executeJavaScript('document.querySelectorAll(".cell").length').catch(() => 0);
+            const count = await win.webContents.executeJavaScript('document.querySelectorAll(".card").length').catch(() => 0);
             if (count) {
               clearInterval(timer);
               emit({ event: 'picker-ready', count });
@@ -43,7 +43,7 @@ if (process.versions.electron && process.type === 'browser' && process.env.PB_E2
         fs.rmSync(command);
         if (action.kind === 'pick-eevee') {
           const selected = await picker.webContents.executeJavaScript(`(() => {
-            const cell = [...document.querySelectorAll('.cell')].find(c => c.querySelector('small')?.textContent === 'eevee');
+            const cell = document.querySelector('.card[data-slug="eevee"]');
             if (!cell) return false;
             cell.click();
             document.querySelector('#start').click();
