@@ -17,7 +17,8 @@ export async function game(argv: string[]): Promise<void> {
       const at = field.indexOf("=");
       if (at <= 0) throw new Error("Use key=value for each argument.");
       const key = field.slice(0, at), value = field.slice(at + 1);
-      return [key, value === "true" ? true : value === "false" ? false : value];
+      // 참·거짓과 숫자는 그 값으로 넘긴다 — `size=3` 은 3 이다
+      return [key, value === "true" ? true : value === "false" ? false : /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : value];
     }));
     if (!args || typeof args !== "object" || Array.isArray(args)) throw new Error("Use a JSON object for arguments.");
     const command: Command = { cmd: name as CommandName, from: "cli", args: args as Record<string, unknown> };

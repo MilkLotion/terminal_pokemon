@@ -16,6 +16,7 @@ const CH = {
   dexDetail: "manage:dex-detail",
   agents: "manage:agents",
   route: "manage:route",
+  drawRegion: "manage:draw-region",
 } satisfies Record<string, ManageChannel>;
 
 // 창 조작 단추가 앉는 자리. 색은 헤더와 같아야 이어져 보인다 (`--surface` 와 `--muted`)
@@ -29,10 +30,13 @@ export interface ManageOptions {
   // 없으면 실행기를 바로 부른다 (개발용 실행기)
   send?: (req: ManageRequest) => Promise<ManageReply>;
   route?: ManageRoute; // 열면서 옮겨 갈 곳 — 알림 배너의 `바로가기`
+  // 설정의 `영역 그리기`. 영역 그리기 창을 열고 적용한 영역을 저장한다. 없으면 이 기능을 쓸 수 없다
+  drawRegion?: () => Promise<ManageReply>;
 }
 
 let win: BrowserWindow | null = null;
 let wired = false;
+let drawRegion: ManageOptions["drawRegion"] = undefined; // 창을 열 때마다 새로 받는다 — 처리기는 한 번만 건다
 
 const isRequest = (v: unknown): v is ManageRequest =>
   v != null && typeof v === "object" && typeof (v as { cmd?: unknown }).cmd === "string";
@@ -63,6 +67,11 @@ function wire(game: GameV3, send: (req: ManageRequest) => Promise<ManageReply>):
     if (!mine(e)) return { ...DENIED, list: [] };
     return game.agents(isAgentRequest(req) ? req : undefined);
   });
+  ipcMain.handle(CH.drawRegion, async (e): Promise<ManageReply> => {
+    if (!mine(e)) return DENIED;
+    if (!drawRegion) return { ok: false, reason: "not-ready" };
+    return drawRegion();
+  });
   ipcMain.handle(CH.command, async (e, req: unknown): Promise<ManageReply> => {
     if (!mine(e)) return DENIED;
     if (!isRequest(req)) return { ok: false, reason: "bad-request" };
@@ -72,6 +81,7 @@ function wire(game: GameV3, send: (req: ManageRequest) => Promise<ManageReply>):
 }
 
 export function openManage(opts: ManageOptions): BrowserWindow {
+  drawRegion = opts.drawRegion;
   if (win && !win.isDestroyed()) {
     if (win.isMinimized()) win.restore();
     win.show();

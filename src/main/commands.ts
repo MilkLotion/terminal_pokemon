@@ -138,10 +138,16 @@ export function createCommands(ctx: CommandContext): Commands {
   dispatcher.register("party.show", showHide(true));
   dispatcher.register("party.hide", showHide(false));
 
-  // pet.set — 자리만 받는다. 크기·모습은 아직 없다
+  // pet.set — 자리 또는 그림 크기. 크기는 저장이 있는 파티만 바꾼다 — 세션 펫은 config.json 의 dotSize 를 쓴다
   dispatcher.register("pet.set", async (c) => {
     const id = target(c);
     if (!id || !ctx.party.all().some((p) => p.id === id)) return { ok: false, reason: "no-pet", id: String(id) };
+    const size = isObj(c.args) ? c.args.size : undefined;
+    if (size !== undefined) {
+      if (typeof size !== "number") return { ok: false, reason: "bad-value", id };
+      if (ctx.party.kind !== "save") return { ok: false, reason: "not-yet", id };
+      return ctx.party.setSize(id, size);
+    }
     const home = isObj(c.args) ? c.args.home : undefined;
     if (!isObj(home)) return { ok: false, reason: "not-yet", id };
     const { dx, dy } = home;

@@ -681,6 +681,8 @@ function drawPet(petId: string): void {
   const meters = el("div", "meters");
   meters.append(meter("친밀도", pet.affinity), meter("만복도", pet.fullness, pet.zone), meter(`기분 · ${pet.moodWord}`, pet.mood));
   dialogEl.appendChild(meters);
+  // 그림 크기 — 파티 개체만. 박스 상세에는 표시 항목을 두지 않는다 (Figma `Detail / Base` "표시 설정")
+  if (inParty) dialogEl.appendChild(sizeRow(pet));
 
   if (!inParty) {
     // 박스 개체 — 빈 칸이 있으면 바로 배치하고, 없으면 바꿀 칸을 고른다
@@ -713,6 +715,25 @@ function drawPet(petId: string): void {
     closeButton(),
   );
   dialogEl.appendChild(actions(...buttons));
+}
+
+// 크기 1~6 — 누를 때마다 한 번 저장한다. 고른 단계는 채운 단추다
+function sizeRow(pet: PetView): HTMLElement {
+  const row = el("div", "size-row");
+  row.appendChild(el("span", "label", "크기"));
+  const group = el("div", "sizes");
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-label", "크기");
+  for (let n = 1; n <= 6; n++) {
+    const b = button("size", String(n));
+    b.setAttribute("aria-pressed", String(n === pet.size));
+    b.addEventListener("click", () => {
+      if (n !== pet.size) void send("pet.set", pet.id, { size: n });
+    });
+    group.appendChild(b);
+  }
+  row.appendChild(group);
+  return row;
 }
 
 // ── 모달 · 진화 확인 ───────────────────────────────────────────────────────────
@@ -1052,7 +1073,11 @@ function drawGeneral(scroll: HTMLElement): void {
       toggle(s.playArea === "full", ["화면 전체", "영역 지정"], (full) => set("playArea", full ? "full" : "region")),
     ),
   );
-  if (s.playArea === "region") scroll.appendChild(el("div", "hint", "영역 그리기는 아직 없습니다."));
+  // 영역 지정일 때만 그리기 단추를 둔다. 그린 뒤에는 `다시 그리기` (docs/specs/s5.md 설정 계약)
+  if (s.playArea === "region") {
+    const draw = actionButton(s.hasRegion ? "다시 그리기" : "영역 그리기", !s.hasRegion, false, () => void regionDraw());
+    scroll.appendChild(settingRow("영역", "동반자가 돌아다닐 영역을 그립니다.", draw));
+  }
 
   scroll.appendChild(
     settingRow(
@@ -1274,6 +1299,21 @@ async function send(cmd: string, target: string, extra: Record<string, unknown> 
   if (CLOSES.has(cmd) && !opts.keepOpen) close();
   else drawDialog();
   return true;
+}
+
+// 영역 그리기 창을 연다. 적용하면 메인이 저장한다. 취소는 아무것도 바꾸지 않으므로 알리지 않는다
+async function regionDraw(): Promise<void> {
+  if (busy) return;
+  busy = true;
+  let reply: ManageReply;
+  try {
+    reply = await window.pokebuddyManage.drawRegion();
+    await refresh();
+  } finally {
+    busy = false;
+  }
+  notice = reply.ok || reply.reason === "cancelled" ? "" : REASON[reply.reason] ?? reply.reason;
+  drawDialog();
 }
 
 async function agent(name: string, action: "connect" | "disconnect" | "check"): Promise<void> {

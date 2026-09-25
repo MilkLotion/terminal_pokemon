@@ -1,0 +1,86 @@
+// 놀이공간 영역 그리기 — 드래그로 사각형을 그리고 `적용` 하면 메인에 보낸다. 좌표는 창 안 좌표(DIP)다.
+// 저장은 메인이 한다. `취소`·Esc 는 아무것도 바꾸지 않는다 (docs/specs/s5.md "놀이공간 변경을 취소하면 적용 전 영역을 유지한다")
+import type { RegionInit, RegionRect } from "../shared/manage.js";
+
+function need<T extends HTMLElement>(id: string, ctor: new () => T): T {
+  const el = document.getElementById(id);
+  if (!(el instanceof ctor)) throw new Error(`region.html 에 #${id} 가 없다`);
+  return el;
+}
+const veil = need("veil", HTMLElement);
+const regionEl = need("region", HTMLElement);
+const sizeEl = need("size", HTMLElement);
+const hintEl = need("hint", HTMLElement);
+const toolbar = need("toolbar", HTMLElement);
+const message = need("message", HTMLElement);
+const redraw = need("redraw", HTMLButtonElement);
+const cancel = need("cancel", HTMLButtonElement);
+const apply = need("apply", HTMLButtonElement);
+
+const api = window.pokebuddyRegion;
+let min = { w: 240, h: 160 };
+let rect: RegionRect | null = null;
+let from: { x: number; y: number } | null = null; // 드래그를 시작한 점
+
+const MESSAGE = "드래그해서 활동 영역을 그리세요";
+
+function paint(): void {
+  const r = rect;
+  veil.hidden = r != null;
+  regionEl.hidden = r == null;
+  if (!r) {
+    apply.disabled = true;
+    message.textContent = MESSAGE;
+    return;
+  }
+  regionEl.style.left = `${r.x}px`;
+  regionEl.style.top = `${r.y}px`;
+  regionEl.style.width = `${r.w}px`;
+  regionEl.style.height = `${r.h}px`;
+  sizeEl.textContent = `${Math.round(r.w)} × ${Math.round(r.h)}`;
+  const enough = r.w >= min.w && r.h >= min.h;
+  apply.disabled = !enough;
+  message.textContent = enough ? MESSAGE : `${min.w} × ${min.h} 보다 크게 그리세요`;
+  // 영역이 작으면 미리보기 문구가 넘친다 — 넓을 때만 보인다
+  hintEl.hidden = r.w < 360 || r.h < 80;
+}
+
+api.onInit((init: RegionInit) => {
+  min = init.min;
+  rect = init.current;
+  paint();
+});
+
+document.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || toolbar.contains(e.target as Node)) return;
+  from = { x: e.clientX, y: e.clientY };
+  rect = { x: e.clientX, y: e.clientY, w: 0, h: 0 };
+  document.body.setPointerCapture(e.pointerId);
+  paint();
+});
+document.addEventListener("pointermove", (e) => {
+  if (!from) return;
+  const x = Math.max(0, Math.min(e.clientX, innerWidth));
+  const y = Math.max(0, Math.min(e.clientY, innerHeight));
+  rect = { x: Math.min(from.x, x), y: Math.min(from.y, y), w: Math.abs(x - from.x), h: Math.abs(y - from.y) };
+  paint();
+});
+document.addEventListener("pointerup", () => {
+  from = null;
+});
+
+const done = (): void => {
+  if (rect && !apply.disabled) api.done(rect);
+};
+redraw.addEventListener("click", () => {
+  rect = null;
+  paint();
+});
+cancel.addEventListener("click", () => api.done(null));
+apply.addEventListener("click", done);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") api.done(null);
+  else if (e.key === "Enter") done();
+});
+
+paint();

@@ -30,6 +30,7 @@ export interface PetView {
   percentToNext: number; // 다음 레벨까지 백분율
   types: string[]; // 화면에 보이는 타입 이름
   nature: string; // 화면에 보이는 성격 이름
+  size: number; // 그림 크기 1~6
   natureId: string; // 성격 id — 성격 변경 창이 지금 성격을 막을 때 쓴다
   affinity: number;
   fullness: number;
@@ -199,7 +200,8 @@ export interface ManageReply {
 // 도감은 종이 1000개를 넘어 스냅샷에 담지 않는다. 탭을 열 때만 따로 부른다.
 // CLI 연결은 저장 밖을 보므로 역시 따로 부른다
 // manage:route 는 메인 → 렌더러 한 방향이다. 알림 배너의 `바로가기` 가 관리 창을 어디로 옮길지 알린다
-export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:dex-detail" | "manage:agents" | "manage:route";
+// manage:draw-region 은 설정의 `영역 그리기` — 영역 그리기 창을 열고, 적용·취소가 끝나면 답한다
+export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:dex-detail" | "manage:agents" | "manage:route" | "manage:draw-region";
 
 // 관리 창 안의 목적지. 부화는 돌보미집, 진화는 개체 상세, 업적은 업적 창 (docs/specs/s5.md "알림 배너의 개별 표시")
 export type ManageRoute = { to: "daycare" } | { to: "pet"; petId: string } | { to: "achievements"; id: string };
@@ -211,6 +213,28 @@ export interface ManageBridge {
   dexDetail: (slug: string) => Promise<DexDetail | null>; // 도감 칸 하나의 상세
   agents: (req?: { name: string; action: AgentAction }) => Promise<AgentReply>; // 인자가 없으면 읽기만 한다
   onRoute: (cb: (route: ManageRoute) => void) => void; // 배너의 `바로가기` 로 옮겨 갈 곳
+  drawRegion: () => Promise<ManageReply>; // 적용하면 ok, 취소하면 reason "cancelled"
+}
+
+// 놀이공간 영역 그리기 창 — Figma `Playground / Region Draw` `396:8541`. 좌표는 창 안 좌표(DIP)다
+export interface RegionRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface RegionInit {
+  current: RegionRect | null; // 지금 영역 (이 화면과 겹칠 때만)
+  min: { w: number; h: number }; // 최소 크기 — 이보다 작으면 적용할 수 없다
+}
+
+// region:init 은 메인 → 렌더러, region:done 은 렌더러 → 메인 (null 이면 취소)
+export type RegionChannel = "region:init" | "region:done";
+
+export interface RegionBridge {
+  onInit: (cb: (init: RegionInit) => void) => void;
+  done: (rect: RegionRect | null) => void;
 }
 
 // 알림 배너 창 — 배너 하나의 문구와 `바로가기` 목적지. 문구는 src/notify/banner.ts 가 만든다

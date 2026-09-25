@@ -65,6 +65,7 @@ export function petView(save: SaveV3, pet: PetV3, hidden: boolean, dayPart: DayP
     types: profile(pet.species).types.map((t) => typeName(t)),
     nature: natureName(pet.nature),
     natureId: pet.nature,
+    size: pet.size,
     affinity: pet.affinity,
     fullness: pet.fullness,
     zone: zoneOf(pet.fullness),

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'" />
+    <title>놀이공간 영역 그리기</title>
+    <style>
+      /* 놀이공간 영역 그리기 — Figma `Playground / Region Draw` `396:8541`. 색은 관리 창과 같은 `PB / Color` 변수다 */
+      :root {
+        --surface: #ffffff;
+        --ink: #1a3330;
+        --inverse: #ffffff;
+        --line: #dde1db;
+        --primary: #0f766e;
+        --primary-hover: #0a5f56;
+        --scrim: rgba(26, 51, 48, 0.45);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+      body {
+        position: relative;
+        color: var(--ink);
+        font: 13px/1.5 "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+        cursor: crosshair;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      /* 영역이 없으면 화면 전체를 어둡게 한다. 영역이 있으면 영역 밖만 어둡게 한다 (영역의 그림자) */
+      #veil {
+        position: absolute;
+        inset: 0;
+        background: var(--scrim);
+      }
+      #veil[hidden] {
+        display: none;
+      }
+      #region {
+        position: absolute;
+        border: 2px solid var(--primary);
+        box-shadow: 0 0 0 200vmax var(--scrim);
+        pointer-events: none;
+      }
+      #region[hidden] {
+        display: none;
+      }
+      .handle {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        border: 2px solid var(--primary);
+        background: var(--surface);
+      }
+      .handle.nw {
+        left: -6px;
+        top: -6px;
+      }
+      .handle.ne {
+        right: -6px;
+        top: -6px;
+      }
+      .handle.sw {
+        left: -6px;
+        bottom: -6px;
+      }
+      .handle.se {
+        right: -6px;
+        bottom: -6px;
+      }
+      #size {
+        position: absolute;
+        left: 10px;
+        top: 10px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        background: var(--scrim);
+        color: var(--inverse);
+        font-size: 11px;
+        line-height: normal;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      #hint {
+        position: absolute;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        padding: 5px 10px;
+        border-radius: 6px;
+        background: var(--scrim);
+        color: var(--inverse);
+        font-size: 12px;
+        line-height: normal;
+        white-space: nowrap;
+      }
+      #toolbar {
+        position: absolute;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        background: var(--surface);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+        cursor: default;
+      }
+      #message {
+        margin-right: 16px;
+        white-space: nowrap;
+      }
+      #toolbar button {
+        width: 120px;
+        height: 32px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+        font-size: 13px;
+        line-height: 18px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #toolbar button.primary {
+        border: 0;
+        background: var(--primary);
+        color: var(--inverse);
+      }
+      #toolbar button.primary:hover:not(:disabled) {
+        background: var(--primary-hover);
+      }
+      #toolbar button:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+      }
+      #toolbar button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="veil"></div>
+    <div id="region" hidden>
+      <span class="handle nw"></span>
+      <span class="handle ne"></span>
+      <span class="handle sw"></span>
+      <span class="handle se"></span>
+      <div id="size"></div>
+      <div id="hint">미리보기 · 적용하면 포켓몬이 이 안에서만 활동해요</div>
+    </div>
+    <div id="toolbar" role="toolbar" aria-label="놀이공간 영역">
+      <span id="message">드래그해서 활동 영역을 그리세요</span>
+      <button id="redraw" type="button">다시 그리기</button>
+      <button id="cancel" type="button">취소</button>
+      <button id="apply" class="primary" type="button" disabled>적용</button>
+    </div>
+    <script type="module" src="../../dist/renderer/region.js"></script>
+  </body>
+</html>

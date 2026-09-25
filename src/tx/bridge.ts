@@ -78,7 +78,7 @@ export function argsOf(command: Command): Record<string, unknown> {
     case "starter.pick":
       return { species: target ?? str(a.species) };
     case "pet.set":
-      return { petId: target ?? str(a.petId), home: a.home };
+      return { petId: target ?? str(a.petId), home: a.home, ...(a.size !== undefined ? { size: a.size } : {}) };
     default:
       return { ...a };
   }

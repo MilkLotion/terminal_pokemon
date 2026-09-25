@@ -50,6 +50,20 @@ export function stageOf(target: Rect, display: Rect): Rect | null {
   return { x: Math.round(x1), y: Math.round(y1), w: Math.round(x2 - x1), h: Math.round(y2 - y1) };
 }
 
+// 동반자의 놀이공간 — 화면 전체면 주 화면 작업 영역, 영역 지정이면 그려 둔 영역을 가장 많이 겹치는 화면 안으로 자른다.
+// 영역이 어느 화면과도 겹치지 않으면(모니터 변경) 화면 전체로 대신한다. 저장된 영역은 지우지 않는다 (docs/specs/s5.md "놀이공간")
+export function playAreaRect(area: { mode: "full" | "region"; rect: Rect | null }, displays: Rect[], primaryWork: Rect): Rect {
+  if (area.mode === "region" && area.rect) {
+    let best: Rect | null = null;
+    for (const d of displays) {
+      const cut = stageOf(area.rect, d);
+      if (cut && (!best || cut.w * cut.h > best.w * best.h)) best = cut;
+    }
+    if (best) return best;
+  }
+  return { ...primaryWork };
+}
+
 // 화면 좌표의 사각형을 무대 안 좌표로
 export const toLocal = (rect: Rect, stage: Rect): Rect => ({ x: rect.x - stage.x, y: rect.y - stage.y, w: rect.w, h: rect.h });
 

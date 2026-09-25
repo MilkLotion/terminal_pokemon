@@ -306,6 +306,39 @@
         display: flex;
         gap: 10px;
       }
+      /* 개체 상세의 크기 1~6 — Figma `Detail / Base` 의 크기 단추 (36 × 36) */
+      .size-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 6px;
+      }
+      .size-row .label {
+        font-weight: 600;
+      }
+      .sizes {
+        display: flex;
+        gap: 8px;
+      }
+      .sizes .size {
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .sizes .size:hover {
+        background: var(--accent-bg);
+      }
+      .sizes .size[aria-pressed="true"] {
+        border-color: var(--primary);
+        background: var(--primary);
+        color: var(--inverse);
+      }
       .meter {
         flex: 1;
         min-width: 0;

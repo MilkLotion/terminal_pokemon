@@ -44,6 +44,7 @@ export interface SaveParty {
   needsStarter(): boolean;
   begin(species: string): boolean;
   setHome(id: string, home: Home): Promise<CommandResult>; // 저장하지 못하면 그 이유를 돌려준다
+  setSize(id: string, size: number): Promise<CommandResult>; // 그림 크기 1~6. 규칙은 src/party/home.ts
   setShown(id: string, shown: boolean): Promise<CommandResult>;
   save(): SaveV3 | null;
   refresh(): void; // 명령을 보낸 뒤 바로 다시 읽는다 — 감시를 기다리지 않는다
@@ -226,6 +227,12 @@ export function createSaveParty(opts: SavePartyOptions): SaveParty {
     async setHome(id, home) {
       if (!amWriter) return ask("pet.set", id, { home });
       const r = game.send({ cmd: "pet.set", target: id, args: { home, reqId: `home:${id}:${now()}` } }, "pet");
+      reload(true);
+      return r;
+    },
+    async setSize(id, size) {
+      if (!amWriter) return ask("pet.set", id, { size });
+      const r = game.send({ cmd: "pet.set", target: id, args: { size, reqId: `size:${id}:${now()}` } }, "menu");
       reload(true);
       return r;
     },

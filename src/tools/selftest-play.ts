@@ -1,0 +1,115 @@
+// 놀이공간·설정 자체 확인 — npm run build 뒤 node dist/tools/selftest-play.js
+//
+// 테스트 프레임워크 없이 assert 만. 로그인 시 시작 기본값, 그림 크기, 놀이공간 영역 저장, 동반자 무대 사각형을 본다.
+// 설계는 docs/work/game-runtime/record.md "놀이공간·설정의 설계".
+// 끝에 "통과" 한 줄. 실패하면 어디서 깨졌는지와 함께 종료 코드 1
+import assert from "node:assert";
+import { playAreaRect } from "../main/layout";
+import { setSize } from "../party/home";
+import { empty, normalize } from "../save/v3";
+import { REGION_MIN, setSetting } from "../state/settings";
+import { createExecutor } from "../tx/executor";
+import { HANDLERS } from "../tx/handlers";
+import type { SaveV3 } from "../shared/save-v3";
+
+const T0 = new Date(2026, 8, 25, 10, 0, 0).getTime();
+
+// (1) 로그인 시 시작 — 새 저장은 켜짐, 이미 끈 저장은 그대로
+{
+  assert.equal(empty(T0).settings.startOnLogin, true, "계약 기본값 켜짐");
+  const off = empty(T0);
+  off.settings.startOnLogin = false;
+  const again = normalize(JSON.parse(JSON.stringify(off)) as unknown, T0);
+  assert.equal(again?.settings.startOnLogin, false, "사용자가 끈 값을 바꾸지 않는다");
+  process.stdout.write("(1) 로그인 시 시작 기본값  ok\n");
+}
+
+// (2) 그림 크기 — 1~6 정수만
+{
+  const save = seedPet();
+  assert.deepStrictEqual(setSize(save, "p1", 4), { ok: true, petId: "p1", size: 4 });
+  assert.equal(save.pets[0]?.size, 4);
+  for (const bad of [0, 7, 2.5, "3", null]) assert.equal(setSize(save, "p1", bad).reason, "bad-value", String(bad));
+  assert.equal(setSize(save, "없음", 3).reason, "no-pet");
+  assert.equal(save.pets[0]?.size, 4, "거부하면 바꾸지 않는다");
+  process.stdout.write("(2) 크기 1~6  ok\n");
+}
+
+// (3) 실행기로 크기 저장 — pet.set 에 size 만 보내면 자리는 그대로
+{
+  let state: SaveV3 | null = seedPet();
+  const ex = createExecutor({ read: () => structuredClone(state), write: (s) => ((state = s), true), now: () => T0, rand: () => 0.5 }, HANDLERS);
+  const home = state?.pets[0]?.home;
+  const res = ex.run({ id: "size-1", name: "pet.set", args: { petId: "p1", size: 5 } });
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(state?.pets[0]?.size, 5);
+  assert.deepStrictEqual(state?.pets[0]?.home, home);
+  const bad = ex.run({ id: "size-2", name: "pet.set", args: { petId: "p1", size: 9 } });
+  assert.equal(bad.ok, false);
+  assert.equal(state?.pets[0]?.size, 5);
+  process.stdout.write("(3) pet.set size  ok\n");
+}
+
+// (4) 놀이공간 영역 — 저장하면 영역 지정으로 바뀌고, 방식을 바꿔도 영역은 남는다
+{
+  const s = empty(T0);
+  assert.deepStrictEqual(setSetting(s, "playRegion", { x: 10.4, y: 20.6, w: 800, h: 400 }), { ok: true, key: "playRegion", value: { x: 10, y: 21, w: 800, h: 400 } });
+  assert.deepStrictEqual(s.settings.playArea, { mode: "region", rect: { x: 10, y: 21, w: 800, h: 400 } });
+  assert.equal(setSetting(s, "playRegion", { x: 0, y: 0, w: REGION_MIN.w - 1, h: 400 }).reason, "bad-value", "최소 크기보다 작다");
+  assert.equal(setSetting(s, "playRegion", { x: 0, y: 0, w: 800 }).reason, "bad-value", "값이 모자라다");
+  assert.equal(s.settings.playArea.rect?.w, 800, "거부하면 이전 영역을 유지한다");
+  setSetting(s, "playArea", "full");
+  assert.deepStrictEqual(s.settings.playArea, { mode: "full", rect: { x: 10, y: 21, w: 800, h: 400 } });
+  process.stdout.write("(4) 영역 저장과 유지  ok\n");
+}
+
+// (5) 동반자 무대 사각형 — 화면 전체, 영역, 화면 밖으로 나간 영역
+{
+  const primary = { x: 0, y: 0, w: 1920, h: 1080 };
+  const work = { x: 0, y: 0, w: 1920, h: 1032 };
+  const second = { x: 1920, y: 0, w: 2560, h: 1440 };
+  const displays = [primary, second];
+  assert.deepStrictEqual(playAreaRect({ mode: "full", rect: null }, displays, work), work, "화면 전체는 주 화면 작업 영역");
+  assert.deepStrictEqual(playAreaRect({ mode: "full", rect: { x: 100, y: 100, w: 500, h: 300 } }, displays, work), work, "영역이 있어도 방식이 화면 전체면 쓰지 않는다");
+  assert.deepStrictEqual(playAreaRect({ mode: "region", rect: { x: 100, y: 100, w: 500, h: 300 } }, displays, work), { x: 100, y: 100, w: 500, h: 300 });
+  assert.deepStrictEqual(
+    playAreaRect({ mode: "region", rect: { x: 1800, y: 100, w: 600, h: 300 } }, displays, work),
+    { x: 1920, y: 100, w: 480, h: 300 },
+    "두 화면에 걸치면 많이 겹치는 화면 안으로 자른다",
+  );
+  assert.deepStrictEqual(playAreaRect({ mode: "region", rect: { x: 9000, y: 0, w: 500, h: 300 } }, displays, work), work, "모니터가 빠져 화면 밖이면 화면 전체");
+  process.stdout.write("(5) 동반자 무대 사각형  ok\n");
+}
+
+function seedPet(): SaveV3 {
+  const s = empty(T0);
+  s.pets.push({
+    id: "p1",
+    species: "pikachu",
+    shiny: false,
+    nature: "hardy",
+    size: 2,
+    level: 5,
+    exp: 0,
+    affinity: 0,
+    affinityProgressMs: 0,
+    fullness: 80,
+    fullnessProgressMs: 0,
+    mood: 60,
+    moodProgressMs: 0,
+    feedCooldownMs: 0,
+    playCooldownMs: 0,
+    playWindowMs: 0,
+    playStreak: 0,
+    buffs: [],
+    home: { dx: -24, dy: -60 },
+    since: T0,
+    stage: 0,
+    evolved: [],
+    daily: { date: "", gained: 0, feeds: 0, plays: 0, pokes: 0, presence: 0, work: 0, turns: 0 },
+  });
+  s.party.slots[0] = { state: "pokemon", petId: "p1", hidden: false };
+  return s;
+}
+
+process.stdout.write("selftest-play: 통과 (로그인 시 시작·크기·pet.set size·영역·무대 사각형)\n");

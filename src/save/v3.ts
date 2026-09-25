@@ -71,7 +71,7 @@ export const newBox = (id: string, name: string): BoxV3 => ({ id, name, slots: A
 
 const emptySettings = (): SettingsV3 => ({
   language: "ko",
-  startOnLogin: false,
+  startOnLogin: true, // 계약 기본값 켜짐 (docs/specs/s5.md "설정과 연결"). 이미 값이 있는 저장은 그 값을 따른다
   sound: true,
   sleepAfterMin: 5,
   playArea: { mode: "full", rect: null },

@@ -12,7 +12,7 @@ import { keep, place, swap } from "../party/placement.js";
 import { setHidden, shownCount } from "../party/visibility.js";
 import { feed, play } from "../state/care.js";
 import { isSettingKey, setSetting } from "../state/settings.js";
-import { setHome } from "../party/home.js";
+import { setHome, setSize } from "../party/home.js";
 import { begin } from "../party/starter.js";
 import { buy } from "../shop/buy.js";
 import type { TxHandler } from "./executor";
@@ -240,10 +240,15 @@ const starterHandler: TxHandler = (draft, args, ctx) => {
   return { ok: true, result: { petId: res.petId, species: res.species, slotIndex: res.slotIndex } };
 };
 
-// 놓아 둔 자리 — 사용자가 마리를 끌어다 놓으면 그 자리를 기억한다
+// 놓아 둔 자리와 그림 크기 — 끌어다 놓으면 자리를, 상세의 크기 단추는 크기를 보낸다. 한 요청에 하나만 온다
 const homeHandler: TxHandler = (draft, args) => {
   const petId = petIdOf(args);
   if (!petId) return { ok: false, reason: "bad-args" };
+  if (isObj(args) && args.size !== undefined) {
+    const sized = setSize(draft, petId, args.size);
+    if (!sized.ok) return { ok: false, reason: sized.reason ?? "failed" };
+    return { ok: true, result: { petId, size: sized.size } };
+  }
   const res = setHome(draft, petId, isObj(args) ? args.home : null);
   if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
   return { ok: true, result: { petId, home: res.home } };

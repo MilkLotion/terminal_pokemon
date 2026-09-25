@@ -7,6 +7,7 @@
 // `--detail` 을 주면 첫 칸을 눌러 개체 상세까지 찍는다.
 // `--click <선택자>` 를 주면 그 요소를 한 번 눌러 놓고 찍는다. 여러 번 주면 순서대로 누른다.
 // `--input <선택자>=<글자>` 를 주면 누른 뒤에 그 입력칸에 한 글자씩 넣는다. 다 넣은 뒤 포커스가 있는 요소의 id 를 출력한다.
+// `--click-text <글자>` 를 주면 그 글자인 첫 단추를 누른다. `--click` 과 섞어 적은 순서대로 한다.
 // `--route <json>` 을 주면 알림 배너의 `바로가기` 처럼 그 목적지로 연다. 예: '{"to":"pet","petId":"p1"}'
 const fs = require("node:fs");
 const os = require("node:os");
@@ -126,7 +127,15 @@ app.whenReady().then(async () => {
   store.write(file, seed(empty, Date.now()));
 
   const route = routeArg ? JSON.parse(routeArg) : undefined;
-  const win = openManage({ preload: paths.preloadFile(), html: paths.rendererFile("manage.html"), game: createGame({ file }), ...(route ? { route } : {}) });
+  const game = createGame({ file });
+  // 설정의 `영역 그리기` — 앱과 같은 창을 띄우고, 적용하면 저장한다
+  const drawRegion = async () => {
+    const { drawRegion: draw } = require(path.join(root, "dist/main/region-window.js"));
+    const rect = await draw({ preload: paths.preloadFile(), html: paths.rendererFile("region.html"), current: game.read()?.settings.playArea.rect ?? null });
+    if (!rect) return { ok: false, reason: "cancelled" };
+    return game.send({ cmd: "settings.set", target: "playRegion", args: { value: rect } }, "settings");
+  };
+  const win = openManage({ preload: paths.preloadFile(), html: paths.rendererFile("manage.html"), game, drawRegion, ...(route ? { route } : {}) });
   if (!shotFile) return;
 
   // 탭 전환과 개체 상세는 그려진 뒤에야 누를 수 있다. 누른 뒤에도 다시 그릴 틈을 준다
@@ -145,6 +154,8 @@ app.whenReady().then(async () => {
       process.argv.forEach((flag, at) => {
         const value = process.argv[at + 1];
         if (flag === "--click" && value) step = step.then(() => click(`document.querySelector(${JSON.stringify(value)}).click(); true`));
+        // --click-text 는 그 글자인 첫 단추를 누른다 — 선택자로 가르기 어려운 설정 단추용
+        if (flag === "--click-text" && value) step = step.then(() => click(`[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === ${JSON.stringify(value)}).click(); true`));
         if (flag !== "--input" || !value) return;
         const cut = value.indexOf("=");
         const sel = value.slice(0, cut);

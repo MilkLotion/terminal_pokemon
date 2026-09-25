@@ -13,7 +13,7 @@ import { pidAlive } from "../save/writer";
 import { createAnchor, type Anchor, type AnchorUpdate } from "./anchor";
 import { createArtLoader } from "./art";
 import { createCommands, type Commands } from "./commands";
-import { STAGE_RULES, stageOf, toLocal, type Rect } from "./layout";
+import { STAGE_RULES, playAreaRect, stageOf, toLocal, type Rect } from "./layout";
 import { clearFailure, createLifetime, petFileOf, reportFailure, type Lifetime } from "./lifetime";
 import { petMenu, trayMenu } from "./menus";
 import { createSandboxParty, type PartyPet, type PartySource } from "./party";
@@ -21,6 +21,7 @@ import { createSaveParty, type SaveParty } from "./save-party";
 import { createGame, type GameV3 } from "./game";
 import { careItem, petStatus } from "./status";
 import { openManage } from "./manage-window";
+import { drawRegion } from "./region-window";
 import { createBannerWindow, type BannerWindow } from "./banner-window";
 import { PATHS, loadConfig, logoFile, preloadFile, rendererFile, saveConfig } from "./paths";
 import { pickStarter } from "./picker-window";
@@ -175,9 +176,30 @@ function workAreaTarget(): HelperWindow {
 
 // ── 배선 ─────────────────────────────────────────────────────────────────────
 
+// 동반자의 놀이공간 — 설정의 `화면 전체 | 영역 지정`. 터미널 창 대신 이 사각형을 따라가는 창으로 삼는다.
+// 세션 펫·창 펫은 지금처럼 터미널 창을 따른다 (2026-09-25 사용자 선택 "동반자만")
+// 저장을 매 폴링마다 읽지 않는다. 게임 틱과 관리 창의 설정 변경 뒤에 다시 읽는다
+let playArea: { mode: "full" | "region"; rect: Rect | null } = { mode: "full", rect: null };
+function syncPlayArea(): void {
+  if (mode !== "companion" || !game) return;
+  const next = game.read()?.settings.playArea;
+  if (!next || (next.mode === playArea.mode && JSON.stringify(next.rect) === JSON.stringify(playArea.rect))) return;
+  playArea = { mode: next.mode, rect: next.rect ? { ...next.rect } : null };
+  anchor?.poll(); // 무대 사각형을 바로 다시 정한다
+}
+
+function playTarget(): HelperWindow {
+  const displays = screen.getAllDisplays().map((d) => ({ x: d.bounds.x, y: d.bounds.y, w: d.bounds.width, h: d.bounds.height }));
+  const work = screen.getPrimaryDisplay().workArea;
+  const r = playAreaRect(playArea, displays, { x: work.x, y: work.y, w: work.width, h: work.height });
+  return { id: -2, pid: 0, app: "", x: r.x, y: r.y, w: r.w, h: r.h };
+}
+
 // 무대 사각형 = target ∩ 그 창이 있는 디스플레이. 바뀔 때만 setBounds (stage-window 가 가른다)
-function onAnchorUpdate(u: AnchorUpdate): void {
+function onAnchorUpdate(update: AnchorUpdate): void {
   if (quitting || !stageWin || !stage) return;
+  // 동반자는 따라갈 창 대신 놀이공간을 쓴다. 보일지와 앞뒤 순서는 앵커가 정한 그대로다
+  const u = mode === "companion" ? { ...update, target: playTarget() } : update;
   if (u.target) {
     const target: Rect = { x: u.target.x, y: u.target.y, w: u.target.w, h: u.target.h };
     const d = screen.getDisplayMatching({ x: target.x, y: target.y, width: target.w, height: target.h }).bounds;
@@ -240,7 +262,20 @@ const openManageWindow = (route?: ManageRoute): void => {
     send: async (req) => {
       if (!commands) return { ok: false, reason: "not-ready" };
       const reply = await commands.dispatcher.dispatch({ cmd: req.cmd as Command["cmd"], target: req.target, args: req.args, from: "settings" });
-      if (req.cmd === "settings.set") syncLoginItem();
+      if (req.cmd === "settings.set") {
+        syncLoginItem();
+        syncPlayArea();
+      }
+      return reply;
+    },
+    // 설정의 `영역 그리기` — 그린 영역을 저장하면 영역 지정으로 바뀐다. 취소하면 아무것도 바꾸지 않는다
+    drawRegion: async () => {
+      const current = game?.read()?.settings.playArea.rect ?? null;
+      const rect = await drawRegion({ preload: preloadFile(), html: rendererFile("region.html"), current });
+      if (!rect) return { ok: false, reason: "cancelled" };
+      if (!commands) return { ok: false, reason: "not-ready" };
+      const reply = await commands.dispatcher.dispatch({ cmd: "settings.set", target: "playRegion", args: { value: rect }, from: "settings" });
+      syncPlayArea();
       return reply;
     },
   });
@@ -324,6 +359,7 @@ function stateTick(): void {
       if (events) workMs = 0; // 쓰지 못했으면 다음 틱에 흐른 시간과 함께 다시 넘긴다
       worker.refresh();
       notifier?.tick(); // 부화 준비·진화 가능·업적 미수령을 배너 줄에 세운다 (src/notify)
+      syncPlayArea(); // 다른 프로세스의 관리 창에서 바꾼 놀이공간도 따라간다
       const points = Math.floor(worker.save()?.points.balance ?? 0);
       if (points !== lastMenuPoints) {
         lastMenuPoints = points;
@@ -542,6 +578,7 @@ async function main(): Promise<void> {
 
   applyClickThrough(!!config.clickThrough, false);
   syncLoginItem();
+  syncPlayArea();
   bootReady = true;
   lifetime.check(); // 창이 생겼으니 pid 파일에 ready 를 적는다 — pokebuddy 명령이 이걸 보고 기다림을 끝낸다
 

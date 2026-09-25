@@ -85,9 +85,12 @@ async function run() {
     await game('snapshot');
     checks.push('중복 실행은 기존 프로세스와 저장 유지. 실제 mailbox 조회');
     const sizeResult = await cli(['game', 'pet.set', id, 'size=3']).done;
-    assert.equal(JSON.parse(sizeResult.stdout).reason, 'not-yet');
-    assert.equal(JSON.parse(fs.readFileSync(saveFile, 'utf8')).pets[0].size, saved.pets[0].size);
-    checks.push('크기 변경 명령은 미구현으로 확인. 저장 크기는 변경되지 않음');
+    assert.equal(JSON.parse(sizeResult.stdout).reason, 'ok', sizeResult.stdout);
+    assert.equal(JSON.parse(fs.readFileSync(saveFile, 'utf8')).pets[0].size, 3);
+    const badSize = await cli(['game', 'pet.set', id, 'size=9']).done;
+    assert.equal(JSON.parse(badSize.stdout).reason, 'bad-value');
+    assert.equal(JSON.parse(fs.readFileSync(saveFile, 'utf8')).pets[0].size, 3);
+    checks.push('크기 변경 명령은 1~6 을 저장하고 범위 밖은 거부');
     await game('pet.set', id, JSON.stringify({ home: { dx: -40, dy: -70 } }));
     await game('party.hide', id);
     assert.equal(JSON.parse(fs.readFileSync(saveFile, 'utf8')).party.slots[0].hidden, true);
@@ -106,7 +109,7 @@ async function run() {
     assert.equal(events().filter((e) => e.event === 'picker-ready').length, selectedCount);
     const restoredSave = JSON.parse(fs.readFileSync(saveFile, 'utf8'));
     assert.equal(restoredSave.pets[0].id, id);
-    assert.equal(restoredSave.pets[0].size, saved.pets[0].size);
+    assert.equal(restoredSave.pets[0].size, 3, '바꾼 크기를 재실행 뒤에도 유지');
     assert.deepEqual(restoredSave.pets[0].home, { dx: -40, dy: -70 });
     assert.equal(restoredSave.party.slots[0].hidden, false);
     checks.push('종료 후 재실행에서 선택창 없이 같은 파티·크기 복원');

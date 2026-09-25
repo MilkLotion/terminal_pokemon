@@ -20,6 +20,9 @@ type ManageRoute = import("../shared/manage").ManageRoute;
 type BannerBridge = import("../shared/manage").BannerBridge;
 type BannerChannel = import("../shared/manage").BannerChannel;
 type BannerView = import("../shared/manage").BannerView;
+type RegionBridge = import("../shared/manage").RegionBridge;
+type RegionChannel = import("../shared/manage").RegionChannel;
+type RegionInit = import("../shared/manage").RegionInit;
 
 const { contextBridge, ipcRenderer } = require("electron") as typeof import("electron");
 
@@ -61,6 +64,7 @@ const MANAGE = {
   dexDetail: "manage:dex-detail",
   agents: "manage:agents",
   route: "manage:route",
+  drawRegion: "manage:draw-region",
 } satisfies Record<string, ManageChannel>;
 
 const manage: ManageBridge = {
@@ -70,6 +74,7 @@ const manage: ManageBridge = {
   dexDetail: (slug: string) => ipcRenderer.invoke(MANAGE.dexDetail, slug) as Promise<DexDetail | null>,
   agents: (req) => ipcRenderer.invoke(MANAGE.agents, req) as Promise<AgentReply>,
   onRoute: (cb) => ipcRenderer.on(MANAGE.route, (_e, route: ManageRoute) => cb(route)),
+  drawRegion: () => ipcRenderer.invoke(MANAGE.drawRegion) as Promise<ManageReply>,
 };
 
 contextBridge.exposeInMainWorld("pokebuddyManage", manage);
@@ -88,3 +93,16 @@ const banner: BannerBridge = {
 };
 
 contextBridge.exposeInMainWorld("pokebuddyBanner", banner);
+
+// 놀이공간 영역 그리기 창 — 지금 영역을 받고, 적용한 사각형(취소면 null)을 돌려준다
+const REGION = {
+  init: "region:init",
+  done: "region:done",
+} satisfies Record<string, RegionChannel>;
+
+const region: RegionBridge = {
+  onInit: (cb) => ipcRenderer.on(REGION.init, (_e, init: RegionInit) => cb(init)),
+  done: (rect) => ipcRenderer.send(REGION.done, rect),
+};
+
+contextBridge.exposeInMainWorld("pokebuddyRegion", region);
