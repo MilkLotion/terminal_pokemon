@@ -1,0 +1,63 @@
+// 해금 사슬 도달 검사 — 모든 종이 실제로 얻어질 수 있는지 규칙을 따라가며 넓힌다 (docs/work/s5-design-system-v2/feedback.md SR-06)
+//
+// 얻는 길(획득)과 해금을 나눠 본다. 시작은 첫 선택 후보 전부다(누구를 골라도 다른 후보는 해금돼 있다).
+//   랜덤알       해금한 종 가운데 진화 전용 종과 상점 종을 뺀 종을 얻는다 (src/shop/buy.ts randomPool)
+//   태고의돌     화석 목록을 얻는다 (data/eggs.json)
+//   알 행동 조건 조건으로 나오는 종을 얻는다 (data/egg-conditions.json — 해금과 무관)
+//   진화 규칙    `from` 종을 얻었으면 대상 종을 해금하고, 진화로 얻는다. 도구 진화의 도구는 상점에 있다 (SHOP_V3_RULES.evoItemPrice)
+//   상점 규칙    해금되며 상점에서 산다
+//   기본형·파티·작업·연속 교감 규칙  조건을 채우면 해금된다 — 해금된 뒤 랜덤알로 얻는다(진화 전용이 아니면)
+// 결과는 순수하다. 저장을 바꾸지 않는다
+import type { DexOptions } from "./data";
+import { unlockRules } from "./unlocks.js";
+import { eggPool } from "../shop/catalog.js";
+import { loadJson } from "./data.js";
+
+export interface Reach {
+  obtainable: Set<string>; // 얻을 수 있는 종
+  unlocked: Set<string>; // 해금될 수 있는 종
+  withRule: string[]; // 해금 규칙이 있는 종
+  unreachable: string[]; // 규칙이 있는데 얻을 수 없는 종 — 끊긴 사슬
+  brokenFrom: string[]; // 진화 규칙의 `from` 이 규칙표·알 어디에도 없는 종
+}
+
+export function reach(opts?: DexOptions): Reach {
+  const rules = unlockRules(opts);
+  const conditions = loadJson<{ species?: Record<string, string> }>("egg-conditions.json", opts).species ?? {};
+  const fossils = eggPool("ancient-stone", opts) ?? [];
+  const entries = Object.entries(rules).filter(([slug]) => !slug.startsWith("_"));
+  const evolveOnly = (slug: string): boolean => !!rules[slug]?.evolve && !rules[slug]?.starter;
+
+  const unlocked = new Set<string>(entries.filter(([, r]) => r.starter).map(([s]) => s));
+  const obtainable = new Set<string>();
+  const add = (set: Set<string>, slug: string): boolean => (set.has(slug) ? false : (set.add(slug), true));
+
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const s of unlocked) if (!evolveOnly(s)) grew = add(obtainable, s) || grew; // 랜덤알
+    for (const s of fossils) grew = add(obtainable, s) || grew;
+    for (const s of Object.keys(conditions)) grew = add(obtainable, s) || grew;
+    for (const [slug, r] of entries) {
+      if (r.evolve) {
+        if (obtainable.has(r.evolve.from)) {
+          grew = add(unlocked, slug) || grew;
+          grew = add(obtainable, slug) || grew;
+        }
+      } else if (r.base || r.shop != null || r.party || r.work || r.streak || r.bond || r.time || r.event) {
+        grew = add(unlocked, slug) || grew;
+        if (r.shop != null) grew = add(obtainable, slug) || grew;
+      }
+    }
+  }
+
+  const known = new Set<string>([...entries.map(([s]) => s), ...fossils, ...Object.keys(conditions)]);
+  const withRule = entries.map(([s]) => s);
+  return {
+    obtainable,
+    unlocked,
+    withRule,
+    unreachable: withRule.filter((s) => !obtainable.has(s)),
+    brokenFrom: entries.filter(([, r]) => r.evolve && !known.has(r.evolve.from)).map(([s]) => s),
+  };
+}

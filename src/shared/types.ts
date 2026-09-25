@@ -74,6 +74,7 @@ export type EvoNeed =
 
 export interface UnlockRule {
   starter?: true;
+  base?: true; // 진화 전 첫 단계 종 — 처음부터 해금한다 (2026-09-25 사용자 결정)
   evolve?: { from: string; affinity: number; when?: DayPart };
   shop?: number; // 포인트 가격 — 해금된 뒤 상점에서 산다
   party?: { count: number };

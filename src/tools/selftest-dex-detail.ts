@@ -39,7 +39,7 @@ function seed(): SaveV3 {
   assert.ok(d);
   assert.equal(d.state, "unlocked");
   assert.equal(d.owned, 0);
-  assert.equal(d.methods, "파이리에서 진화 · 랜덤알");
+  assert.equal(d.methods, "파이리에서 진화", "진화 전용 종은 랜덤알에서 나오지 않는다");
   assert.equal(d.evolution, "Lv.36에서 리자몽 · 진화는 개체 상세에서 직접");
   process.stdout.write("(2) 해금 · 앞 단계에서 진화  ok\n");
 }

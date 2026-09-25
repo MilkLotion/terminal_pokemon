@@ -51,6 +51,15 @@ function seed(points: number): SaveV3 {
   process.stdout.write("(2) 알 구매 · 준비 시간 시작  ok\n");
 }
 
+// (2b) 랜덤알 후보는 진화 전용 종을 뺀다 — 리자드·라이츄는 빠지고, 첫 선택 후보 피카츄는 남는다
+{
+  const s = seed(200);
+  s.dex.unlocked = ["charmander", "charmeleon", "pikachu", "raichu"];
+  buy(s, "random", T0, rand);
+  assert.deepStrictEqual(s.eggs[0]?.candidates, ["charmander", "pikachu"]);
+  process.stdout.write("(2b) 랜덤알 · 진화 전용 종 제외  ok\n");
+}
+
 // (3) 태고의돌은 화석 후보를 담는다
 {
   const s = seed(300);

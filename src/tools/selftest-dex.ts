@@ -318,10 +318,11 @@ function world(over: Partial<Pick<World, "now" | "hour">> = {}, save: Partial<Sa
   assert.deepStrictEqual(table.ditto, { party: { count: 3 } });
   assert.deepStrictEqual(table.lapras, { work: { hours: 100 } });
   assert.deepStrictEqual(table.chansey, { streak: { days: 14 } });
-  assert.strictEqual(table.mewtwo, undefined, "해금 길 없는 종은 표에 없다");
-  assert.strictEqual(table.pichu, undefined);
+  assert.strictEqual(table.mewtwo, undefined, "전설·환상은 기본형 규칙을 받지 않는다 — 해금 길 없는 종은 표에 없다");
+  assert.deepStrictEqual(table.pichu, { base: true }, "아기 포켓몬도 진화 전 첫 단계라 기본형");
+  assert.deepStrictEqual(table.rattata, { base: true }, "기본형은 처음부터 해금 (2026-09-25 사용자 결정)");
   // 표의 모든 규칙이 아는 조건만 쓰고, evolve 의 from·to 가 evo.json 과 맞는다
-  const known = ["starter", "evolve", "shop", "party", "work", "streak", "bond", "time", "event"];
+  const known = ["starter", "base", "evolve", "shop", "party", "work", "streak", "bond", "time", "event"];
   for (const [slug, rule] of Object.entries(table)) {
     for (const k of Object.keys(rule)) assert.ok(known.includes(k), `${slug} 모르는 조건 ${k}`);
     if (rule.evolve) {
@@ -330,11 +331,12 @@ function world(over: Partial<Pick<World, "now" | "hour">> = {}, save: Partial<Sa
       assert.ok(dex.hasProfile(slug) && dex.hasProfile(rule.evolve.from), `${slug} 프로필`);
     }
   }
-  // 첫 실행 세상 — 스타터와 상점 종은 해금, 진화·조건 종은 아직
+  // 첫 실행 세상 — 스타터·기본형·상점 종은 해금, 진화·조건 종은 아직
   const fresh = dex.evaluate(table, world());
-  assert.ok(fresh.includes("bulbasaur") && fresh.includes("snorlax"), "첫 실행에 스타터·상점 종");
+  assert.ok(fresh.includes("bulbasaur") && fresh.includes("snorlax") && fresh.includes("rattata"), "첫 실행에 스타터·상점·기본형 종");
   assert.ok(!fresh.includes("umbreon") && !fresh.includes("ditto") && !fresh.includes("lapras") && !fresh.includes("chansey"));
-  assert.strictEqual(fresh.length, 30, "스타터 29 + 잠만보");
+  const baseCount = Object.values(table).filter((r) => r.base).length;
+  assert.strictEqual(fresh.length, 30 + baseCount, "스타터 29 + 잠만보 + 기본형");
   // 이브이 500 · 밤 — 진화 규칙이 살아난다
   const night = dex.evaluate(table, world({ hour: 22 }, { party: [pet("eevee", 500)], unlocked: fresh }));
   assert.ok(night.includes("umbreon") && night.includes("vaporeon") && !night.includes("espeon"), "밤에는 블래키, 에브이는 아니다");

@@ -2,6 +2,7 @@
 //
 // 조건 종류마다 함수 하나. 규칙에 적힌 조건은 전부 만족해야 한다. 판정은 순수 — 저장을 바꾸지 않는다
 //   starter  표시다 — 항상 참 (첫 실행 선택 화면에 나온다)
+//   base     진화 전 첫 단계 종 — 항상 참. 처음부터 해금해 랜덤알에서 나온다 (2026-09-25 사용자 결정)
 //   evolve   `from` 종을 가진 마리 중 친밀도가 임계 이상인 마리가 있다. `when` 은 지금 시간대
 //   shop     가격이다, 문턱이 아니다 — 항상 참. 해금된 뒤 상점에 이 값으로 나온다 (priceOf). 포인트 검사는 상점 모듈이
 //   party    파티 마리 수 ≥ count
@@ -13,6 +14,7 @@
 // 시간대는 RULES.night — 18시부터 다음날 6시 전까지 night [스펙 미확정]
 
 import { localDate } from "../shared/clock";
+import type { SaveV3 } from "../shared/save-v3";
 import type { DayPart, Pet, UnlockRule, World } from "../shared/types";
 import { isMetaKey, loadJson, normalizeSlug, type DexOptions } from "./data";
 
@@ -32,6 +34,7 @@ const petsOf = (species: string, party: Pet[]): Pet[] => {
 
 // ── 조건별 판정 ────────────────────────────────────────────────────────────────
 export const checkStarter = (_flag: true, _world: World): boolean => true;
+export const checkBase = (_flag: true, _world: World): boolean => true;
 
 export function checkEvolve(cond: NonNullable<UnlockRule["evolve"]>, world: World): boolean {
   if (cond.when && dayPartOf(world.hour) !== cond.when) return false;
@@ -62,6 +65,7 @@ export function check(rule: UnlockRule, world: World): boolean {
     return ok;
   };
   if (rule.starter !== undefined && !need(checkStarter(rule.starter, world))) return false;
+  if (rule.base !== undefined && !need(checkBase(rule.base, world))) return false;
   if (rule.evolve !== undefined && !need(checkEvolve(rule.evolve, world))) return false;
   if (rule.shop !== undefined && !need(checkShop(rule.shop, world))) return false;
   if (rule.party !== undefined && !need(checkParty(rule.party, world))) return false;
@@ -102,3 +106,34 @@ export function evolvers(rule: UnlockRule, world: World): Pet[] {
 
 // data/unlocks.json 전부
 export const unlockRules = (opts?: DexOptions): UnlockRules => loadJson<UnlockRules>("unlocks.json", opts);
+
+// ── v3 저장 해금 ───────────────────────────────────────────────────────────────
+// 규칙을 만족한 종을 save.dex.unlocked 에 더한다. 새로 해금한 슬러그를 돌려준다
+//   게임 틱(state/time.ts applyTime)과 모든 거래 뒤(tx/executor.ts)에 부른다 — 첫 선택 직후 다른 후보·기본형도 해금된다
+//   evolve 규칙은 보지 않는다 — 실제로 진화할 때 해금한다
+//   파티 마리 수는 칸에 든 마리, 친밀도는 가진 마리 전부로 본다
+export function unlockByRules(save: SaveV3, now: number, opts?: DexOptions): string[] {
+  const rules = unlockRules(opts);
+  const done = new Set(save.dex.unlocked.map(normalizeSlug));
+  const partyCount = save.party.slots.filter((s) => s.state === "pokemon" && s.petId).length;
+  const part = dayPartOf(new Date(now).getHours());
+  const out: string[] = [];
+  for (const [slug, r] of Object.entries(rules)) {
+    if (isMetaKey(slug) || r.evolve || done.has(normalizeSlug(slug))) continue;
+    let seen = 0;
+    const ok = (cond: boolean): boolean => ((seen += 1), cond);
+    if (r.party && !ok(partyCount >= r.party.count)) continue;
+    if (r.work && !ok(save.totals.workMs >= r.work.hours * 3600_000)) continue;
+    if (r.streak && !ok(save.daily.streak >= r.streak.days)) continue;
+    if (r.bond && !ok(save.pets.some((p) => normalizeSlug(p.species) === normalizeSlug(r.bond!.of) && p.affinity >= r.bond!.affinity))) continue;
+    if (r.time && !ok(part === r.time)) continue;
+    if (r.event && !ok(localDate(now).slice(5) === r.event.date)) continue;
+    if (r.starter) ok(true);
+    if (r.base) ok(true);
+    if (r.shop !== undefined) ok(true);
+    if (seen === 0) continue;
+    save.dex.unlocked.push(slug);
+    out.push(slug);
+  }
+  return out;
+}
