@@ -1,6 +1,6 @@
 // 관리 창 — 파티·박스·도감·상점·가방을 보는 창. 문서는 src/renderer/manage.html, 값은 스냅샷이 준다.
 //
-// 폭은 고정이고 세로만 조절한다. 박스 6열과 도감 5열 격자가 720 폭에 맞춰져 있다 (docs/specs/s5.md "관리 창").
+// 폭은 고정이고 세로만 조절한다. 박스 6열과 도감 5열 격자가 640 폭에 맞춰져 있다 (docs/specs/s5.md "관리 창").
 // 창을 열 때 흐른 시간을 먼저 적용한다. 그래야 만복도와 쿨타임이 지금 값으로 보인다.
 // 창은 하나만 둔다. 다시 열면 이미 떠 있는 창을 앞으로 가져온다.
 import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
@@ -17,7 +17,7 @@ const CH = {
 } satisfies Record<string, ManageChannel>;
 
 // 창 조작 단추가 앉는 자리. 색은 헤더와 같아야 이어져 보인다 (`--surface` 와 `--muted`)
-const CHROME = { color: "#ffffff", symbolColor: "#4a6663", height: 61 };
+const CHROME = { color: "#ffffff", symbolColor: "#4a6663", height: 40 };
 
 export interface ManageOptions {
   preload: string;

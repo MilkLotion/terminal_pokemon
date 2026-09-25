@@ -40,26 +40,23 @@
         overflow: hidden;
       }
 
-      /* 헤더 — 브랜드, 보유 포인트, 업적창·설정 아이콘.
+      /* 헤더 — 브랜드와 보유 포인트만 둔다. 업적창·설정 아이콘은 탭 줄 오른쪽이다.
          제목 표시줄 자리를 이 헤더가 대신하므로 끌어서 창을 옮길 수 있어야 한다.
-         오른쪽은 OS 가 그리는 창 조작 단추의 폭만큼 비운다. 겹쳐 두면 아이콘을 누를 수 없다 */
+         오른쪽은 OS 가 그리는 창 조작 단추의 폭만큼 비운다. 높이는 manage-window.ts 의 CHROME 과 같다 */
       header {
         flex: none;
-        height: 61px;
+        height: 40px;
         display: flex;
         align-items: center;
         gap: 12px;
         /* macOS 는 왼쪽에, Windows 는 오른쪽에 창 조작 단추가 앉는다. 양쪽 다 비워 둔다 */
-        padding-left: calc(env(titlebar-area-x, 0px) + 24px);
-        padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 16px);
+        padding-left: calc(env(titlebar-area-x, 0px) + 20px);
+        padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 12px);
         background: var(--surface);
         border-bottom: 1px solid var(--line);
         -webkit-app-region: drag;
       }
-      header button {
-        -webkit-app-region: no-drag;
-      }
-      /* 헤더 아이콘 — 선으로만 그린다. 채움이 없어 글자와 같은 무게로 보인다 */
+      /* 업적창·설정 아이콘 — 선으로만 그린다. 채움이 없어 글자와 같은 무게로 보인다 */
       .icon {
         position: relative;
         appearance: none;
@@ -101,45 +98,72 @@
       .spacer {
         flex: 1;
       }
-      .points-label {
-        color: var(--muted);
-        font-size: 11px;
+      /* 보유 포인트 칩 — 동전 모양 P 와 숫자 */
+      .point-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px 3px 4px;
+        border-radius: 999px;
+        background: var(--accent-bg);
+      }
+      .point-chip .coin {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--primary);
+        color: var(--inverse);
+        font-size: 10px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
       .points {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
       }
 
-      /* 탭 */
+      /* 탭 줄 — 왼쪽은 탭, 오른쪽은 업적창·설정 아이콘 */
       nav {
         flex: none;
+        height: 40px;
         display: flex;
-        gap: 4px;
-        padding: 0 24px;
+        align-items: center;
+        padding: 0 12px 0 20px;
         background: var(--surface);
         border-bottom: 1px solid var(--line);
       }
-      nav button {
+      nav .tabs {
+        align-self: stretch;
+        display: flex;
+        gap: 4px;
+      }
+      nav .tabs button {
         appearance: none;
         border: 0;
         background: none;
         color: var(--muted);
         font: inherit;
-        padding: 8px 14px 6px;
+        padding: 2px 14px 0;
         border-bottom: 2px solid transparent;
         cursor: pointer;
       }
-      nav button[aria-selected="true"] {
+      nav .tabs button[aria-selected="true"] {
         color: var(--primary);
         border-bottom-color: var(--primary);
         font-weight: 600;
+      }
+      nav .nav-actions {
+        display: flex;
+        gap: 4px;
       }
 
       /* 본문 — 여기만 스크롤한다 */
       main {
         flex: 1;
         overflow-y: auto;
-        padding: 24px;
+        padding: 16px 20px 32px;
       }
       .head {
         display: flex;
@@ -1065,25 +1089,32 @@
     <header>
       <span class="brand">PokeBuddy</span>
       <span class="spacer"></span>
-      <span class="points-label">보유 포인트</span>
-      <span class="points" id="points">0 P</span>
-      <button type="button" class="icon" id="open-achievements" title="업적창">
-        <svg viewBox="0 0 20 20" aria-hidden="true">
-          <path d="M6 3h8v4a4 4 0 0 1-8 0V3Z" />
-          <path d="M6 4H4v1a3 3 0 0 0 3 3M14 4h2v1a3 3 0 0 1-3 3" />
-          <path d="M10 11v3M7.5 16h5" />
-        </svg>
-        <span class="dot" id="achievements-dot" hidden></span>
-      </button>
-      <button type="button" class="icon" id="open-settings" title="설정">
-        <svg viewBox="0 0 20 20" aria-hidden="true">
-          <path d="M3 6.5h8.5M15.5 6.5H17M3 13.5h1.5M8.5 13.5H17" />
-          <circle cx="13.5" cy="6.5" r="2" />
-          <circle cx="6.5" cy="13.5" r="2" />
-        </svg>
-      </button>
+      <span class="point-chip" title="보유 포인트" aria-label="보유 포인트">
+        <span class="coin" aria-hidden="true">P</span>
+        <span class="points" id="points">0</span>
+      </span>
     </header>
-    <nav id="tabs"></nav>
+    <nav>
+      <div class="tabs" id="tabs"></div>
+      <span class="spacer"></span>
+      <div class="nav-actions">
+        <button type="button" class="icon" id="open-achievements" title="업적창">
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M6 3h8v4a4 4 0 0 1-8 0V3Z" />
+            <path d="M6 4H4v1a3 3 0 0 0 3 3M14 4h2v1a3 3 0 0 1-3 3" />
+            <path d="M10 11v3M7.5 16h5" />
+          </svg>
+          <span class="dot" id="achievements-dot" hidden></span>
+        </button>
+        <button type="button" class="icon" id="open-settings" title="설정">
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M3 6.5h8.5M15.5 6.5H17M3 13.5h1.5M8.5 13.5H17" />
+            <circle cx="13.5" cy="6.5" r="2" />
+            <circle cx="6.5" cy="13.5" r="2" />
+          </svg>
+        </button>
+      </div>
+    </nav>
     <main id="body"></main>
 
     <div class="scrim" id="scrim"><div class="dialog" id="dialog"></div></div>

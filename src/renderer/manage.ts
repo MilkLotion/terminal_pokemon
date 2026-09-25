@@ -460,7 +460,7 @@ function draw(): void {
     bodyEl.appendChild(el("div", "empty-note", "저장이 없습니다. 첫 포켓몬을 먼저 고르세요."));
     return;
   }
-  pointsEl.textContent = `${view.points.toLocaleString("ko-KR")} P`;
+  pointsEl.textContent = view.points.toLocaleString("ko-KR");
   achDotEl.hidden = view.achievements.unclaimed === 0;
   if (tab === "party") drawParty(view);
   else if (tab === "box") drawBox(view);
