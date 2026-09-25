@@ -86,6 +86,8 @@ export function createStageWindow(opts: StageWindowOptions): StageWindow {
       // 포커스를 받지 않는 창(focusable:false)이라 Chromium 이 누르기를 버린다(MA_NOACTIVATEANDEAT) — 떼기만 온다.
       // 켜 두면 숨은 동안만 타이머가 초당 1회로 느려지고, 다시 보이면 곧바로 제 속도로 돈다 (최소 시험 창으로 확인)
       backgroundThrottling: process.platform === "win32",
+      // 울음소리 — 메뉴에서 고른 놀아주기처럼 무대 창에 사용자 동작이 없어도 소리를 낸다 (Chromium 자동 재생 제한)
+      autoplayPolicy: "no-user-gesture-required",
     },
   });
   let stageRect: Rect | null = null;

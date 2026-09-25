@@ -149,6 +149,7 @@ type Dialog =
 
 let tab: TabId = "party";
 let view: Snapshot | null = null;
+let detailPet: string | null = null; // 개체 상세 페이지에 띄운 개체 — 있으면 탭 본문 대신 상세를 그린다
 let dexRows: DexEntry[] | null = null;
 // 도감에서 고른 칸과 그 상세 — 상세는 칸을 누를 때 한 종만 따로 읽는다
 let dexPick: string | null = null;
@@ -735,6 +736,7 @@ function drawTabs(): void {
     b.setAttribute("aria-selected", String(t.id === tab));
     b.addEventListener("click", () => {
       tab = t.id;
+      detailPet = null;
       if (t.id === "dex" && !dexRows) void loadDex();
       draw();
     });
@@ -751,6 +753,14 @@ function draw(): void {
   }
   pointsEl.textContent = view.points.toLocaleString("ko-KR");
   achDotEl.hidden = view.achievements.unclaimed === 0;
+  // 개체 상세 페이지 — 개체가 사라졌으면 탭으로 돌아간다
+  const detail = detailPet ? petOf(detailPet) : null;
+  if (detail) {
+    drawPetPage(view, detail);
+    restoreSearchFocus();
+    return;
+  }
+  detailPet = null;
   if (tab === "party") drawParty(view);
   else if (tab === "box") drawBox(view);
   else if (tab === "dex") drawDex(view);
@@ -798,57 +808,143 @@ function actions(...items: HTMLElement[]): HTMLElement {
 
 const closeButton = (label = "닫기"): HTMLButtonElement => actionButton(label, false, false, close);
 
-// ── 모달 · 개체 상세 ───────────────────────────────────────────────────────────
+// ── 개체 상세 페이지 ───────────────────────────────────────────────────────────
+// Figma `Detail / Base` `217:1968`(파티)·`Detail / Box Pokemon` `389:7210`(박스). 모달이 아니라 탭 본문을 차지하는 페이지다.
+// 진화 확인·성격 변경 같은 모달은 이 페이지 위에 뜨고, 끝나면 이 페이지로 돌아온다
 
-function drawPet(petId: string): void {
-  const pet = petOf(petId);
-  if (!pet) {
-    close();
-    return;
-  }
-  const slot = slotOfPet(petId);
+// 한 줄 — 왼쪽에 이름과 설명, 오른쪽에 단추 (Figma care/feed · setting/visibility · growth 줄)
+function actRow(title: string, desc: string, action?: HTMLElement): HTMLElement {
+  const row = el("div", "act-row");
+  const copy = el("div", "copy");
+  copy.append(el("div", "title", title), el("div", "desc", desc));
+  row.appendChild(copy);
+  if (action) row.appendChild(action);
+  return row;
+}
+
+function pageButton(label: string, primary: boolean, disabled: boolean, run: () => void): HTMLButtonElement {
+  const b = button(primary ? "page-btn primary" : "page-btn", label);
+  b.disabled = disabled;
+  b.addEventListener("click", run);
+  return b;
+}
+
+function section(label: string, ...rows: HTMLElement[]): HTMLElement {
+  const box = el("section", "detail-section");
+  box.appendChild(el("div", "section-label", label));
+  box.append(...rows);
+  return box;
+}
+
+const boxNameOf = (id: string): string | null => view?.boxes.find((b) => b.slots.some((p) => p?.id === id))?.name ?? null;
+
+function drawPetPage(v: Snapshot, pet: PetView): void {
+  const slot = slotOfPet(pet.id);
   const inParty = slot != null;
-  // 박스 개체는 스냅샷에서 늘 숨김으로 온다. 파티에 있을 때만 숨김 여부가 뜻을 가진다
-  const kept = inParty && pet.hidden ? " · 숨긴 상태" : "";
-  dialogEl.append(...dialogHead(pet.name, `Lv.${pet.level} · ${pet.nature} · ${ZONE_WORD[pet.zone] ?? pet.zone}${kept}`));
+  const where = inParty ? `파티 ${slot + 1}번` : (boxNameOf(pet.id) ?? "박스");
+  const page = el("div", "pet-page");
 
+  // 머리 — 제목과 돌아가기
+  const headRow = el("div", "page-head");
+  const copy = el("div", "copy");
+  copy.append(el("div", "title", `${pet.name} 상세`), el("div", "caption", inParty ? `${where} · ${pet.hidden ? "숨긴 상태" : "표시 중"}` : `${where} · 보관 중`));
+  headRow.append(
+    copy,
+    pageButton(inParty ? "파티로" : "박스로", false, false, () => {
+      detailPet = null;
+      draw();
+    }),
+  );
+  page.appendChild(headRow);
+
+  // 프로필 — 초상, 레벨, 이름, 타입·성격, 상태, 친밀도·만복도
+  const profile = el("div", "profile");
+  const portrait = portraitOf(pet.species, pet.shiny, "portrait", pet.shiny ? "이로치" : "");
+  if (inParty && pet.hidden) {
+    const mark = el("span", "mark");
+    mark.title = "숨긴 상태";
+    portrait.appendChild(mark);
+  }
+  profile.appendChild(portrait);
+  const identity = el("div", "identity");
+  const level = el("div", "level-row");
+  const bar = el("div", "mini-track");
+  const fill = el("div", "fill");
+  fill.style.width = `${pet.percentToNext}%`;
+  bar.appendChild(fill);
+  level.append(el("span", undefined, `${where} · Lv.${pet.level}`), bar, el("span", undefined, `Lv.${pet.level + 1}까지 ${pet.percentToNext}%`));
+  identity.appendChild(level);
+  identity.appendChild(el("div", "name", pet.name));
+  const traits = el("div", "traits");
+  pet.types.forEach((name, i) => traits.appendChild(typeBadge(name, pet.typeIds[i])));
+  traits.appendChild(el("span", "nature", `성격: ${pet.nature}`));
+  identity.appendChild(traits);
+  const state = el("div", "state-row");
+  state.appendChild(el("span", "status-dot"));
+  state.appendChild(el("span", "state", inParty ? `기분 ${pet.moodWord} · ${ZONE_WORD[pet.zone] ?? pet.zone}` : "박스에 보관 중 · 친밀도·만복도·적립 멈춤"));
+  if (inParty && pet.longPlay) state.appendChild(el("span", "chip-note", "오래 놀아주기"));
+  identity.appendChild(state);
   const meters = el("div", "meters");
-  meters.append(meter("친밀도", pet.affinity), meter("만복도", pet.fullness, pet.zone), meter(`기분 · ${pet.moodWord}`, pet.mood));
-  dialogEl.appendChild(meters);
-  // 그림 크기 — 파티 개체만. 박스 상세에는 표시 항목을 두지 않는다 (Figma `Detail / Base` "표시 설정")
-  if (inParty) dialogEl.appendChild(sizeRow(pet));
+  meters.append(meter("친밀도", pet.affinity), meter("만복도", pet.fullness, pet.zone));
+  identity.appendChild(meters);
+  profile.appendChild(identity);
+  page.appendChild(profile);
 
-  if (!inParty) {
-    // 박스 개체 — 빈 칸이 있으면 바로 배치하고, 없으면 바꿀 칸을 고른다
-    const free = emptySlot();
-    dialogEl.appendChild(el("div", "sub", "박스에 있습니다. 파티에 있는 동안에만 시간이 흐릅니다."));
-    // 박스 개체도 진화할 수 있다 (docs/specs/s5.md "박스 개체의 상세에는 … 성장·진화, 도구 사용, 파티에 배치 또는 교체만 둔다")
-    const boxButtons = [
-      free != null
-        ? actionButton("파티에 배치", true, false, () => void send("party.place", pet.id, { slotIndex: free }))
-        : actionButton("교체", true, false, () => open({ kind: "pick-slot", petId: pet.id })),
-    ];
-    if (pet.evolutions.length) boxButtons.push(actionButton("진화", false, false, () => open({ kind: "evolve", petId: pet.id })));
-    boxButtons.push(actionButton("성격 변경", false, false, () => open({ kind: "nature", petId: pet.id })));
-    boxButtons.push(closeButton());
-    dialogEl.appendChild(actions(...boxButtons));
-    return;
+  if (inParty) {
+    // 돌봄 — 밥 주기·놀아주기 두 칸
+    const feedDesc = pet.fullness >= 100 ? "이미 배가 불러요." : pet.feedReady ? "무료로 배고픔을 돌봐요." : `${pet.feedInSec}초 뒤에 줄 수 있어요.`;
+    const playDesc = pet.playReady ? "기분과 친밀도를 돌봐요." : "아직 쉬는 시간이에요.";
+    const care = el("div", "care-row");
+    care.append(
+      actRow("밥 주기", feedDesc, pageButton("실행", false, !pet.feedReady || pet.fullness >= 100, () => void send("feed", pet.id))),
+      actRow("놀아주기", playDesc, pageButton("실행", false, !pet.playReady, () => void send("play", pet.id))),
+    );
+    page.appendChild(section("돌봄", care));
+
+    // 표시 설정 — 화면 표시, 크기
+    const visible = pageButton(pet.hidden ? "꺼내기" : "숨기기", false, false, () => void send(pet.hidden ? "party.show" : "party.hide", pet.id));
+    page.appendChild(section("표시 설정", actRow("화면 표시", pet.hidden ? "숨겨 둔 상태예요." : "지금 화면에 표시 중이에요.", visible), sizeRow(pet)));
   }
 
-  const buttons = [
-    actionButton(pet.hidden ? "꺼내기" : "숨기기", true, false, () => void send(pet.hidden ? "party.show" : "party.hide", pet.id)),
-    actionButton(pet.feedReady ? "밥 주기" : `밥 주기 (${pet.feedInSec}초)`, false, !pet.feedReady || pet.fullness >= 100, () => void send("feed", pet.id)),
-    actionButton(pet.playReady ? "놀아주기" : "놀아주기 (쿨타임)", false, !pet.playReady, () => void send("play", pet.id)),
-  ];
-  // 최종 단계는 진화할 곳이 없다 — 버튼을 두지 않는다
-  if (pet.evolutions.length) buttons.push(actionButton("진화", false, false, () => open({ kind: "evolve", petId: pet.id })));
-  buttons.push(
-    actionButton("성격 변경", false, false, () => open({ kind: "nature", petId: pet.id })),
-    actionButton("교체", false, false, () => open({ kind: "pick-box", slotIndex: slot })),
-    actionButton("박스에 보관", false, false, () => void send("party.keep", pet.id)),
-    closeButton(),
+  // 성장·진화 — 진화, 성격, 도구 사용
+  const growth: HTMLElement[] = [];
+  const ready = pet.evolutions.filter((e) => e.ready);
+  const toEvolve = (): void => open({ kind: "evolve", petId: pet.id });
+  if (!pet.evolutions.length) growth.push(actRow("진화", "더 진화하지 않아요."));
+  else if (ready.length) growth.push(actRow(`진화 가능 · ${ready.map((e) => e.name).join(" · ")}`, "조건을 채웠어요. 한 단계씩 직접 진화해요.", pageButton("진화", true, false, toEvolve)));
+  else {
+    const need = pet.evolutions.map((e) => e.need ?? "").filter(Boolean).join(" · ");
+    growth.push(actRow(`진화 · ${pet.evolutions.map((e) => e.name).join(" · ")}`, need || "조건을 채우면 여기서 진화해요.", pageButton("진화", false, false, toEvolve)));
+  }
+  growth.push(actRow(`성격 · ${pet.nature}`, "민트로 바꿀 수 있어요 · 보정 없는 성격은 성실민트", pageButton("성격 변경", false, false, () => open({ kind: "nature", petId: pet.id }))));
+  growth.push(
+    actRow(
+      "도구 사용",
+      "경험사탕·이상한사탕·진화의돌·민트",
+      pageButton("가방 ›", false, false, () => {
+        detailPet = null;
+        tab = "bag";
+        draw();
+      }),
+    ),
   );
-  dialogEl.appendChild(actions(...buttons));
+  page.appendChild(section("성장·진화", ...growth));
+
+  // 파티 관리
+  const manage = el("div", "manage-row");
+  if (inParty) {
+    manage.append(pageButton("교체", false, false, () => open({ kind: "pick-box", slotIndex: slot })), pageButton("박스에 보관", false, false, () => void send("party.keep", pet.id)));
+  } else {
+    const free = emptySlot();
+    manage.appendChild(
+      free != null
+        ? pageButton("파티에 배치", true, false, () => void send("party.place", pet.id, { slotIndex: free }))
+        : pageButton("교체", true, false, () => open({ kind: "pick-slot", petId: pet.id })),
+    );
+  }
+  page.appendChild(section("파티 관리", manage));
+  if (notice) page.appendChild(el("div", "notice bad", notice));
+  bodyEl.appendChild(page);
 }
 
 // 크기 1~6 — 누를 때마다 한 번 저장한다. 고른 단계는 채운 단추다
@@ -1337,8 +1433,7 @@ function drawDialog(): void {
   dialogEl.className = SHAPE[dialog.kind];
   dialogEl.replaceChildren();
 
-  if (dialog.kind === "pet") drawPet(dialog.petId);
-  else if (dialog.kind === "use") drawUse(dialog.itemId);
+  if (dialog.kind === "use") drawUse(dialog.itemId);
   else if (dialog.kind === "evolve") drawEvolve(dialog.petId, dialog.to, dialog.itemId);
   else if (dialog.kind === "evo-target") drawEvoTarget(dialog.itemId);
   else if (dialog.kind === "nature") drawNature(dialog.petId, dialog.pick, dialog.itemId, dialog.listOpen === true);
@@ -1356,6 +1451,17 @@ function drawDialog(): void {
 
 // 다른 모달로 갈 때는 지난 실패 문구를 지운다. 구매 창의 부족 안내처럼 그 화면이 다시 만드는 것은 남는다
 function open(next: Dialog): void {
+  // 개체 상세는 모달이 아니라 페이지다 — 모달을 닫고 그 개체가 있는 탭에서 상세를 그린다
+  if (next.kind === "pet") {
+    dialog = null;
+    notice = "";
+    setScrim(false);
+    detailPet = next.petId;
+    tab = slotOfPet(next.petId) != null ? "party" : "box";
+    draw();
+    bodyEl.scrollTop = 0;
+    return;
+  }
   dialog = next;
   notice = "";
   drawDialog();

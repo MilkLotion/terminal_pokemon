@@ -302,7 +302,13 @@ const trayTemplate = () => [
 // 울음소리 — 놀아주기가 성공하면 그 포켓몬의 PokeAPI 울음소리를 무대에서 한 번 낸다.
 // 설정의 "알림 소리" 가 꺼져 있으면 내지 않는다. 받은 소리는 ~/.claude/pokebuddy/cries/ 에 캐시한다 (src/main/cries.ts)
 let cries: Cries | null = null;
+// 같은 포켓몬을 연달아 누르면 겹쳐 울지 않게 잠깐 쉰다
+const cryAt = new Map<string, number>();
+const CRY_GAP_MS = 1500;
 async function playCry(id: string): Promise<void> {
+  const at = Date.now();
+  if (at - (cryAt.get(id) ?? 0) < CRY_GAP_MS) return;
+  cryAt.set(id, at);
   const save = game?.read();
   if (!save || save.settings.sound === false) return;
   const pet = save.pets.find((p) => p.id === id);
@@ -497,7 +503,11 @@ async function main(): Promise<void> {
         await refreshParty();
       });
     },
-    onClick: (id) => void commands?.click(id), // 클릭은 놀아주기 (src/main/commands.ts)
+    // 클릭은 놀아주기 (src/main/commands.ts). 울음소리는 놀아주기가 쿨타임이어도 클릭할 때마다 낸다 — 반응을 들려준다
+    onClick: (id) => {
+      void commands?.click(id);
+      void playCry(id);
+    },
     onMenu: showPetMenu,
     onArtMissing: (pet) => {
       // PMD 를 못 받았다 — 대개 없는 이름이거나 네트워크가 막혔다. 무대에 나오지 않고 이유만 남긴다 (s2-plan 2.2 h)
@@ -541,7 +551,7 @@ async function main(): Promise<void> {
       poke: (id) => !!stage?.poke(id),
       care: (id, action) => {
         stage?.care(id, action);
-        if (action === "play") void playCry(id);
+        if (action === "play") void playCry(id); // 메뉴·관리 창에서 고른 놀아주기
       },
       petIds: () => stage?.petIds() ?? [],
       size: () => stageWin?.size() ?? { w: 0, h: 0 },

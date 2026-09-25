@@ -159,10 +159,11 @@
         gap: 4px;
       }
 
-      /* 본문 — 여기만 스크롤한다 */
+      /* 본문 — 여기만 스크롤한다. 스크롤 막대 자리를 늘 비워 둔다 — 탭마다 막대가 생겼다 없어지면 카드 폭이 흔들린다 */
       main {
         flex: 1;
         overflow-y: auto;
+        scrollbar-gutter: stable;
         padding: 16px 20px 32px;
       }
       .head {
@@ -376,6 +377,168 @@
         padding-left: 0;
       }
       .meters {
+        display: flex;
+        gap: 10px;
+      }
+      /* 개체 상세 페이지 — Figma `Detail / Base` `217:1968`·`Detail / Box Pokemon` `389:7210` */
+      .pet-page {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .pet-page .page-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 52px;
+      }
+      .pet-page .page-head .title {
+        font-size: 20px;
+        line-height: 28px;
+        font-weight: 700;
+      }
+      .pet-page .page-head .caption {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .page-btn {
+        flex: none;
+        width: 120px;
+        height: 32px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .page-btn:hover:not(:disabled) {
+        background: var(--accent-bg);
+      }
+      .page-btn.primary {
+        border: 0;
+        background: var(--primary);
+        color: var(--inverse);
+      }
+      .page-btn.primary:hover:not(:disabled) {
+        background: var(--primary-hover);
+      }
+      .page-btn:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .pet-page .profile {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 16px;
+      }
+      .pet-page .profile .portrait {
+        margin: 16px;
+      }
+      .pet-page .identity {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .pet-page .level-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .pet-page .mini-track {
+        width: 96px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--subtle);
+        overflow: hidden;
+      }
+      .pet-page .mini-track .fill {
+        height: 100%;
+        border-radius: 999px;
+        background: var(--primary);
+      }
+      .pet-page .identity .name {
+        font-size: 20px;
+        line-height: 28px;
+        font-weight: 700;
+      }
+      .pet-page .traits {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pet-page .traits .nature {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .pet-page .state-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .pet-page .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--muted);
+      }
+      .pet-page .chip-note {
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: var(--canvas);
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .pet-page .meters {
+        gap: 16px;
+      }
+      .detail-section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .detail-section .section-label {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .act-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 6px 0;
+      }
+      .act-row .copy {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .act-row .title {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .act-row .desc {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .care-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .manage-row {
         display: flex;
         gap: 10px;
       }

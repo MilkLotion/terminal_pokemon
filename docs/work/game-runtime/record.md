@@ -562,6 +562,25 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 
 **수용 검사** — 자체 검사(도감 설명 표·주소), 개발용 실행기로 가방·상점·돌보미집·도감 상세를 찍어 Figma 와 비교, `npm run selftest`·E2E·`check-docs`.
 
+### 개체 상세 페이지·스크롤·울음소리 보완의 설계와 작업
+
+날짜: 2026-09-25. 상태: 구현·검수 완료, 실제 소리 확인 대기. 사용자 지시: "아무소리안들리는거같은데?? 1. 포켓몬상세화면 ui 개선. 그냥 보기 싫음. 2. 스크롤 때문에 레이아웃깨지는거 개선."(캡처 세 장). "개선"은 자율 실행 키워드라 확인 없이 진행했다.
+
+**관측과 원인**
+- 소리: 울음소리를 놀아주기 성공 때만 냈다. 놀아주기는 쿨타임 10분이라 클릭해도 대부분 실패한다. 메뉴에서 고른 놀아주기는 무대 창에 사용자 동작이 없어 Chromium 자동 재생 제한에 막힐 수 있다.
+- 상세: 모달 안에 막대 세 개, 크기 줄, 단추 여덟 개가 줄지어 있었다. Figma `Detail / Base` `217:1968`·`Detail / Box Pokemon` `389:7210` 은 탭 본문을 차지하는 페이지다.
+- 스크롤: 본문(`main`)이 탭마다 스크롤 막대가 생겼다 없어져 카드 폭이 달라졌다(상점 전체 ↔ 알).
+
+**작업**
+- 소리: 클릭할 때마다 울음소리(`onClick` → `playCry`), 같은 포켓몬은 1.5초 간격. 무대 창 `autoplayPolicy: "no-user-gesture-required"`.
+- 상세 페이지: `drawPetPage` — 머리(○○ 상세, 파티로/박스로), 프로필(초상·레벨 막대·이름·타입 배지·성격·상태 줄·친밀도·만복도), 절(돌봄 두 칸, 표시 설정의 화면 표시·크기, 성장·진화의 진화·성격·도구 사용, 파티 관리). `open({ kind: "pet" })` 는 모달 대신 `detailPet` 을 두고 그 개체의 탭에서 페이지를 그린다. 탭을 누르면 페이지를 닫는다. 진화·성격 모달은 페이지 위에 뜨고 돌아온다.
+- 스크롤: `main` 에 `scrollbar-gutter: stable`.
+
+**검수**
+- 개발용 실행기 화면: 파티 개체(피카츄)와 박스 개체(이상해씨) 상세 페이지가 Figma 구성과 같다.
+- `npm run selftest` 전체, E2E(종료 코드 0), `check-docs` 통과.
+- 자동 검사가 없는 것: 실제 무대에서 클릭 때 울음소리가 들리는지.
+
 ## 작업
 
 ### 저장 v3 전환의 작업
@@ -743,7 +762,7 @@ Figma 만 바꿨다. 코드는 바꾸지 않았다.
 
 - 도구·알 그림: `src/main/portraits.ts` 에 `iconUrl`(열쇠 `egg`·`item:<식별자>`)과 `icons()`, 채널 `manage:icons`. 관리 창 `iconOf` 가 가방 카드·상점 줄의 28 칸(`.thumb`, Figma)과 돌보미집 알(`.shell`)을 채운다. 상점의 포켓몬 상품은 초상, 랜덤알은 알 그림. 알 그림(96 × 96)은 가운데를 잘라 보인다.
 - 도감 설명: `src/tools/build-dex-text.ts` → `data/dex-text.json`(분류 1025 · 설명 한국어 898 · 영어 1025, `data:build` 끝에). `DexDetail.genus`·`flavor`(`src/tx/dex-detail.ts`, 지금 언어가 없으면 다른 언어). 도감 상세 머리 줄에 분류, 그 아래에 설명문.
-- 울음소리: `src/main/cries.ts`(`createCries`, `cryUrl`), 채널 `stage:cry`, 무대 렌더러가 `Audio` 로 한 번(소리 0.35). `stage.html` CSP 에 `media-src data:`. `src/main/app.ts` 의 무대 `care` 가 놀아주기 성공 때 `playCry` 를 부른다(알림 소리 설정을 따른다).
+- 울음소리: `src/main/cries.ts`(`createCries`, `cryUrl`), 채널 `stage:cry`, 무대 렌더러가 `Audio` 로 한 번(소리 0.2 — 2026-09-25 사용자 요청으로 0.35 에서 줄임). `stage.html` CSP 에 `media-src data:`. `src/main/app.ts` 의 무대 `care` 가 놀아주기 성공 때 `playCry` 를 부른다(알림 소리 설정을 따른다).
 - 검사: `selftest-dex-detail` (8)에 그림·소리 주소, (9) 공식 분류·설명.
 
 ### 포켓몬 요소의 공식 데이터 맞춤의 작업
