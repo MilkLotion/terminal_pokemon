@@ -359,6 +359,9 @@ async function refreshParty(): Promise<void> {
   tray?.refresh();
 }
 
+// 말풍선을 보이는 시간 — 스펙 미확정이라 2026-09-25 구현에서 정했다 (docs/work/game-runtime/record.md "배고픔 말풍선")
+const BUBBLE_MS = 5000;
+
 // 게임 시간 — 흐른 만큼 한 번에 적용한다. 쓰기는 거래 실행기 하나가 하므로 writer 일 때만 부른다.
 // 주기는 저장 주기와 같다. 주기보다 크게 벌어진 틈(앱 종료·절전)은 `game.tick` 이 버린다
 // (docs/specs/s5.md "복귀할 때 중단 기간을 소급 진행하지 않는다")
@@ -379,6 +382,8 @@ function stateTick(): void {
       lastTick = now;
       const events = game.tick({ workMs });
       if (events) workMs = 0; // 쓰지 못했으면 다음 틱에 흐른 시간과 함께 다시 넘긴다
+      // 배고픔 말풍선 — 무대에 나와 있는 포켓몬이 배고픔·매우 배고픔 구간에 들어갈 때 한 번. 숨긴 포켓몬은 무대에 없어 띄우지 않는다
+      if (events && !userHidden) for (const e of events.hungerEnter) if (stage.petOf(e.petId)) stage.say(e.petId, t(e.zone === "starving" ? "bubble.starving" : "bubble.hungry"), BUBBLE_MS);
       worker.refresh();
       notifier?.tick(); // 부화 준비·진화 가능·업적 미수령을 배너 줄에 세운다 (src/notify)
       syncPlayArea(); // 다른 프로세스의 관리 창에서 바꾼 놀이공간도 따라간다

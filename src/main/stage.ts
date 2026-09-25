@@ -32,6 +32,7 @@ export interface StageOptions {
 
 interface PetState {
   evolvingUntil?: number;
+  bubble?: { text: string; until: number };
   quirkKey?: string;
   care: { action: "feed" | "play"; target: Spot; until: number; eatingAt: number | null; last: number } | null;
   pet: PartyPet;
@@ -62,6 +63,7 @@ export interface Stage {
   poke(id: string): boolean;
   care(id: string, action: CareAction): void;
   celebrate(id: string): void;
+  say(id: string, text: string, ms: number): void; // 말풍선을 ms 동안 — 배고픔 구간 진입 (docs/specs/s5.md "배고픔 말풍선")
   petIds(): string[];
   petOf(id: string): PartyPet | null;
   heldId(): string | null;
@@ -268,6 +270,7 @@ export function createStage(opts: StageOptions): Stage {
         state: agent,
         pets: drawOrder().map((p) => ({ id: p.pet.id, look: p.look.look, zoom: p.zoom, x: p.pos.x, y: p.pos.y, play: p.play, held: p.held,
           ...(p.evolvingUntil && t < p.evolvingUntil ? { evolution: (p.evolvingUntil - t) / 1200 } : {}),
+          ...(p.bubble && t < p.bubble.until ? { bubble: p.bubble.text } : {}),
           ...(p.care?.action === "feed" ? { berry: { x: p.care.target.x + p.body.w / 2, y: p.care.target.y + p.body.h - 4 } } : {}) })),
       };
       last = frame;
@@ -351,6 +354,10 @@ export function createStage(opts: StageOptions): Stage {
       p.care = { action, target: clampInStage(p.pos.x + (p.pos.x > size.w / 2 ? -1 : 1) * STAGE_RULES.care.foodOffsetPx, p.pos.y, p.body, size), until: t + STAGE_RULES.care.durationMs, eatingAt: null, last: t };
     },
 
+    say(id, text, ms) {
+      const p = pets.get(id);
+      if (p) p.bubble = { text, until: now() + ms };
+    },
     celebrate(id) {
       const p = pets.get(id);
       if (p) { p.evolvingUntil = now() + 1200; p.motion?.click(now()); }

@@ -72,6 +72,8 @@
   "game.evolve": "진화하기",
   "game.look": "모습 선택",
   "game.mint": "성격 바꾸기",
+  "bubble.hungry": "배고파…",
+  "bubble.starving": "너무 배고파…",
   "game.shiny": "다른 색",
   "game.shown": "화면에 보임",
   "game.unlocked": "도감 해금 {n}종: {names}",

@@ -47,6 +47,7 @@ export interface Play {
 export interface StagePet {
   evolution?: number; // 진화 연출의 남은 비율 0~1
   berry?: { x: number; y: number };
+  bubble?: string; // 머리 위 말풍선 글 — 배고픔 구간에 들어갈 때 잠깐 (Figma `Speech Bubble` `338:733`)
   id: string;
   look: string;
   zoom: number; // 도트 배율 (Pet.size 를 그림 크기로 가둔 값)

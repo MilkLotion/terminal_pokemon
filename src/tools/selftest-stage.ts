@@ -308,6 +308,12 @@ async function stageRuntimeTests(): Promise<void> {
   for (let n = 0; n < 150; n++) { now += 40; stage.tick(); }
   const after = stage.lastFrame()!.pets[0]!;
   ok(Math.hypot(after.x - 100, after.y - 100) > Math.hypot(before.x - 100, before.y - 100) - STAGE_RULES.care.foodOffsetPx - 1, "반응이 끝나도 커서 밑으로 오지 않음");
+  // 배고픔 말풍선 — 정한 시간 동안만 프레임에 실린다
+  stage.say("p1", "배고파…", 1000);
+  now += 40; stage.tick();
+  eq(stage.lastFrame()?.pets[0]?.bubble, "배고파…", "말풍선이 프레임에 실린다");
+  now += 1000; stage.tick();
+  eq(stage.lastFrame()?.pets[0]?.bubble, undefined, "시간이 지나면 말풍선이 사라진다");
   stage.setVisible(false);
   stage.setVisible(true);
   now += 40; stage.tick();

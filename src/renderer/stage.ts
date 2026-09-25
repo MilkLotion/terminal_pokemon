@@ -128,6 +128,7 @@ function paint() {
       Math.round(r.w * dpr),
       Math.round(r.h * dpr),
     );
+    if (pet.bubble) drawBubble(pet.bubble, r);
     if (pet.evolution) {
       ctx.save();
       ctx.strokeStyle = `rgba(255, 226, 110, ${pet.evolution})`;
@@ -140,6 +141,44 @@ function paint() {
     }
   }
   if (debugOn) renderDebug();
+}
+
+// 말풍선 — Figma `Speech Bubble` `338:733`: 흰 바탕, 1px 테두리, 반경 12, 좌우 10·위아래 6, 12px 글, 아래 왼쪽 꼬리.
+// 몸 가운데 위에 두고, 무대 밖으로 나가지 않게 가둔다
+function drawBubble(text: string, r: { x: number; y: number; w: number; h: number }) {
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.font = '12px "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif';
+  const w = Math.ceil(ctx.measureText(text).width) + 20;
+  const h = 28;
+  const tailX = 13;
+  const stageW = canvas.width / dpr;
+  let x = Math.round(r.x + r.w / 2 - tailX - 6);
+  x = Math.max(2, Math.min(x, stageW - w - 2));
+  const y = Math.max(2, Math.round(r.y - h - 8));
+  ctx.beginPath();
+  ctx.roundRect(x + 0.5, y + 0.5, w, h, 12);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.strokeStyle = "#dde1db";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // 꼬리 — 12 × 7 삼각형. 테두리 위를 흰색으로 덮어 이어 붙인다
+  ctx.beginPath();
+  ctx.moveTo(x + tailX, y + h);
+  ctx.lineTo(x + tailX + 6, y + h + 7);
+  ctx.lineTo(x + tailX + 12, y + h);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + tailX + 0.5, y + h + 0.5);
+  ctx.lineTo(x + tailX + 6.5, y + h + 7.5);
+  ctx.lineTo(x + tailX + 12.5, y + h + 0.5);
+  ctx.stroke();
+  ctx.fillStyle = "#1a3330";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x + 10.5, y + h / 2 + 0.5);
+  ctx.restore();
 }
 
 function renderDebug() {
@@ -310,6 +349,7 @@ function mockBridge(): StageBridge {
         x: p.x,
         y: p.y,
         held: held === p.id,
+        ...(p.id === "a" ? { bubble: "배고파…" } : {}), // 말풍선 모양 확인용 — 가짜 모드에서만
         play: held === p.id ? { anim: "Idle", row: 4, mode: "hold", rate: 1 } : p.walk ? { anim: "Walk", row: dir, mode: "loop", rate: 1.5 } : p.id === "c" && Math.floor(sec) % 6 < 2 ? { anim: "Attack", row: 0, mode: "loop", rate: 1 } : null,
       })),
     };

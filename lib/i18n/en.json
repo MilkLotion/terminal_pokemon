@@ -72,6 +72,8 @@
   "game.evolve": "Evolve",
   "game.look": "Select appearance",
   "game.mint": "Change nature",
+  "bubble.hungry": "Hungry…",
+  "bubble.starving": "So hungry…",
   "game.shiny": "Shiny color",
   "game.shown": "Show on stage",
   "game.unlocked": "Unlocked {n} species: {names}",
