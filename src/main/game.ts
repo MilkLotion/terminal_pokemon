@@ -13,9 +13,10 @@ import { createExecutor, type Executor, type TxResult } from "../tx/executor.js"
 import { HANDLERS } from "../tx/handlers.js";
 import { argsOf, requestIdOf, toCommandResult } from "../tx/bridge.js";
 import { dexList } from "../tx/lists.js";
+import { dexDetail } from "../tx/dex-detail.js";
 import { snapshot } from "../tx/snapshot.js";
 import { agentInfo, connect, disconnect, status } from "../agents/registry.js";
-import type { AgentAction, AgentReply, AgentRow, DexEntry, ManageReply, ManageRequest, Snapshot } from "../shared/manage";
+import type { AgentAction, AgentReply, AgentRow, DexDetail, DexEntry, ManageReply, ManageRequest, Snapshot } from "../shared/manage";
 import type { SaveV3 } from "../shared/save-v3";
 import type { AgentName, Command, CommandName, CommandSource } from "../shared/types";
 
@@ -28,6 +29,7 @@ export interface GameV3 {
   tick: (input?: TimeInput) => TickEvents | null; // 마지막 틱 뒤로 흐른 시간을 적용한다. 상한을 넘는 틈은 버린다
   view: () => Snapshot | null;
   dex: () => DexEntry[];
+  dexDetail: (slug: string) => DexDetail | null; // 도감 칸 하나의 상세
   agents: (req?: { name: string; action: AgentAction }) => AgentReply;
   send: (req: ManageRequest, from: CommandSource) => ManageReply;
   executor: Executor;
@@ -86,5 +88,10 @@ export function createGame({ file = saveFile(), now = Date.now, rand = Math.rand
     return { ok: res.ok, reason: res.reason, list: list() };
   };
 
-  return { file, read, tick, view, dex, agents, send, executor };
+  const detail = (slug: string): DexDetail | null => {
+    const save = read();
+    return save ? dexDetail(save, slug) : null;
+  };
+
+  return { file, read, tick, view, dex, dexDetail: detail, agents, send, executor };
 }

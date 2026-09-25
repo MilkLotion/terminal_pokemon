@@ -14,6 +14,7 @@ type ManageRequest = import("../shared/manage").ManageRequest;
 type ManageReply = import("../shared/manage").ManageReply;
 type Snapshot = import("../shared/manage").Snapshot;
 type DexEntry = import("../shared/manage").DexEntry;
+type DexDetail = import("../shared/manage").DexDetail;
 type AgentReply = import("../shared/manage").AgentReply;
 
 const { contextBridge, ipcRenderer } = require("electron") as typeof import("electron");
@@ -53,6 +54,7 @@ const MANAGE = {
   snapshot: "manage:snapshot",
   command: "manage:command",
   dex: "manage:dex",
+  dexDetail: "manage:dex-detail",
   agents: "manage:agents",
 } satisfies Record<string, ManageChannel>;
 
@@ -60,6 +62,7 @@ const manage: ManageBridge = {
   snapshot: () => ipcRenderer.invoke(MANAGE.snapshot) as Promise<Snapshot | null>,
   command: (req: ManageRequest) => ipcRenderer.invoke(MANAGE.command, req) as Promise<ManageReply>,
   dex: () => ipcRenderer.invoke(MANAGE.dex) as Promise<DexEntry[]>,
+  dexDetail: (slug: string) => ipcRenderer.invoke(MANAGE.dexDetail, slug) as Promise<DexDetail | null>,
   agents: (req) => ipcRenderer.invoke(MANAGE.agents, req) as Promise<AgentReply>,
 };
 

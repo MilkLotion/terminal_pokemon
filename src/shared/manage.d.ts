@@ -111,6 +111,21 @@ export interface DexEntry {
   condition: string | null; // 발견한 알 행동 조건
 }
 
+// 도감 상세 — 칸을 누를 때 한 종만 따로 읽는다. 문구는 화면이 그대로 쓴다 (Figma Dex / Base 상세 패널)
+export interface DexDetail {
+  slug: string;
+  dex: number;
+  name: string; // 미해금이면 "???"
+  state: DexState;
+  types: string[]; // 미해금이면 비어 있다
+  shiny: boolean; // 이로치를 얻었는가
+  owned: number; // 가진 개체 수
+  methods: string; // 입수 방법 — 경로가 없으면 "획득 방법 준비 중"
+  evolution: string; // 다음 단계와 조건 — 미해금이면 "해금하면 보여요"
+  eggCondition: string; // "없음" · "미발견 · …" · "발견 · <조건>"
+  gimmick: string;
+}
+
 // 달성 전 · 달성했고 보상이 남음 · 보상까지 받음
 export type AchievementState = "locked" | "achieved" | "claimed";
 
@@ -183,11 +198,12 @@ export interface ManageReply {
 
 // 도감은 종이 1000개를 넘어 스냅샷에 담지 않는다. 탭을 열 때만 따로 부른다.
 // CLI 연결은 저장 밖을 보므로 역시 따로 부른다
-export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:agents";
+export type ManageChannel = "manage:snapshot" | "manage:command" | "manage:dex" | "manage:dex-detail" | "manage:agents";
 
 export interface ManageBridge {
   snapshot: () => Promise<Snapshot | null>; // 저장이 없으면 null
   command: (req: ManageRequest) => Promise<ManageReply>;
   dex: () => Promise<DexEntry[]>;
+  dexDetail: (slug: string) => Promise<DexDetail | null>; // 도감 칸 하나의 상세
   agents: (req?: { name: string; action: AgentAction }) => Promise<AgentReply>; // 인자가 없으면 읽기만 한다
 }

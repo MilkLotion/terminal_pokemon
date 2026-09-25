@@ -193,6 +193,8 @@
         padding: 16px;
         min-height: 160px;
         display: flex;
+        /* 빈 칸·잠긴 칸과 높이를 맞추느라 남는 세로 공간은 위아래로 나눈다 (Figma Party / Approved UI) */
+        align-items: center;
         gap: 14px;
         text-align: left;
         font: inherit;
@@ -789,12 +791,65 @@
         gap: 8px;
       }
       .dex-cell {
+        position: relative;
         border-radius: 10px;
         border: 1px solid var(--line);
         background: var(--surface);
         padding: 10px 6px;
         text-align: center;
+        font: inherit;
         font-size: 11px;
+        color: inherit;
+        cursor: pointer;
+      }
+      /* 고른 칸 — 왼쪽 막대와 옅은 배경. 색 테두리로 강조하지 않는다 */
+      .dex-cell[aria-pressed="true"],
+      .dex-cell.locked[aria-pressed="true"] {
+        background: var(--accent-bg);
+      }
+      .dex-cell[aria-pressed="true"]::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
+        height: 20px;
+        border-radius: 0 3px 3px 0;
+        background: var(--primary);
+      }
+      /* 도감 상세 패널 — 격자 아래 (Figma Dex / Base) */
+      .dex-detail {
+        grid-column: 1 / -1;
+        margin: 4px 0;
+        padding: 16px 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        font-size: 12px;
+      }
+      .dex-detail .head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+      .dex-detail .head strong {
+        font-size: 13px;
+      }
+      .dex-detail .meta {
+        color: var(--muted);
+      }
+      .dex-detail .row {
+        display: grid;
+        grid-template-columns: 96px 1fr;
+        gap: 12px;
+      }
+      .dex-detail .key {
+        font-weight: 600;
+        color: var(--muted);
       }
       .dex-cell.locked {
         background: var(--subtle);

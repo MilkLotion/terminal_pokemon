@@ -41,6 +41,9 @@ export function speciesOf(conditionId: string, opts?: DexOptions): string[] {
     .map(([slug]) => slug);
 }
 
+// 그 종을 부르는 조건 식별자. 조건 종이 아니면 null
+export const conditionOf = (slug: string, opts?: DexOptions): string | null => table(opts).species[slug] ?? null;
+
 // 도감에 적는 조건 문구
 export function textOf(conditionId: string, opts?: DexOptions): string | null {
   return table(opts).conditions[conditionId]?.ko ?? null;

@@ -8,6 +8,7 @@ import type {
   AchievementView,
   AgentRow,
   BagItemView,
+  DexDetail,
   DexEntry,
   EggView,
   ManageReply,
@@ -57,6 +58,7 @@ const SLEEP_CHOICES = [
 
 // 한 번에 다 그리면 무겁다. 도감은 앞에서부터 이만큼만 보여 준다
 const DEX_SHOWN = 200;
+const DEX_COLUMNS = 5; // manage.html 의 .dex-grid 열 수와 같다
 
 // 한 번에 살 수 있는 최대 수량. `[스펙 미확정]` 정식 상한이 정해지면 여기를 고친다
 const BUY_MAX = 10;
@@ -146,6 +148,9 @@ type Dialog =
 let tab: TabId = "party";
 let view: Snapshot | null = null;
 let dexRows: DexEntry[] | null = null;
+// 도감에서 고른 칸과 그 상세 — 상세는 칸을 누를 때 한 종만 따로 읽는다
+let dexPick: string | null = null;
+let dexDetail: DexDetail | null = null;
 let agentRows: AgentRow[] | null = null;
 let boxPage = 0;
 let shopFilter = "all";
@@ -352,12 +357,53 @@ function drawBox(v: Snapshot): void {
 // ── 도감 ───────────────────────────────────────────────────────────────────────
 
 function dexCell(row: DexEntry): HTMLElement {
-  const cell = el("div", row.state === "locked" ? "dex-cell locked" : "dex-cell");
+  const cell = button(row.state === "locked" ? "dex-cell locked" : "dex-cell");
+  cell.setAttribute("aria-pressed", String(row.slug === dexPick));
+  cell.addEventListener("click", () => void pickDex(row.slug));
   cell.append(el("div", "no", `#${String(row.dex).padStart(4, "0")}`), el("div", "dot"));
   cell.appendChild(el("div", undefined, row.state === "locked" ? "???" : row.name));
   if (row.state === "obtained") cell.appendChild(el("div", "no", row.shiny ? "이로치 획득" : "획득"));
   if (row.condition) cell.title = `발견한 조건: ${row.condition}`;
   return cell;
+}
+
+// 도감 상세 패널 — 격자 아래에 둔다 (Figma Dex / Base 의 species-detail)
+const DEX_STATE_WORD: Record<string, string> = { obtained: "획득", unlocked: "해금", locked: "미해금" };
+
+function dexPanel(d: DexDetail): HTMLElement {
+  const panel = el("div", "dex-detail");
+  const headRow = el("div", "head");
+  const meta = d.state === "locked"
+    ? "미해금 · 이름과 진화는 해금하면 보여요"
+    : `${DEX_STATE_WORD[d.state] ?? d.state} · 이로치 ${d.shiny ? "획득" : "미획득"} · 보유 ${d.owned}마리`;
+  headRow.append(el("strong", undefined, `#${String(d.dex).padStart(4, "0")} ${d.name}`), el("span", "meta", meta));
+  panel.appendChild(headRow);
+  const rows: [string, string][] = [
+    ["입수 방법", d.methods],
+    ["진화", d.evolution],
+    ["알 행동 조건", d.eggCondition],
+    ["특수 기믹", d.gimmick],
+  ];
+  if (d.types.length) rows.unshift(["타입", d.types.join(" · ")]);
+  for (const [key, value] of rows) {
+    const row = el("div", "row");
+    row.append(el("span", "key", key), el("span", "value", value));
+    panel.appendChild(row);
+  }
+  return panel;
+}
+
+// 칸을 누르면 그 종의 상세를 읽는다. 다시 누르면 닫는다
+async function pickDex(slug: string): Promise<void> {
+  if (dexPick === slug) {
+    dexPick = null;
+    dexDetail = null;
+    draw();
+    return;
+  }
+  dexPick = slug;
+  dexDetail = await window.pokebuddyManage.dexDetail(slug);
+  if (tab === "dex") draw();
 }
 
 function drawDex(v: Snapshot): void {
@@ -377,8 +423,15 @@ function drawDex(v: Snapshot): void {
     bodyEl.appendChild(el("div", "empty-note", "해당하는 종이 없습니다."));
     return;
   }
+  // 상세 패널은 고른 칸이 있는 줄 바로 아래에 격자 폭으로 끼운다. 목록이 길어도 눈앞에 열린다
+  const shown = rows.slice(0, DEX_SHOWN);
+  const picked = dexDetail && dexDetail.slug === dexPick ? shown.findIndex((r) => r.slug === dexPick) : -1;
+  const panelAfter = picked < 0 ? -1 : Math.min(Math.floor(picked / DEX_COLUMNS) * DEX_COLUMNS + DEX_COLUMNS - 1, shown.length - 1);
   const grid = el("div", "dex-grid");
-  for (const row of rows.slice(0, DEX_SHOWN)) grid.appendChild(dexCell(row));
+  shown.forEach((row, i) => {
+    grid.appendChild(dexCell(row));
+    if (i === panelAfter && dexDetail) grid.appendChild(dexPanel(dexDetail));
+  });
   bodyEl.appendChild(grid);
   if (rows.length > DEX_SHOWN) bodyEl.appendChild(el("div", "empty-note", `${rows.length}종 가운데 앞 ${DEX_SHOWN}종을 보여 줍니다.`));
 }
@@ -1109,6 +1162,7 @@ async function agent(name: string, action: "connect" | "disconnect" | "check"): 
 
 async function loadDex(): Promise<void> {
   dexRows = await window.pokebuddyManage.dex();
+  if (dexPick) dexDetail = await window.pokebuddyManage.dexDetail(dexPick);
   if (tab === "dex") draw();
 }
 

@@ -13,6 +13,7 @@ const CH = {
   snapshot: "manage:snapshot",
   command: "manage:command",
   dex: "manage:dex",
+  dexDetail: "manage:dex-detail",
   agents: "manage:agents",
 } satisfies Record<string, ManageChannel>;
 
@@ -55,6 +56,7 @@ function wire(game: GameV3, send: (req: ManageRequest) => Promise<ManageReply>):
     return game.view();
   });
   ipcMain.handle(CH.dex, (e) => (mine(e) ? game.dex() : []));
+  ipcMain.handle(CH.dexDetail, (e, slug: unknown) => (mine(e) && typeof slug === "string" ? game.dexDetail(slug) : null));
   ipcMain.handle(CH.agents, (e, req: unknown) => {
     if (!mine(e)) return { ...DENIED, list: [] };
     return game.agents(isAgentRequest(req) ? req : undefined);
