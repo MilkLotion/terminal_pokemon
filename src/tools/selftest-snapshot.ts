@@ -31,7 +31,7 @@ function seed(): SaveV3 {
   if (box) box.slots[0] = "p3";
   s.pets.push(pet({ id: "p3", species: "squirtle", level: 5 }));
   s.eggs.push({ id: "e1", kind: "random", boughtAt: T0, remainMs: 2 * MIN, ready: false, candidates: [], careCooldownMs: 30_000, actions: { pat: 2, song: 0 } });
-  s.bag = { "mint-adamant": 2, "exp-candy-s": 1, "없는도구": 3 };
+  s.bag = { "adamant-mint": 2, "exp-candy-s": 1, "없는도구": 3 };
   s.dex = { unlocked: ["pikachu", "charmander"], obtained: ["pikachu"], shinyObtained: [], discovered: {} };
   s.achievements = { a1: { achievedAt: T0, claimedAt: null }, a2: { achievedAt: T0, claimedAt: T0 }, a3: { achievedAt: null, claimedAt: null } };
   return s;
@@ -119,8 +119,8 @@ function seed(): SaveV3 {
 {
   const v = snapshot(seed());
   assert.equal(v.bag.length, 3);
-  assert.deepStrictEqual(v.bag.map((i) => i.name), ["경험사탕 S", "고집 민트", "없는도구"], "이름순");
-  assert.equal(v.bag.find((i) => i.id === "mint-adamant")?.count, 2);
+  assert.deepStrictEqual(v.bag.map((i) => i.name), ["경험사탕S", "고집민트", "없는도구"], "이름순");
+  assert.equal(v.bag.find((i) => i.id === "adamant-mint")?.count, 2);
   assert.equal(v.bag.find((i) => i.id === "없는도구")?.name, "없는도구", "모르는 도구는 식별자 그대로");
   process.stdout.write("(8) 가방 이름과 정렬  ok\n");
 }
@@ -131,13 +131,13 @@ function seed(): SaveV3 {
   assert.equal(v.natures.length, 25, "성격은 25개");
   const byId = (id: string) => v.natures.find((n) => n.id === id);
   assert.equal(byId("adamant")?.name, "고집");
-  assert.equal(byId("adamant")?.mint, "mint-adamant");
-  assert.equal(byId("adamant")?.mintName, "고집 민트");
-  for (const id of ["hardy", "docile", "serious", "bashful", "quirky"]) assert.equal(byId(id)?.mint, "mint-serious", `${id} 는 성실 민트`);
-  assert.deepStrictEqual(v.bag.find((i) => i.id === "mint-adamant")?.natures, ["adamant"], "민트가 바꿀 성격");
+  assert.equal(byId("adamant")?.mint, "adamant-mint");
+  assert.equal(byId("adamant")?.mintName, "고집민트");
+  for (const id of ["hardy", "docile", "serious", "bashful", "quirky"]) assert.equal(byId(id)?.mint, "serious-mint", `${id} 는 성실민트`);
+  assert.deepStrictEqual(v.bag.find((i) => i.id === "adamant-mint")?.natures, ["adamant"], "민트가 바꿀 성격");
   assert.equal(v.bag.find((i) => i.id === "exp-candy-s")?.natures, undefined, "민트가 아니면 없다");
   assert.equal(v.party.slots[0]?.pet?.natureId, "hardy", "개체의 성격 id");
-  const mints = v.shop.filter((p) => p.id.startsWith("mint-"));
+  const mints = v.shop.filter((p) => p.id.endsWith("-mint"));
   assert.equal(mints.length, 21, "상점에 민트 21종");
   assert.ok(mints.every((p) => p.category === "tool" && p.price === 100), "모두 도구 분류 100P");
   process.stdout.write("(8b) 성격 선택지와 민트  ok\n");

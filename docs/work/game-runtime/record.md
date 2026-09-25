@@ -522,6 +522,26 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 
 **수용 검사** — 자체 검사(타입 키, 초상 경로·이로치 경로), 개발용 실행기로 파티·박스·상세·도감·선택 창의 초상과 타입 배지·숨김 표시를 찍어 Figma 와 비교, 무대 놀아주기가 커서를 따라가지 않음(자체 검사 또는 무대 시험), `npm run selftest`·E2E·`check-docs`.
 
+### 포켓몬 요소의 공식 데이터 맞춤의 설계
+
+날짜: 2026-09-25. 상태: 구현·검수 완료. 사용자 지시: "최대한 포켓몬 요소들은 공식api기반으로 되게 다시 조사해봐." 조사 보고 뒤 "1~4번 먼저 진행".
+
+**관측** (2026-09-25, PokeAPI CSV `https://github.com/PokeAPI/pokeapi/tree/master/data/v2/csv` 와 대조)
+- 이미 PokeAPI 기반: 이름(`lib/names.json`), 종 프로필(`data/species.defaults.json`), 진화(`data/evo.json`), 진화 도구 이름(`data/evo-items.json`), 아기 포켓몬 해금, 관리 창 초상. 타입 한국어 이름(`src/main/text.ts` `TYPE_KO`)은 손으로 적었지만 공식 `type_names` 와 18개 모두 같다.
+- 공식과 다른 것: (1) 성격 이름 2개 — `naive` 천진(공식 천진난만), `mild` 온화(공식 의젓). (2) 민트 21종 — 이름 띄어쓰기(고집 민트 → 공식 고집민트)와 위 두 성격, 키(`mint-adamant` → 공식 `adamant-mint`). (3) 경험사탕 5종 띄어쓰기(경험사탕 XS → 공식 경험사탕XS).
+- (4) 도감표 `lib/dex.json` 은 codex-pokepets 에서 가져온 표다. 1089 슬러그의 번호는 PokeAPI 와 모두 같지만 21종이 빠져 있다: 990~995, 1001~1004, 1006, 1008, 1010, 1014~1017, 1022~1025.
+- 공식에 없어 바꾸지 않는 것: 무대 애니메이션(PMD — 방향별 동작이 필요), 게임 고유 도구(기본먹이·프리미엄먹이·장난감·약), 타입 배지 색(Figma).
+
+**목표**
+1. `src/tools/build-natures.ts`: `nature_names.csv` 로 `data/natures.json` 의 이름 칸만 맞춘다(axes 는 게임 고유 값이라 그대로).
+2. 민트 키를 공식 식별자(`<성격>-mint`)로 바꾸고, 저장을 읽을 때 옛 키(`mint-<성격>`)를 새 키로 옮긴다(`src/save/v3.ts` `normalizeBag`).
+3. `src/tools/build-items.ts`: `item_names.csv` 로 `data/items.json` 에서 공식 식별자와 같은 키의 이름 칸만 맞춘다(민트·경험사탕·이상한사탕). 게임 고유 도구는 그대로.
+4. `src/tools/build-dex.ts`: `pokemon_species.csv` 의 종 전부 + 지금 표가 고른 폼(공식 식별자로 확인되는 것)으로 `lib/dex.json` 을 만든다. `npm run data:build` 맨 앞에 두고 다른 빌드를 다시 돌린다.
+
+**위험** — 도감표가 바뀌면 백분위로 매기는 종 프로필 값이 조금 움직인다. 민트를 가진 기존 저장은 이전으로 옮긴다.
+
+**수용 검사** — `npm run data:build` 결과 대조(새 21종, 기존 값 변화), 이전 자체 검사(옛 민트 키), `npm run selftest`·E2E·`check-docs`.
+
 ## 작업
 
 ### 저장 v3 전환의 작업
@@ -698,6 +718,13 @@ Figma 만 바꿨다. 코드는 바꾸지 않았다.
 - `config.js`: `PACKAGED`(Electron 이고 `process.defaultApp` 이 없음)이면 기본 모드가 `companion` 이다.
 - `src/main/app.ts`: 동반자의 `second-instance` 에서 관리 창을 연다. `syncLoginItem` 이 기동할 때와 관리 창의 `settings.set` 뒤에 `app.setLoginItemSettings` 를 부른다. 설치한 앱(`app.isPackaged`)에서만 한다.
 - 문서: `docs/guide.md` 의 "Windows 실행 파일"·"Windows 실행 파일 만들기", `README.md` 설치 절.
+
+### 포켓몬 요소의 공식 데이터 맞춤의 작업
+
+- 새 빌드 도구 `build-dex.ts`·`build-natures.ts`·`build-items.ts`. `data:build` 순서: dex → names → species → evo → evo-items → unlocks → natures → items. natures·items 는 파일을 새로 쓰지 않고 이름 칸만 바꾼다(줄맞춤·게임 값 유지).
+- `data/items.json` 민트 키 21개를 `<성격>-mint` 로. `src/save/v3.ts` `itemIdOf` 가 옛 키를 옮기고 같은 민트면 더한다. 개발용 실행기 씨앗과 자체 검사의 민트 키도 바꿨다.
+- 현재 문서·코드 주석·검사의 표기를 공식으로(경험사탕XS, 고집민트, 성실민트). 지난 기록(history·archive·옛 계획서)은 당시 기록이라 두었다.
+- `lib/dex.js`·`docs/guide.md` "펫 이름" 의 출처 설명을 PokeAPI 로.
 
 ### 초상·타입 배지·숨김 표시·놀아주기의 작업
 
@@ -895,6 +922,14 @@ SSOT: `docs/specs/s5.md` 의 종료와 재개, `docs/specs/modules.md` 의 저�
 - `npm run selftest` 전체, `node scripts/e2e-companion.cjs`(종료 코드 0), `check-docs` 통과.
 - 문서: 바뀐 문장(`guide.md`·`README.md`·진행표·이력·이 기록)을 쓰기 점검표로 다시 읽었다.
 - 자동 검사가 없는 것: 실제 설치·바로가기·제거, 두 번째 실행 때 관리 창이 열리는지, 로그인 시 시작 등록, 트레이 종료. 설치는 사용자 PC 를 바꾸므로 사용자 확인으로 남겼다.
+
+### 포켓몬 요소의 공식 데이터 맞춤의 검수
+
+- `npm run data:build` 종료 코드 0. 도감표 1110(종 1025 + 폼 85), 새 슬러그 21, 번호가 바뀐 슬러그 0, 뺀 슬러그 0. 이름표 1110(새 21, 기존 변화 0). 진화·진화 도구·해금 표 변화 0. 성격 이름 2개, 도구 이름 26개를 바꿨다.
+- 종 프로필: 새 21종 외에 510종이 바뀌었다. 배고픔·졸림 속도(hungerRate 365·sleepiness 217)는 전체 종 안의 백분위라 21종이 더해져 0.01씩 움직였다. 애버라스·니드런♀ 의 moodSwing 이 1 → 0.8 로 바뀌었다 — 스피드 41 이 하위 20% 경계 아래로 내려갔다. 규칙은 그대로라 받아들였다.
+- 새 종의 이름 확인: 무쇠암석·테라파고스·복숭악동·오거폰·총지엔.
+- 검사 수정: 개수를 박아 둔 `selftest-dex`(1089 → 1110)·`selftest-manage`(1004 → 1025), 민트 키 필터(`selftest-snapshot`), 이름 기대(경험사탕S·고집민트). 옛 민트 키 이전 검사를 `selftest-bag` 에 더했다.
+- `npm run selftest` 전체, E2E(종료 코드 0), `check-docs` 통과.
 
 ### 초상·타입 배지·숨김 표시·놀아주기의 검수
 

@@ -887,7 +887,7 @@ function drawEvoTarget(itemId: string): void {
 
 // ── 모달 · 성격 변경 ───────────────────────────────────────────────────────────
 // 왼쪽은 지금, 오른쪽은 바꾼 후다. 오른쪽에서 성격을 고르면 필요한 민트가 가운데에 보인다 (Figma Detail / Nature Change).
-// 보정 없는 성격은 모두 성실 민트다. 가방의 민트로 왔으면 그 민트가 바꿀 수 있는 성격만 고른다.
+// 보정 없는 성격은 모두 성실민트다. 가방의 민트로 왔으면 그 민트가 바꿀 수 있는 성격만 고른다.
 // `취소` 는 아무것도 바꾸지 않는다
 
 function drawNature(petId: string, pick: string | undefined, itemId: string | undefined, listOpen: boolean): void {

@@ -151,7 +151,7 @@ function world(over: Partial<Pick<World, "now" | "hour">> = {}, save: Partial<Sa
   // 돌려받은 배열을 고쳐도 표는 그대로
   pika.likes.push("food");
   assert.deepStrictEqual(dex.profile("pikachu").likes, ["work", "play"]);
-  assert.strictEqual(dex.slugs().length, 1089, "표의 종 수");
+  assert.strictEqual(dex.slugs().length, 1110, "표의 종 수 — PokeAPI 종 1025 + 폼 85");
   assert.ok(!dex.slugs().includes("_comment"));
   // 모든 종의 값 범위
   for (const s of dex.slugs()) {

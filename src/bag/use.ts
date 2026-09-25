@@ -16,7 +16,7 @@ export interface ItemEntry {
   price: number | null;
   effect: ItemEffect;
   amount: number;
-  natures?: string[]; // 민트가 바꿀 수 있는 성격. 성격별 민트는 하나, 성실 민트는 보정 없는 성격 5개다
+  natures?: string[]; // 민트가 바꿀 수 있는 성격. 성격별 민트는 하나, 성실민트는 보정 없는 성격 5개다
 }
 
 export type UseFailure =
@@ -45,7 +45,7 @@ const items = (opts?: DexOptions): Record<string, ItemEntry> => loadJson<Record<
 
 export const itemOf = (id: string, opts?: DexOptions): ItemEntry | null => (id.startsWith("_") ? null : items(opts)[id] ?? null);
 
-// 그 성격으로 바꾸는 민트의 id — 보정 없는 성격이면 성실 민트다 (docs/specs/balance.md 가격표)
+// 그 성격으로 바꾸는 민트의 id — 보정 없는 성격이면 성실민트다 (docs/specs/balance.md 가격표)
 export function mintFor(nature: string, opts?: DexOptions): string | null {
   for (const [id, item] of Object.entries(items(opts))) if (item.effect === "nature" && item.natures?.includes(nature)) return id;
   return null;
@@ -121,7 +121,7 @@ export function use(save: SaveV3, itemId: string, petId: string, args: { nature?
       return done({ level: pet.level, exp: pet.exp });
     }
     case "nature": {
-      // 성격별 민트는 바꿀 성격이 하나라 고르지 않아도 된다. 성실 민트는 보정 없는 성격 5개 중 하나를 받는다
+      // 성격별 민트는 바꿀 성격이 하나라 고르지 않아도 된다. 성실민트는 보정 없는 성격 5개 중 하나를 받는다
       const allowed = item.natures ?? [];
       const next = args.nature ?? (allowed.length === 1 ? (allowed[0] ?? "") : "");
       if (!isNatureId(next, opts) || !allowed.includes(next)) return { ok: false, reason: "bad-nature" };

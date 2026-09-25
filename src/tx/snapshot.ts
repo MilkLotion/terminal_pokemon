@@ -172,7 +172,7 @@ export function snapshot(
   };
 }
 
-// 성격 변경 창의 선택지 — 성격마다 바꾸는 민트를 붙인다. 보정 없는 성격은 모두 성실 민트다
+// 성격 변경 창의 선택지 — 성격마다 바꾸는 민트를 붙인다. 보정 없는 성격은 모두 성실민트다
 function natureOptions(): NatureOption[] {
   return natureTable().map((n) => {
     const mint = mintFor(n.id) ?? "";

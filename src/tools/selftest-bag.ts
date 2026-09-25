@@ -7,7 +7,7 @@ import assert from "node:assert";
 import { mintFor, use } from "../bag/use";
 import { expForLevel, growthOf, levelFor, MAX_LEVEL, progressTo } from "../dex/growth";
 import { BAG_V3_RULES, SAVE_V3_RULES } from "../save/rules";
-import { empty } from "../save/v3";
+import { empty, normalize } from "../save/v3";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
 import { feed, play } from "../state/care";
 import { applyTime } from "../state/time";
@@ -159,29 +159,34 @@ function seed(over: Partial<PetV3> = {}, bag: Record<string, number> = {}): Save
 
 // (12) 민트는 성격별이다 — 그 민트의 성격으로만 바꾼다. 같은 성격이면 거절하고 쓰지 않는다
 {
-  const s = seed({ nature: "hardy" }, { "mint-adamant": 1, "mint-brave": 1 });
-  assert.equal(use(s, "mint-adamant", "p1", { nature: "brave" }).reason, "bad-nature", "다른 성격으로는 못 바꾼다");
-  const res = use(s, "mint-adamant", "p1");
+  const s = seed({ nature: "hardy" }, { "adamant-mint": 1, "brave-mint": 1 });
+  assert.equal(use(s, "adamant-mint", "p1", { nature: "brave" }).reason, "bad-nature", "다른 성격으로는 못 바꾼다");
+  const res = use(s, "adamant-mint", "p1");
   assert.equal(res.ok, true, "성격별 민트는 성격을 고르지 않아도 된다");
   assert.equal(s.pets[0]?.nature, "adamant");
-  assert.equal(s.bag["mint-adamant"], undefined, "1개를 썼다");
-  const again = seed({ nature: "brave" }, { "mint-brave": 1 });
-  assert.equal(use(again, "mint-brave", "p1").reason, "already");
-  assert.equal(again.bag["mint-brave"], 1, "거절하면 쓰지 않는다");
+  assert.equal(s.bag["adamant-mint"], undefined, "1개를 썼다");
+  const again = seed({ nature: "brave" }, { "brave-mint": 1 });
+  assert.equal(use(again, "brave-mint", "p1").reason, "already");
+  assert.equal(again.bag["brave-mint"], 1, "거절하면 쓰지 않는다");
   process.stdout.write("(12) 민트 · 성격별로 바꾼다  ok\n");
 }
 
-// (12b) 성실 민트는 보정 없는 성격 5개 중 하나를 고른다. 고르지 않으면 거절한다
+// (12b) 성실민트는 보정 없는 성격 5개 중 하나를 고른다. 고르지 않으면 거절한다
 {
-  const s = seed({ nature: "adamant" }, { "mint-serious": 2 });
-  assert.equal(use(s, "mint-serious", "p1").reason, "bad-nature", "5개 중 고른 성격이 있어야 한다");
-  assert.equal(use(s, "mint-serious", "p1", { nature: "brave" }).reason, "bad-nature", "보정 있는 성격은 안 된다");
-  assert.equal(use(s, "mint-serious", "p1", { nature: "quirky" }).ok, true);
+  const s = seed({ nature: "adamant" }, { "serious-mint": 2 });
+  assert.equal(use(s, "serious-mint", "p1").reason, "bad-nature", "5개 중 고른 성격이 있어야 한다");
+  assert.equal(use(s, "serious-mint", "p1", { nature: "brave" }).reason, "bad-nature", "보정 있는 성격은 안 된다");
+  assert.equal(use(s, "serious-mint", "p1", { nature: "quirky" }).ok, true);
   assert.equal(s.pets[0]?.nature, "quirky");
-  assert.equal(s.bag["mint-serious"], 1);
-  assert.equal(mintFor("docile"), "mint-serious", "보정 없는 성격은 성실 민트");
-  assert.equal(mintFor("adamant"), "mint-adamant");
-  process.stdout.write("(12b) 성실 민트 · 5개 중 고른다  ok\n");
+  assert.equal(s.bag["serious-mint"], 1);
+  assert.equal(mintFor("docile"), "serious-mint", "보정 없는 성격은 성실민트");
+  assert.equal(mintFor("adamant"), "adamant-mint");
+  // 옛 저장의 민트 키(mint-adamant)는 읽을 때 공식 식별자로 옮긴다. 같은 민트가 둘 다 있으면 더한다
+  const old = empty(0);
+  (old.bag as Record<string, number>)["mint-adamant"] = 2;
+  old.bag["adamant-mint"] = 1;
+  assert.deepStrictEqual(normalize(JSON.parse(JSON.stringify(old)) as unknown, 0)?.bag, { "adamant-mint": 3 });
+  process.stdout.write("(12b) 성실민트 · 5개 중 고른다  ok\n");
 }
 
 // (13) 약 두 개는 이로치를 오간다. 도감 기록은 남는다
@@ -199,9 +204,9 @@ function seed(over: Partial<PetV3> = {}, bag: Record<string, number> = {}): Save
 
 // (14) 없는 도구와 없는 개체
 {
-  const s = seed({}, { "mint-brave": 1 });
+  const s = seed({}, { "brave-mint": 1 });
   assert.equal(use(s, "없는도구", "p1").reason, "no-item");
-  assert.equal(use(s, "mint-brave", "없는개체").reason, "no-pet");
+  assert.equal(use(s, "brave-mint", "없는개체").reason, "no-pet");
   assert.equal(use(s, "_comment", "p1").reason, "no-item", "메모 키는 도구가 아니다");
   process.stdout.write("(14) 없는 도구와 개체  ok\n");
 }

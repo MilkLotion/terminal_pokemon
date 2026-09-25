@@ -15,10 +15,10 @@
   { "id": "hasty",    "name": { "ko": "성급",       "en": "Hasty" },    "axes": { "activity": 1,  "boldness": 0,  "steadiness": -1, "sociability": 0,  "patience": 0 } },
   { "id": "serious",  "name": { "ko": "성실",       "en": "Serious" },  "axes": { "activity": 0,  "boldness": 0,  "steadiness": 0,  "sociability": 0,  "patience": 0 } },
   { "id": "jolly",    "name": { "ko": "명랑",       "en": "Jolly" },    "axes": { "activity": 1,  "boldness": 0,  "steadiness": 0,  "sociability": -1, "patience": 0 } },
-  { "id": "naive",    "name": { "ko": "천진",       "en": "Naive" },    "axes": { "activity": 1,  "boldness": 0,  "steadiness": 0,  "sociability": 0,  "patience": -1 } },
+  { "id": "naive",    "name": { "ko": "천진난만",       "en": "Naive" },    "axes": { "activity": 1,  "boldness": 0,  "steadiness": 0,  "sociability": 0,  "patience": -1 } },
 
   { "id": "modest",   "name": { "ko": "조심",       "en": "Modest" },   "axes": { "activity": 0,  "boldness": -1, "steadiness": 0,  "sociability": 1,  "patience": 0 } },
-  { "id": "mild",     "name": { "ko": "온화",       "en": "Mild" },     "axes": { "activity": 0,  "boldness": 0,  "steadiness": -1, "sociability": 1,  "patience": 0 } },
+  { "id": "mild",     "name": { "ko": "의젓",       "en": "Mild" },     "axes": { "activity": 0,  "boldness": 0,  "steadiness": -1, "sociability": 1,  "patience": 0 } },
   { "id": "quiet",    "name": { "ko": "냉정",       "en": "Quiet" },    "axes": { "activity": -1, "boldness": 0,  "steadiness": 0,  "sociability": 1,  "patience": 0 } },
   { "id": "bashful",  "name": { "ko": "수줍음",     "en": "Bashful" },  "axes": { "activity": 0,  "boldness": 0,  "steadiness": 0,  "sociability": 0,  "patience": 0 } },
   { "id": "rash",     "name": { "ko": "덜렁",       "en": "Rash" },     "axes": { "activity": 0,  "boldness": 0,  "steadiness": 0,  "sociability": 1,  "patience": -1 } },

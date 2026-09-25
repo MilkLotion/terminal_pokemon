@@ -212,12 +212,15 @@ function normalizeEggs(raw: unknown): EggV3[] {
   return out;
 }
 
+// 옛 도구 id → 지금 id. 2026-09-25 에 민트 키를 공식 식별자로 바꿨다(mint-adamant → adamant-mint)
+const itemIdOf = (id: string): string => id.replace(/^mint-([a-z]+)$/, "$1-mint");
+
 function normalizeBag(raw: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   if (!isObj(raw)) return out;
   for (const [k, v] of Object.entries(raw)) {
     const n = nonNeg(v);
-    if (n > 0) out[k] = n;
+    if (n > 0) out[itemIdOf(k)] = (out[itemIdOf(k)] ?? 0) + n;
   }
   return out;
 }

@@ -268,13 +268,14 @@ npm 이 만든 `pokebuddy.ps1` 이 실행 정책에 걸린 것이다. `pokebuddy
 
 ### 펫 이름
 
-[codex-pokepets 의 `pets/` 폴더명](https://github.com/dnnyngyen/codex-pokepets/tree/main/pets)을 쓴다.
-PMD 는 같은 이름을 도감 번호로 바꿔 받는다(`lib/dex.json`) — `gengar` 와 `gengar-3d` 는 PMD 에서 같은 그림이다.
+PokeAPI 의 종 식별자(`pokemon_species.csv` 의 `identifier`)를 쓴다. 전국도감 1025종 전부와 고른 폼 85개다.
+도감표 `lib/dex.json` 은 `npm run data:build` 의 `build-dex` 가 PokeAPI CSV 로 만든다. PMD 는 같은 이름을 도감 번호로 바꿔 받는다.
+2026-09-25 전에는 codex-pokepets 의 폴더명 표(1021번까지)를 썼다. 그때의 `-3d` 이름도 계속 받는다 — `gengar` 와 `gengar-3d` 는 같은 그림이다.
 
 | 입력 | 결과 |
 |---|---|
 | `pikachu` · `Pikachu` | 대문자로 적어도 소문자로 맞춘다 |
-| `gengar` · `gengar-3d` | 같은 그림 — `-3d` 는 codex-pokepets 이름의 그림체 구분이라 PMD 에는 없다 |
+| `gengar` · `gengar-3d` | 같은 그림 — `-3d` 는 옛 codex-pokepets 이름의 그림체 구분이라 떼고 본다 |
 | `rotom-wash` · `deoxys-attack` · `unown-z` | 폼은 PokeAPI 표기 |
 
 메가·거다이맥스 폼은 없다(`charizard-mega-x` 같은 이름은 실패한다). 없는 이름을 넣으면 그 펫만 건너뛴다.

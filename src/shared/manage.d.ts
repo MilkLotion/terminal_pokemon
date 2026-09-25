@@ -79,7 +79,7 @@ export interface BagItemView {
   name: string;
   count: number;
   evolution: boolean; // 진화용 도구 — 누르면 진화할 개체를 고른다
-  natures?: string[]; // 민트 — 바꿀 수 있는 성격 id. 성실 민트는 보정 없는 성격 5개
+  natures?: string[]; // 민트 — 바꿀 수 있는 성격 id. 성실민트는 보정 없는 성격 5개
 }
 
 // 성격 변경 창의 선택지 하나. 자료 순서다

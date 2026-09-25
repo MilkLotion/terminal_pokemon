@@ -183,7 +183,7 @@ try {
   // (11) 도감은 따로 부른다. 도감 번호 순이며 상태가 세 가지다
   {
     const rows = game.dex();
-    assert.equal(rows.length, 1004, "폼을 뺀 기본 종 수");
+    assert.equal(rows.length, 1025, "폼을 뺀 기본 종 수 — 공식 전국도감 1025");
     assert.equal(rows[0]?.slug, "bulbasaur", "1번은 이상해씨");
     let prev = 0;
     for (const row of rows) {

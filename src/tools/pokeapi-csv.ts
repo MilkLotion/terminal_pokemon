@@ -74,7 +74,7 @@ export async function csv<K extends string>(name: string, columns: readonly K[])
   return rows as CsvRow<K>[];
 }
 
-// lib/dex.json — 우리 도감표의 슬러그 1089개
+// lib/dex.json — 우리 도감표 (PokeAPI 의 종 전부 + 고른 폼. src/tools/build-dex.ts)
 export function readDex(): DexTable {
   return JSON.parse(fs.readFileSync(path.join(LIB_DIR, "dex.json"), "utf8")) as DexTable;
 }
