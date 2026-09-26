@@ -2,44 +2,40 @@
 
 이 문서는 설치, 명령, 설정, 동작 원리, 실측 근거를 모두 담는다. 요약은 [README](../README.md)에 있다.
 
-## S4 상점과 진화
+## 게임 — 관리 창과 CLI
 
-동반자나 창 펫을 실행한 뒤 포켓몬을 우클릭하면 상점, 파티, 도감을 사용할 수 있다.
-동반자는 트레이에서도 같은 메뉴를 연다. 설정창은 S5 단계에서 추가한다.
+동반자를 실행한 뒤 트레이 메뉴나 포켓몬 우클릭 메뉴에서 `관리 창 열기`를 누른다.
+관리 창에는 파티·박스·도감·상점·가방 다섯 탭이 있다. 헤더에서 업적창과 설정을 연다.
+화면 계약은 [S5 기능 계약](specs/s5.md)을 따른다. 가격과 확률은 [밸런스 수치](specs/balance.md)를 따른다.
 
-1. 상점에서 파티 칸을 구매한다. 파티 칸은 최대 6칸이다.
-2. 빈 칸이 있으면 해금한 포켓몬을 얻는다. 포켓몬 가격은 종마다 다르다.
-3. 파티에서 마리를 선택하면 성격, 모습, 색, 표시 여부를 바꿀 수 있다.
-4. 진화 조건을 채우면 `진화하기`가 나타난다. 진화 갈림길에서는 원하는 종을 선택한다.
+1. 첫 실행에서 첫 포켓몬을 고른다. 시작 포인트를 한 번 받는다.
+2. 상점에서 알을 산다. 알은 박스 탭의 돌보미집에 들어간다. 준비가 끝나면 직접 연다.
+3. 알을 열면 부화 결과 창이 태어난 개체와 들어간 자리를 보여 준다.
+4. 파티나 박스의 개체를 누르면 개체 상세가 열린다. 돌봄·진화·성격 변경·크기를 여기서 한다.
+5. 코스모그처럼 공유 계열인 개체는 박스 칸에 모습들이 2×2 로 보인다. 칸에 마우스를 올리면 툴팁에서 모습을 바꾼다.
 
-민트를 사용하면 성격이 바로 바뀐다. 먹이를 구매하면 재고에 추가된다.
-다음 밥을 줄 때 먹이를 하나 쓰면 효과가 두 배가 된다. 먹이가 없어도 기본 밥을 줄 수 있다.
-밥 주기의 대기 시간과 하루 친밀도 상한은 그대로 유지한다.
-색을 되돌려도 추가 비용은 없다.
-그림을 받을 수 없으면 거래를 취소한다. 저장에 실패하면 거래를 취소한다.
-
-칸 가격은 80, 160, 240, 320, 400 포인트다. 민트는 40포인트, 먹이는 10포인트, 색은 200포인트다.
-이 가격은 조정 가능한 초기값이다. 보상 규칙은 [계획과 규칙](work/s4/plan.md)에 있다.
-
-CLI에서도 같은 기능을 사용한다. 아래 명령은 PowerShell과 일반 셸에서 사용할 수 있다.
-`p1`은 예시 ID다. 실제 ID는 `snapshot`의 `party`에서 확인한다.
+CLI 에서도 같은 명령을 보낸다. 아래 명령은 PowerShell 과 일반 셸에서 쓸 수 있다.
+`p1` 은 예시 ID 다. 실제 ID 는 `snapshot` 의 `party` 와 `boxes` 에서 확인한다.
+상점 구매는 대상 자리에 상품 ID 를 쓴다. 알은 `random`·`ancient-stone`·`legendary` 등, 파티 칸은 `party-slot`, 종은 종 이름, 도구는 도구 ID 다.
 
 ```text
 pokebuddy game snapshot
-pokebuddy game shop.buy - item=slot
-pokebuddy game shop.buy - item=species species=pikachu
-pokebuddy game shop.buy p1 item=mint nature=jolly
-pokebuddy game shop.buy - item=berry
-pokebuddy game evolve p1 species=umbreon
-pokebuddy game pet.look p1 look=eevee
-pokebuddy game shop.buy p1 item=shiny
-pokebuddy game pet.look p1 shiny=false
+pokebuddy game shop.buy random
+pokebuddy game shop.buy party-slot
+pokebuddy game shop.buy snorlax
+pokebuddy game shop.buy rare-candy
+pokebuddy game evolve p1 to=umbreon
+pokebuddy game pet.form p1 species=lunala
+pokebuddy game pet.set p1 size=3
+pokebuddy game feed p1
+pokebuddy game party.show p1
 pokebuddy game --help
 ```
 
-`snapshot`에는 포인트, 재고, 파티, 해금 조건, 상점, 진화 조건, 최근 기록이 포함된다.
 이 기능을 쓰려면 게임 저장을 담당하는 앱이 실행 중이어야 한다. 세션 펫은 육성 기능을 사용하지 않는다.
-`pet.set size=3` 으로 마리별 크기(1~6)를 바꾼다. 관리 창 개체 상세의 크기 단추도 같은 명령이다.
+`pet.set size=3` 은 마리별 크기(1~6)를 바꾼다. 관리 창 개체 상세의 크기 단추도 같은 명령이다.
+`pet.form` 은 공유 계열 개체만 받는다. 고를 수 있는 모습이 아니면 `bad-form` 을 돌려준다.
+가방 사용·알 열기·파티 배치는 관리 창에서 한다. CLI 는 `--help` 에 나오는 명령만 받는다.
 
 ## 기본 사용
 
@@ -437,7 +433,7 @@ S3 구현 검수는 [S3 기록](work/s3/review.md)에 있다. 이 문서의 이�
 포켓몬은 종·성격·크기·표시·집 위치를 저장한다. 저장 계약은 [공유 타입](../src/shared/types.ts)을 따른다.
 저장 복구 절차는 [저장 모듈](../src/save/store.ts)을 따른다. 저장 손실이 한 가지 원인으로만 발생한다고 단정하지 않는다.
 
-진화 조건과 보상은 [S4 계획](work/s4/plan.md)을 따른다. 현재 조작은 [S4 상점과 진화](#s4-상점과-진화)를 참고한다.
+진화 조건은 [S5 기능 계약](specs/s5.md)의 진화 계약을 따른다. 현재 조작은 [게임 — 관리 창과 CLI](#게임--관리-창과-cli)를 참고한다.
 현재 상품 구현과 S5 채택 여부는 구분한다. 사용자 명칭 정정은 [명칭 기록](work/s5-terminology/review.md)에 있다.
 
 ### 트레이와 우클릭 메뉴

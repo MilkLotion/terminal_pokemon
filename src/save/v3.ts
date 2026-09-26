@@ -43,6 +43,7 @@ export function empty(now: number): SaveV3 {
     party: { slots: emptySlots() },
     boxes: [newBox("b1", SAVE_V3_RULES.box.firstName)],
     eggs: [],
+    eggSeq: 0,
     bag: {},
     points: { balance: 0, progressMs: 0 },
     dex: { unlocked: [], obtained: [], shinyObtained: [], discovered: {} },
@@ -332,6 +333,7 @@ export function normalize(raw: unknown, now: number): SaveV3 | null {
 
   const d = isObj(raw.daily) ? raw.daily : {};
   const dailyDate = str(d.date, date);
+  const eggs = normalizeEggs(raw.eggs);
   return {
     v: 3,
     savedAt: nonNeg(raw.savedAt, now),
@@ -340,7 +342,8 @@ export function normalize(raw: unknown, now: number): SaveV3 | null {
     starterPetId: seen.has(str(raw.starterPetId)) ? str(raw.starterPetId) : null,
     party: { slots },
     boxes,
-    eggs: normalizeEggs(raw.eggs),
+    eggs,
+    eggSeq: Math.max(nonNeg(raw.eggSeq), maxEggNo(eggs)), // 2026-09-26 에 더했다. 옛 저장은 지금 있는 알의 가장 큰 번호에서 시작한다
     bag: normalizeBag(raw.bag),
     points: normalizePoints(raw.points),
     dex: normalizeDex(raw.dex),
@@ -356,6 +359,16 @@ export function normalize(raw: unknown, now: number): SaveV3 | null {
     legacy: isObj(raw.legacy) ? { ...raw.legacy } : {},
     log: normalizeLog(raw.log),
   };
+}
+
+// 알 식별자 `e숫자` 의 가장 큰 번호
+export function maxEggNo(eggs: { id: string }[]): number {
+  let max = 0;
+  for (const e of eggs) {
+    const m = /^e(\d+)$/.exec(e.id);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return max;
 }
 
 function normalizeTotals(raw: Raw): Totals {

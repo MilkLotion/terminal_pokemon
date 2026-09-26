@@ -147,13 +147,17 @@ function seed(points: number): SaveV3 {
   process.stdout.write("(9) 종 지정 구매 · 해금한 종만  ok\n");
 }
 
-// (10) 알 식별자는 이어서 붙는다
+// (10) 알 식별자는 이어서 붙고, 연 알의 식별자를 다시 쓰지 않는다 — 다시 쓰면 부화 배너 기록이 겹친다
 {
   const s = seed(1000);
   assert.equal(nextEggId(s), "e1");
   buy(s, "random", T0, rand);
   assert.equal(nextEggId(s), "e2");
-  process.stdout.write("(10) 알 식별자 이어 붙이기  ok\n");
+  s.eggs = []; // e1 을 열어 돌보미집이 비었다
+  buy(s, "random", T0, rand);
+  assert.equal(s.eggs[0]?.id, "e2", "비어도 e1 을 다시 쓰지 않는다");
+  assert.equal(s.eggSeq, 2);
+  process.stdout.write("(10) 알 식별자 이어 붙이기 · 다시 쓰지 않음  ok\n");
 }
 
 process.stdout.write("selftest-shop: 통과 (가격·알·도구·파티 칸·종)\n");

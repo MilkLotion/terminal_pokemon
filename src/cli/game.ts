@@ -1,4 +1,4 @@
-// S4 명령 진입. 게임 저장은 writer만 변경
+// 게임 명령 진입 — 관리 창과 같은 명령을 우편함으로 보낸다. 게임 저장은 writer 만 바꾼다 (docs/guide.md "게임 — 관리 창과 CLI")
 import { PATHS } from "../main/paths";
 import { send } from "../save/mailbox";
 import type { Command, CommandName } from "../shared/types";
@@ -8,7 +8,7 @@ const allowed: CommandName[] = ["snapshot", "shop.buy", "evolve", "pet.look", "p
 export async function game(argv: string[]): Promise<void> {
   const [name = "snapshot", target, ...fields] = argv;
   if (name === "--help") {
-    process.stdout.write('pokebuddy game <command> [pet-id|-] [key=value ... | JSON]\nCommands: snapshot, shop.buy, evolve, pet.look, pet.set, feed, play, party.show, party.hide\nExample: pokebuddy game shop.buy - item=slot\n');
+    process.stdout.write("pokebuddy game <command> [pet-id|product-id|-] [key=value ... | JSON]\nCommands: snapshot, shop.buy, evolve, pet.set, pet.form, feed, play, party.show, party.hide\nExamples: pokebuddy game shop.buy random · pokebuddy game evolve p1 to=umbreon · pokebuddy game pet.form p1 species=lunala\n");
     return;
   }
   try {

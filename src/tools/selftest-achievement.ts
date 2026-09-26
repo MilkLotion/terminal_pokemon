@@ -36,8 +36,9 @@ function seed(): SaveV3 {
   const list = defs();
   assert.equal(list.length, 2);
   assert.deepStrictEqual(list.map(([id]) => id).sort(), ["show-two", "starter-final"]);
-  for (const [, def] of list) {
+  for (const [id, def] of list) {
     assert.ok(def.ko.length > 0);
+    assert.ok((def.en ?? "").length > 0, `영어 이름 ${id}`);
     assert.equal(def.reward, "party-slot");
   }
   process.stdout.write("(1) 업적 목록과 보상  ok\n");

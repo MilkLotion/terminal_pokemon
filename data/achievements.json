@@ -1,12 +1,14 @@
 {
-  "_comment": "업적 — 규칙은 docs/specs/s5.md '파티 칸과 업적'. 조건 판정은 코드(src/achievement/core.ts)가 하고 여기는 이름과 보상만 둔다. reward 가 party-slot 이면 업적으로 여는 파티 칸 하나를 연다",
+  "_comment": "업적 — 규칙은 docs/specs/s5.md '파티 칸과 업적'. 조건 판정은 코드(src/achievement/core.ts)가 하고 여기는 이름(ko·en)과 보상만 둔다. reward 가 party-slot 이면 업적으로 여는 파티 칸 하나를 연다",
   "show-two": {
     "ko": "두 마리 꺼내기",
+    "en": "Two Out Together",
     "desc": "파티의 두 마리를 동시에 꺼낸다",
     "reward": "party-slot"
   },
   "starter-final": {
     "ko": "첫 포켓몬의 마지막 모습",
+    "en": "First Partner, Final Form",
     "desc": "첫 선택으로 만난 포켓몬을 최종 진화까지 키운다",
     "reward": "party-slot"
   }

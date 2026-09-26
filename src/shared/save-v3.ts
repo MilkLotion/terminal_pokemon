@@ -125,6 +125,7 @@ export interface SaveV3 {
   party: { slots: PartySlotV3[] };
   boxes: BoxV3[];
   eggs: EggV3[];
+  eggSeq: number; // 지금까지 만든 알 수 — 알 식별자를 다시 쓰지 않게 한다. 연 알의 식별자가 새 알에 붙으면 배너 기록이 겹친다
   bag: Record<string, number>;
   points: PointsV3;
   dex: DexV3;

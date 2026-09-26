@@ -12,6 +12,7 @@ import { randomNature } from "../dex/natures.js";
 import { newPet, nextPetId, recordDex } from "../party/create.js";
 import type { Rand } from "../egg/hatch";
 import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
+import { maxEggNo } from "../save/v3.js";
 import type { EggV3, SaveV3 } from "../shared/save-v3";
 import { canGiveEgg, eggPool, find, inRandomEgg, isSingleEgg, singleLeft, slotPrice } from "./catalog.js";
 
@@ -34,14 +35,10 @@ export interface BuyResult {
   toBox?: boolean;
 }
 
-// 다음 알 식별자 — 기존 `e숫자` 중 가장 큰 수 다음
+// 다음 알 식별자 — 지금까지 만든 알 수(eggSeq)와 지금 있는 알의 가장 큰 번호 중 큰 것의 다음.
+// 연 알의 식별자를 다시 쓰지 않는다. 다시 쓰면 "부화 준비" 배너의 표시 기록이 새 알에 겹쳐 배너가 뜨지 않는다
 export function nextEggId(save: SaveV3): string {
-  let max = 0;
-  for (const e of save.eggs) {
-    const m = /^e(\d+)$/.exec(e.id);
-    if (m) max = Math.max(max, Number(m[1]));
-  }
-  return `e${max + 1}`;
+  return `e${Math.max(save.eggSeq, maxEggNo(save.eggs)) + 1}`;
 }
 
 // 상점으로 이미 연 칸 수 — 남은 잠긴 칸으로 센다
@@ -64,8 +61,10 @@ function placeNew(save: SaveV3, petId: string): { slotIndex?: number; toBox: boo
 //   종 목록 알       그 목록
 //   랜덤알           해금한 종 가운데 랜덤알에서 나올 수 있는 종
 export function newEgg(save: SaveV3, kind: string, now: number, opts?: DexOptions): EggV3 {
+  const id = nextEggId(save);
+  save.eggSeq = Number(id.slice(1)); // 번호는 여기서 쓴 것으로 센다 — 알을 저장에 넣는 것은 부르는 쪽이다
   return {
-    id: nextEggId(save),
+    id,
     kind,
     boughtAt: now,
     remainMs: EGG_V3_RULES.readyMs,

@@ -11,6 +11,7 @@ import type { SaveV3 } from "../shared/save-v3";
 
 export interface AchievementDef {
   ko: string;
+  en?: string; // 영어 이름 — 다른 데이터(도구·알)처럼 함께 둔다. 화면은 지금 한국어만 쓴다
   desc: string;
   reward: "party-slot";
 }
