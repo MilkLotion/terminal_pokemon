@@ -11,7 +11,7 @@ import { growthOf, progressTo } from "../dex/growth.js";
 import { profile } from "../dex/species.js";
 import { itemOf, mintFor } from "../bag/use.js";
 import { natures as natureTable } from "../dex/natures.js";
-import { eggName } from "../shop/catalog.js";
+import { eggName, eggPalettes } from "../shop/catalog.js";
 import { zoneOf } from "../state/time.js";
 import { moodWord, natureName, petName, typeName } from "../main/text.js";
 import type { AchievementView, BagItemView, BoxView, EggView, EvolutionView, FormView, NatureOption, PetView, SlotView, Snapshot } from "../shared/manage";
@@ -179,6 +179,7 @@ export function snapshot(
       hasRegion: save.settings.playArea.rect != null,
     },
     natures: natureOptions(),
+    eggPalettes: eggPalettes(),
     tutorial: manageTutorial(save),
   };
 }

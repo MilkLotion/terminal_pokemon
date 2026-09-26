@@ -172,6 +172,7 @@ export interface Snapshot {
   achievements: { total: number; unclaimed: number; list: AchievementView[] };
   settings: SettingsView;
   natures: NatureOption[];
+  eggPalettes: Record<string, string[]>; // 알 종류별 그림 색표 (data/eggs.json palette) — 없는 알은 원작 그림
   tutorial: string | null; // 관리 창에 지금 보여 줄 튜토리얼 id(shop · hatch · party). 해당 탭에 있을 때만 화면이 코치마크를 그린다 (src/tutorial/core.ts)
   // 포켓몬 표시·클릭 통과 — 저장이 아니라 이 앱 프로세스의 창 상태다. 앱이 채운다. 없으면 설정에 두 줄을 두지 않는다
   display?: DisplayView;

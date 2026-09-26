@@ -29,6 +29,7 @@ interface EggEntry {
   pool?: unknown; // "unlocked" 또는 종 목록
   single?: boolean; // 단일 포켓몬 알 — 종별 한 번만 얻는다
   bonus?: Record<string, number>; // 열 때 포켓몬 대신 다른 알이 나올 확률
+  palette?: string[]; // 알 그림 색표 — 원작 egg.png 의 9색을 같은 순서로 바꾼다
 }
 
 interface ItemEntry {
@@ -80,6 +81,16 @@ export function eggPrice(kind: string, opts?: DexOptions): number | null {
 export function eggName(kind: string, opts?: DexOptions): string | null {
   if (isMetaKey(kind)) return null;
   return eggs(opts)[kind]?.ko ?? null;
+}
+
+// 알 종류별 그림 색표 — 색표가 있는 알만. 관리 창이 원작 알 그림의 색을 바꿔 쓴다
+export function eggPalettes(opts?: DexOptions): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [kind, row] of Object.entries(eggs(opts))) {
+    if (isMetaKey(kind) || !Array.isArray(row.palette)) continue;
+    out[kind] = row.palette.filter((c): c is string => typeof c === "string");
+  }
+  return out;
 }
 
 export function eggNote(kind: string, opts?: DexOptions): string | null {
