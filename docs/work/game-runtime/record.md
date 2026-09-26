@@ -627,6 +627,12 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 - `main` 을 푸시했다(`43bd20e..d76e0ee`, 25 커밋). GitHub Release `v0.3.0`(태그 → `d76e0ee`)에 그림 없는 `pokebuddy-Setup-0.3.0.exe`(101.1MB)를 올렸다. 초안·시험판이 아니다. 릴리스 노트에 서명 없음, 첫 실행 그림 받기, 그림 저작권·PMD CC BY-NC·Galmuri OFL 을 적었다.
 - 올리기 전 실행 파일을 임시 HOME 으로 띄워 첫 선택 창과 20초 안에 그림 2063개 받기를 확인했다. 사용자의 설치본 프로세스(`AppData\Local\Programs\pokebuddy`)는 건드리지 않았다.
 
+**v0.3.1 릴리스** (2026-09-27, 사용자 지시 "그렇게 진행" — 진행 표 정리 뒤 릴리스)
+- 버전 0.3.0 → 0.3.1(`b2c22f2`, `package.json`·`package-lock.json` 의 버전 줄만 — 두 파일에 세 번째 세션의 supabase 변경이 미커밋으로 섞여 있었다). VS Code 확장 버전은 그대로.
+- 빌드: 작업 트리에 다른 세션의 미커밋 변경이 있어, 커밋 `12ffe62` 그대로의 임시 git worktree 에서 `npm ci` 와 `npm run dist:win` 을 돌렸다. 설치 파일 101.1MB, 앱 안 우리 도구 그림 15장, 포켓몬 그림 없음, supabase 없음. 임시 HOME 으로 띄워 첫 선택 창과 그림 받기를 확인했다. 빌드 뒤 worktree 는 지웠다.
+- 게시: `main` 푸시(`d76e0ee..12ffe62`), 태그 `v0.3.1` → `12ffe62`, GitHub Release `v0.3.1` 에 `pokebuddy-Setup-0.3.1.exe`. `--target 12ffe62`(짧은 id)는 거부돼 태그를 먼저 올리고 `--verify-tag` 로 만들었다.
+- 담긴 것(0.3.0 뒤): 경험사탕·민트·진화 도구 그림(pokesprite), 도트 P 동전, 빈 기술머신·연결의끈 이름, 단일 포켓몬 알 색, 우리 도구 그림 15장(폰트 세션).
+
 **경험사탕·민트 그림** (폰트 세션 인계 — 사용자 결정 "경험사탕·민트 그림을 실행 때 받아오게 연결")
 - 출처: PokeAPI 에 없어(404) msikma/pokesprite 에서 받는다(코드 MIT, 그림 © Nintendo·Creatures·GAME FREAK, 32×32). 폰트 세션이 주소를 조사해 넘겼다. 15개 주소를 받아 모두 200·PNG 임을 확인했다.
 - `src/main/portraits.ts` `itemUrl`: 경험사탕 `exp-candy/<크기>.png`, 민트 21종은 올려 주는 능력치별 6장(`mint/attack` 등, 성실민트는 `neutral`), 진화 도구 4종(`galarica-wreath`·`sweet-apple`·`tart-apple`·`cracked-pot`)은 `evo-item/`. 나머지는 PokeAPI. 미리 받기와 필요할 때 받기(`iconUrl`)가 같은 주소를 쓴다.
