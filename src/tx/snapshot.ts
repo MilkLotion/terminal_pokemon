@@ -16,6 +16,7 @@ import { zoneOf } from "../state/time.js";
 import { moodWord, natureName, petName, typeName } from "../main/text.js";
 import type { AchievementView, BagItemView, BoxView, EggView, EvolutionView, FormView, NatureOption, PetView, SlotView, Snapshot } from "../shared/manage";
 import { formsOf } from "../dex/forms.js";
+import { currentTutorial } from "../tutorial/core.js";
 import { candidates, dayPartOf } from "../dex/evolve.js";
 import type { DayPart } from "../shared/types";
 import { isEvoItem, nameOfItem, shopList } from "./lists.js";
@@ -178,7 +179,14 @@ export function snapshot(
       hasRegion: save.settings.playArea.rect != null,
     },
     natures: natureOptions(),
+    tutorial: manageTutorial(save),
   };
+}
+
+// 관리 창의 튜토리얼 — 대기열 맨 앞이 관리 창 것일 때만. 바탕화면 것이 앞이면 그것이 끝나기를 기다린다
+function manageTutorial(save: SaveV3): string | null {
+  const now = currentTutorial(save);
+  return now && now.surface === "manage" ? now.id : null;
 }
 
 // 성격 변경 창의 선택지 — 성격마다 바꾸는 민트를 붙인다. 보정 없는 성격은 모두 성실민트다

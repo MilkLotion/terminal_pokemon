@@ -97,6 +97,7 @@ export type TutorialState = "none" | "active" | "skipped" | "done";
 export interface TutorialV3 {
   state: TutorialState;
   steps: number; // 끝낸 단계 수
+  queuedAt?: number; // 시작 조건을 채운 시각 — 먼저 생긴 것부터 보여 준다 (src/tutorial/core.ts)
 }
 
 export type PlayAreaMode = "full" | "region";

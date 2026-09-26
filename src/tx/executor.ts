@@ -11,6 +11,7 @@
 // 파일을 직접 다루지 않는다. 읽기·쓰기·시계를 받아서 쓴다 — 자체 검사가 파일 없이 돈다.
 import { evaluate } from "../achievement/core.js";
 import { unlockByRules } from "../dex/unlocks.js";
+import { queueTutorials } from "../tutorial/core.js";
 import type { SaveV3, TxRecordV3 } from "../shared/save-v3";
 import { SAVE_V3_RULES } from "../save/rules.js";
 
@@ -78,6 +79,7 @@ export function createExecutor(ports: TxPorts, handlers: Record<string, TxHandle
 
     // 상태가 바뀌었으니 해금 규칙과 업적을 다시 본다. 첫 선택 한 번으로 다른 후보·기본형이 해금되고, 꺼내기 한 번으로도 달성이 생긴다
     unlockByRules(draft, now);
+    queueTutorials(draft, now);
     const achieved = evaluate(draft, now);
 
     const result = out.result ?? null;

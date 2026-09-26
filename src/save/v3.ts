@@ -261,6 +261,7 @@ function normalizeTutorials(raw: unknown): Record<string, TutorialV3> {
     out[k] = {
       state: ((TUTORIAL_STATES as readonly string[]).includes(state) ? state : "none") as TutorialState,
       steps: nonNeg(v.steps),
+      ...(typeof v.queuedAt === "number" && Number.isFinite(v.queuedAt) ? { queuedAt: v.queuedAt } : {}), // 2026-09-26 에 더했다
     };
   }
   return out;

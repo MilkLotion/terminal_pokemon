@@ -15,6 +15,7 @@
 // 구간 시작 시점의 친밀도로 셈해서 소급을 막는다. 그래서 틱을 잘게 나누면 포인트가 조금 더 정확해진다.
 import { evaluate } from "../achievement/core.js";
 import { unlockByRules } from "../dex/unlocks.js";
+import { queueTutorials } from "../tutorial/core.js";
 import { MOOD_RULES, TIME_V3_RULES } from "../save/rules.js";
 import type { BuffV3, PetV3, SaveV3 } from "../shared/save-v3";
 
@@ -159,6 +160,7 @@ export function applyTime(save: SaveV3, elapsedMs: number, now: number, input: T
 
   // 상태 판정 — 배너 순서는 부화 → 진화 → 업적이다. 진화 판정은 아직 없다
   unlockByRules(save, now);
+  queueTutorials(save, now);
   events.achieved = evaluate(save, now);
   return events;
 }

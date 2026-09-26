@@ -7,7 +7,10 @@ import assert from "node:assert";
 import { claim, defs, evaluate, isAchieved } from "../achievement/core";
 import { empty } from "../save/v3";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
-import { canShow, done, skip } from "../tutorial/core";
+import { begin } from "../party/starter";
+import { buy } from "../shop/buy";
+import { open } from "../egg/open";
+import { canShow, currentTutorial, done, queueTutorials, skip } from "../tutorial/core";
 
 const T0 = new Date(2026, 8, 24, 10, 0, 0).getTime();
 
@@ -157,4 +160,47 @@ function seed(): SaveV3 {
   process.stdout.write("(10) 튜토리얼 상태 기록  ok\n");
 }
 
-process.stdout.write("selftest-achievement: 통과 (업적 조건·수령·튜토리얼)\n");
+// (11) 튜토리얼 대기열 — 첫 선택 → 상점, 랜덤알 구매 → 부화, 새 개체 → 파티. 이미 한 행동은 완료로 넘긴다
+{
+  const s = empty(T0);
+  assert.ok(begin(s, "charmander", T0, () => 0.5).ok);
+  assert.equal(s.points.balance, 120, "첫 선택 뒤 시작 포인트 120 — 랜덤알 하나 값");
+  assert.deepStrictEqual(queueTutorials(s, T0), ["shop"], "바탕화면 튜토리얼(첫 돌봄)은 아직 줄에 넣지 않는다");
+  assert.deepStrictEqual(currentTutorial(s), { id: "shop", surface: "manage" });
+  assert.deepStrictEqual(queueTutorials(s, T0 + 1), [], "두 번 불러도 다시 넣지 않는다");
+
+  assert.ok(buy(s, "random", T0 + 2, () => 0.5).ok);
+  assert.deepStrictEqual(queueTutorials(s, T0 + 2), ["hatch"]);
+  assert.equal(s.tutorials.shop?.state, "done", "랜덤알을 샀으니 상점 튜토리얼은 완료");
+  assert.equal(currentTutorial(s)?.id, "hatch");
+
+  const egg = s.eggs[0]!;
+  Object.assign(egg, { ready: true, remainMs: 0, actions: { pat: 1, song: 0 }, candidates: ["rattata"] });
+  assert.ok(open(s, egg.id, T0 + 3, () => 0.99).ok);
+  assert.deepStrictEqual(queueTutorials(s, T0 + 3), ["party"]);
+  assert.equal(s.tutorials.hatch?.state, "done", "알을 열었으니 부화 튜토리얼은 완료");
+  assert.equal(currentTutorial(s)?.id, "party");
+
+  assert.ok(skip(s, "party").ok, "✕ 는 스킵");
+  assert.equal(currentTutorial(s), null);
+  process.stdout.write("(11) 튜토리얼 대기열 · 시작 조건과 건너뛰기  ok\n");
+}
+
+// (12) 같은 순간에 생긴 조건은 스펙 순서(상점 → 부화), 먼저 생긴 것이 먼저. 이미 다른 개체가 있는 옛 저장은 상점을 넘긴다
+{
+  const s = empty(T0);
+  assert.ok(begin(s, "charmander", T0, () => 0.5).ok);
+  assert.ok(buy(s, "random", T0, () => 0.5).ok);
+  s.eggSeq = 0; // 산 기록이 없는 옛 저장처럼 — 상점이 넘어가지 않게
+  queueTutorials(s, T0);
+  assert.equal(currentTutorial(s)?.id, "shop", "같은 순간이면 상점이 부화보다 먼저");
+
+  const old = empty(T0);
+  assert.ok(begin(old, "charmander", T0, () => 0.5).ok);
+  old.pets.push({ ...old.pets[0]!, id: "p9" });
+  queueTutorials(old, T0);
+  assert.equal(old.tutorials.shop?.state, "done", "다른 개체가 이미 있으면 상점 튜토리얼은 완료");
+  process.stdout.write("(12) 튜토리얼 순서 · 옛 저장  ok\n");
+}
+
+process.stdout.write("selftest-achievement: 통과 (업적 조건·수령·튜토리얼·대기열)\n");
