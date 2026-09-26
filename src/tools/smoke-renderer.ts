@@ -16,6 +16,7 @@ window.pokebuddy = {
   onInit(cb) { callbacks.init = cb; }, onSheets(cb) { callbacks.sheets = cb; },
   onFrame(cb) { callbacks.frame = cb; }, onHover(cb) { callbacks.hover = cb; },
   onClickThrough(cb) { callbacks.ct = cb; },
+  onCoach(cb) { callbacks.coach = cb; }, coachAction(a) { window.stageTest.messages.push(a); }, onCry() {},
   hit(id) { window.stageTest.hit = id; },
   pointer(msg) { window.stageTest.messages.push(msg); }
 };
@@ -74,6 +75,29 @@ void app.whenReady().then(async () => {
     const overlapShot = path.join(dir, "overlap.png");
     fs.writeFileSync(overlapShot, (await win.webContents.capturePage()).toPNG());
     process.stdout.write(`겹침 화면 통과: 픽셀·투명 부분·히트·우클릭 · ${overlapShot}\n`);
+    // 튜토리얼 말풍선 — 말풍선 위에서는 "coach" 로 답해 클릭을 받고, 버튼은 완료·스킵을 보낸다. 막은 클릭을 막지 않는다
+    const coach = await win.webContents.executeJavaScript(`(async () => {
+      const fixture = window.stageTest;
+      fixture.callbacks.coach({ id: 'first-care', kind: 'pet', petId: 'last', step: 's', title: 't', body: 'b', button: '다음' });
+      await new Promise((r) => setTimeout(r, 100));
+      const b = document.querySelector('.coach-bubble').getBoundingClientRect();
+      fixture.callbacks.hover({ x: b.left + 20, y: b.top + 20 }); const onBubble = fixture.hit;
+      fixture.callbacks.hover({ x: 110, y: 110 }); const onPet = fixture.hit;
+      fixture.callbacks.hover({ x: 700, y: 550 }); const onDim = fixture.hit;
+      document.querySelector('.coach-bubble .go').click();
+      const done = fixture.messages.at(-1);
+      document.querySelector('.coach-bubble .x').click();
+      const skip = fixture.messages.at(-1);
+      fixture.callbacks.coach(null);
+      return { onBubble, onPet, onDim, done, skip, hidden: document.getElementById('coach').hidden };
+    })()`) as { onBubble: string; onPet: string; onDim: string | null; done: { id: string; action: string }; skip: { action: string }; hidden: boolean };
+    assert.equal(coach.onBubble, "coach", "말풍선 위는 클릭을 받는다");
+    assert.equal(coach.onPet, "last", "밝힌 마리는 그대로 누를 수 있다");
+    assert.equal(coach.onDim, null, "어두운 막 위는 아래 창으로 통과한다");
+    assert.deepEqual(coach.done, { id: "first-care", action: "done" });
+    assert.equal(coach.skip.action, "skip");
+    assert.equal(coach.hidden, true, "null 이면 지운다");
+    process.stdout.write("튜토리얼 말풍선 통과: 히트·버튼·지우기\n");
     if (process.env.POKEBUDDY_SMOKE_ART) {
       const artDir = process.env.POKEBUDDY_SMOKE_ART;
       const sheets = ["eevee", "eevee-shiny", "umbreon"].map((name) => JSON.parse(fs.readFileSync(path.join(artDir, `${name}.json`), "utf8")));

@@ -10,3 +10,5 @@ release/
 # PC Settings
 .playwright-mcp/
 .claude/
+
+font/

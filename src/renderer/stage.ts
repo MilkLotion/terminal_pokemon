@@ -3,7 +3,7 @@
 // 위치의 주인은 메인이다. 40ms 마다 오는 StageFrame 을 그대로 그리고, 애니 프레임 진행(어느 프레임인지)만 스스로 한다.
 // 렌더러가 죽고 다시 떠도 ready → 메인의 재송신(init · sheets · 마지막 frame)으로 복구된다.
 // 다시 그리는 때: 프레임이 새로 왔거나 · 어느 마리의 애니 프레임이 바뀌었거나 · 캔버스 크기가 바뀌었을 때만
-import type { HoverQuery, LookSheets, PointerMsg, SpriteSheet, StageBridge, StageFrame, StageInit, StageSize } from "../shared/stage.js";
+import type { CoachView, HoverQuery, LookSheets, PointerMsg, SpriteSheet, StageBridge, StageFrame, StageInit, StagePet, StageSize } from "../shared/stage.js";
 import { hitAt, rectOf, type HitLookup } from "./hit.js";
 import { enablePointer } from "./pointer.js";
 import { Animator, SpriteStore, TICK_MS } from "./sprites.js";
@@ -11,6 +11,7 @@ import { Animator, SpriteStore, TICK_MS } from "./sprites.js";
 const params = new URLSearchParams(location.search);
 const opts = {
   mock: params.get("mock") === "1", // Chrome 에서 stage.html 을 직접 열어 보는 가짜 다리 (아래 mockBridge)
+  mockCoach: params.get("coach"), // mock 에서 튜토리얼 말풍선 흉내 — pet · area
   debug: params.get("debug") === "1", // init.debug 와 같다 — 화면 안 텍스트
 };
 
@@ -22,6 +23,7 @@ function need<T extends HTMLElement>(id: string, ctor: new () => T): T {
 }
 const canvas = need("stage", HTMLCanvasElement);
 const debugBox = need("debug", HTMLPreElement);
+const coachBox = need("coach", HTMLDivElement);
 // getContext 옵션 없음 — willReadFrequently 를 주면 GPU 가속이 빠진다. 픽셀은 시트별 ImageData(sprites.ts)에서 읽는다
 const ctx = ((): CanvasRenderingContext2D => {
   const c = canvas.getContext("2d");
@@ -94,6 +96,14 @@ const lookup: HitLookup = (pet) => {
 };
 const hitAtStage = (x: number, y: number) => (frame ? hitAt(frame, lookup, x, y) : null);
 
+// 마리가 지금 그려진 사각형(무대 안 DIP) — 그림이 아직 없으면 null
+function petRect(pet: StagePet): { x: number; y: number; w: number; h: number } | null {
+  const art = store.get(pet.look);
+  const shown = animators.get(pet.id)?.current();
+  const sheet = shown ? art?.anims[shown.anim] : undefined;
+  return art && sheet ? rectOf(pet, art.body, sheet) : null;
+}
+
 function paint() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (!frame) return;
@@ -129,6 +139,7 @@ function paint() {
       Math.round(r.h * dpr),
     );
     if (pet.bubble) drawBubble(pet.bubble, r);
+    if (coach?.kind === "pet" && coach.petId === pet.id) placeCoach(r);
     if (pet.evolution) {
       ctx.save();
       ctx.strokeStyle = `rgba(255, 226, 110, ${pet.evolution})`;
@@ -255,8 +266,9 @@ bridge.onFrame((f) => syncFrame(f, performance.now()));
 // 메인이 묻는 커서 자리가 어느 마리 위인지 답한다. 누르고 있는 동안은 늘 그 마리로 답한다 —
 // 도중에 통과로 바뀌면 떼기가 아래 창으로 가서 마리가 들린 채 남는다
 bridge.onHover((q: HoverQuery) => {
-  hoverId = pointer.pressedId() ?? hitAtStage(q.x, q.y);
-  bridge.hit(hoverId);
+  const onBubble = !pointer.pressedId() && overCoach(q.x, q.y);
+  hoverId = pointer.pressedId() ?? (onBubble ? null : hitAtStage(q.x, q.y));
+  bridge.hit(onBubble ? "coach" : hoverId); // 말풍선 위에서는 클릭을 받는다 — 버튼을 누를 수 있게
   if (!pointer.pressedId()) document.body.style.cursor = hoverId ? "grab" : "default";
   if (debugOn) renderDebug();
 });
@@ -276,6 +288,105 @@ bridge.onClickThrough((on) => {
   }
 });
 
+// ── 튜토리얼 코치마크 ─────────────────────────────────────────────────────────
+// Figma `Tutorial / First Care` `397:8552`, `Tutorial / Playground` `397:8596`. 문구와 대상은 메인이 준다(stage:coach).
+// 첫 돌봄: 포켓몬 둘레 8px 을 비우고 나머지를 어둡게 한다. 막은 보기만 한다 — 클릭은 그대로 아래로 통과하므로 포켓몬 우클릭이 된다.
+//   포켓몬이 움직이므로 그릴 때마다 자리를 다시 잰다(paint). 말풍선은 포켓몬 위(넘치면 아래).
+// 놀이공간: 무대(=놀이공간) 둘레 테두리와 "지금 · 화면 전체" 표시, 말풍선은 가운데.
+// 말풍선 위에서만 클릭을 받는다(onHover 의 "coach" 답). 버튼은 메인으로 간다 — 버튼은 완료, ✕ 는 스킵
+
+const COACH = { pad: 8, gap: 12, width: 280, margin: 8 };
+let coach: CoachView | null = null;
+let bubbleEl: HTMLElement | null = null;
+const dims: HTMLElement[] = [];
+
+function coachEl<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag);
+  e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function renderCoach(next: CoachView | null): void {
+  coach = next;
+  coachBox.replaceChildren();
+  dims.length = 0;
+  bubbleEl = null;
+  coachBox.hidden = !next;
+  if (!next) return;
+  if (next.kind === "pet") {
+    for (let i = 0; i < 4; i++) dims.push(coachBox.appendChild(coachEl("div", "coach-dim")));
+  } else {
+    const frameEl = coachBox.appendChild(coachEl("div", "coach-area"));
+    frameEl.appendChild(coachEl("span", "coach-area-label", next.areaLabel ?? ""));
+  }
+  const bubble = coachEl("div", "coach-bubble");
+  const head = coachEl("div", "head");
+  const x = coachEl("button", "x", "✕");
+  x.setAttribute("aria-label", "튜토리얼 닫기");
+  x.addEventListener("click", () => act("skip"));
+  head.append(coachEl("span", "step", next.step), x);
+  const foot = coachEl("div", "foot");
+  const go = coachEl("button", "go", next.button);
+  go.addEventListener("click", () => act("done"));
+  foot.appendChild(go);
+  bubble.append(head, coachEl("div", "title", next.title), coachEl("div", "body", next.body), foot);
+  // 말풍선을 누른 것이 포켓몬 잡기·우클릭 메뉴로 번지지 않게
+  for (const type of ["pointerdown", "pointerup", "contextmenu"]) bubble.addEventListener(type, (e) => e.stopPropagation());
+  coachBox.appendChild(bubble);
+  bubbleEl = bubble;
+  if (next.kind === "area") placeArea();
+  else dirty = true; // 다음 paint 가 포켓몬 자리에 맞춘다
+}
+
+function act(action: "done" | "skip"): void {
+  if (!coach) return;
+  bridge.coachAction({ id: coach.id, action });
+}
+
+// 첫 돌봄 — 포켓몬 사각형 r(무대 안 DIP)에 맞춰 막 네 장과 말풍선을 옮긴다
+function placeCoach(r: { x: number; y: number; w: number; h: number }): void {
+  if (!bubbleEl || dims.length !== 4) return;
+  const W = innerWidth;
+  const H = innerHeight;
+  const hole = { l: Math.max(0, r.x - COACH.pad), t: Math.max(0, r.y - COACH.pad), r: Math.min(W, r.x + r.w + COACH.pad), b: Math.min(H, r.y + r.h + COACH.pad) };
+  const boxes = [
+    [0, 0, W, hole.t],
+    [0, hole.b, W, H - hole.b],
+    [0, hole.t, hole.l, hole.b - hole.t],
+    [hole.r, hole.t, W - hole.r, hole.b - hole.t],
+  ] as const;
+  boxes.forEach(([x, y, w, h], i) => {
+    const d = dims[i];
+    if (d) Object.assign(d.style, { left: `${x}px`, top: `${y}px`, width: `${Math.max(0, w)}px`, height: `${Math.max(0, h)}px` });
+  });
+  const bh = bubbleEl.offsetHeight;
+  const left = Math.min(Math.max(COACH.margin, r.x + r.w / 2 - COACH.width / 2), W - COACH.width - COACH.margin);
+  const above = hole.t - COACH.gap - bh;
+  const top = above >= COACH.margin ? above : Math.min(hole.b + COACH.gap, H - bh - COACH.margin);
+  bubbleEl.style.left = `${Math.round(left)}px`;
+  bubbleEl.style.top = `${Math.round(top)}px`;
+}
+
+// 놀이공간 — 말풍선을 무대 가운데에
+function placeArea(): void {
+  if (!bubbleEl) return;
+  bubbleEl.style.left = `${Math.round((innerWidth - COACH.width) / 2)}px`;
+  bubbleEl.style.top = `${Math.round((innerHeight - bubbleEl.offsetHeight) / 2)}px`;
+}
+addEventListener("resize", () => {
+  if (coach?.kind === "area") placeArea();
+});
+
+// 커서가 말풍선 위인가 (무대 안 좌표)
+function overCoach(x: number, y: number): boolean {
+  if (!coach || !bubbleEl || coachBox.hidden) return false;
+  const b = bubbleEl.getBoundingClientRect();
+  return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom;
+}
+
+bridge.onCoach(renderCoach);
+
 setInterval(tick, TICK_MS);
 // 로드 직후 한 번 — 메인이 init · 모든 look 의 sheets · 마지막 frame 을 (다시) 보낸다
 bridge.ready();
@@ -284,6 +395,7 @@ bridge.ready();
 //      그리기·히트·드래그를 화면 안 텍스트로 확인한다. Electron 에서는 쓰지 않는다
 function mockBridge(): StageBridge {
   type Cb<T> = (v: T) => void;
+  let coachCb: Cb<CoachView | null> | null = null;
   const cbs = { init: [] as Cb<StageInit>[], sheets: [] as Cb<LookSheets>[], frame: [] as Cb<StageFrame>[], hover: [] as Cb<HoverQuery>[], ct: [] as Cb<boolean>[] };
 
   // 색 사각형 시트 — 프레임마다 안쪽 여백을 달리 해 넘어가는 것이 보이게, 행마다 밝기를 달리 해 방향이 보이게
@@ -401,6 +513,23 @@ function mockBridge(): StageBridge {
     onHover: (cb) => void cbs.hover.push(cb),
     onClickThrough: (cb) => void cbs.ct.push(cb),
     onCry: () => {},
+    // ?coach=pet · area — 튜토리얼 말풍선 흉내. 버튼을 누르면 지운다
+    onCoach: (cb) => {
+      coachCb = cb;
+      const kind = opts.mockCoach;
+      if (kind !== "pet" && kind !== "area") return;
+      setTimeout(() => {
+        cb(
+          kind === "pet"
+            ? { id: "first-care", kind: "pet", petId: "a", step: "튜토리얼 · 첫 돌봄 1 / 1", title: "포켓몬 위에서 우클릭해 보세요", body: "밥 주기와 놀아주기로 돌볼 수 있어요. 포켓몬이 없는 곳의 우클릭은 뒤 앱으로 넘어가요.", button: "다음" }
+            : { id: "playground", kind: "area", areaLabel: "지금 · 화면 전체", step: "튜토리얼 · 놀이공간 1 / 1", title: "포켓몬이 다니는 공간을 바꿀 수 있어요", body: "설정의 놀이공간에서 화면 전체와 영역 지정 중에서 고르세요. 영역 지정은 드래그로 범위를 그려요.", button: "확인" },
+        );
+      }, 300);
+    },
+    coachAction: (a) => {
+      note(`(mock) 튜토리얼 ${a.id} ${a.action}`);
+      coachCb?.(null);
+    },
     hit: () => {},
     log: () => {}, // mock 은 진단을 #debug 로만 본다
     pointer(msg) {

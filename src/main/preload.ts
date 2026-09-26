@@ -8,6 +8,7 @@ type LookSheets = import("../shared/stage").LookSheets;
 type StageFrame = import("../shared/stage").StageFrame;
 type HoverQuery = import("../shared/stage").HoverQuery;
 type PickerPayload = import("../shared/stage").PickerPayload;
+type CoachView = import("../shared/stage").CoachView;
 type ManageBridge = import("../shared/manage").ManageBridge;
 type ManageChannel = import("../shared/manage").ManageChannel;
 type ManageRequest = import("../shared/manage").ManageRequest;
@@ -36,6 +37,8 @@ const CH = {
   hover: "stage:hover",
   clickThrough: "stage:click-through",
   cry: "stage:cry",
+  coach: "stage:coach",
+  coachAction: "stage:coach-action",
   ready: "stage:ready",
   hit: "stage:hit",
   pointer: "stage:pointer",
@@ -53,6 +56,8 @@ const bridge: StageBridge = {
   onHover: (cb) => ipcRenderer.on(CH.hover, (_e, q: HoverQuery) => cb(q)),
   onClickThrough: (cb) => ipcRenderer.on(CH.clickThrough, (_e, on: boolean) => cb(on)),
   onCry: (cb) => ipcRenderer.on(CH.cry, (_e, uri: string) => cb(uri)),
+  onCoach: (cb) => ipcRenderer.on(CH.coach, (_e, coach: CoachView | null) => cb(coach)),
+  coachAction: (action) => ipcRenderer.send(CH.coachAction, action),
   hit: (id) => ipcRenderer.send(CH.hit, id),
   pointer: (msg) => ipcRenderer.send(CH.pointer, msg),
   log: (entry) => ipcRenderer.send(CH.log, entry),

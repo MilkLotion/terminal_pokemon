@@ -173,6 +173,7 @@ const feedHandler: TxHandler = (draft, args) => {
   if (!petId) return { ok: false, reason: "bad-args" };
   const res = feed(draft, petId);
   if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  draft.totals.fed += 1; // 누적 기록 — 첫 돌봄 튜토리얼이 "이미 돌봤다"를 본다. 2026-09-26 전에는 v3 에서 늘지 않았다
   return { ok: true, result: { petId, fullness: res.fullness } };
 };
 
@@ -182,6 +183,7 @@ const playHandler: TxHandler = (draft, args) => {
   if (!petId) return { ok: false, reason: "bad-args" };
   const res = play(draft, petId);
   if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  draft.totals.played += 1;
   return { ok: true, result: { petId, affinity: res.affinity, streak: res.streak, longPlay: res.longPlay } };
 };
 

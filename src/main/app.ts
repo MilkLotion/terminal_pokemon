@@ -36,6 +36,8 @@ import { STATE_RULES } from "../state/rules";
 import { createNotifier, type Notifier } from "../notify/notifier";
 import type { ManageRoute } from "../shared/manage";
 import type { Command } from "../shared/types";
+import type { CoachView } from "../shared/stage";
+import { currentTutorial } from "../tutorial/core";
 
 let lastTick = 0;
 // 에이전트 작업 시간 — 상태를 볼 때마다 running 이던 만큼 쌓아 두고, 게임 틱에 넘기고 비운다
@@ -190,6 +192,24 @@ function syncPlayArea(): void {
   anchor?.poll(); // 무대 사각형을 바로 다시 정한다
 }
 
+// 바탕화면 튜토리얼 — 대기열 맨 앞이 바탕화면 것이면 무대에 말풍선을 보낸다 (src/tutorial/core.ts, docs/specs/s5.md "코치마크")
+// 저장을 새로 읽는 때(게임 틱·명령 뒤·파티 변경)에 부른다. 같은 값이면 무대 창이 다시 보내지 않는다
+function syncCoach(): void {
+  if (mode !== "companion" || !game || !stageWin) return;
+  const save = game.read();
+  const now = save ? currentTutorial(save) : null;
+  stageWin.sendCoach(now && now.surface === "stage" && save ? coachView(now.id, save.starterPetId) : null);
+}
+
+function coachView(id: string, starterPetId: string | null): CoachView | null {
+  const base = { id, step: t("coach.step", { name: t(`coach.${id}.name`) }), title: t(`coach.${id}.title`), body: t(`coach.${id}.body`), button: t(`coach.${id}.button`) };
+  if (id === "playground") return { ...base, kind: "area", areaLabel: t(playArea.mode === "region" ? "coach.area.region" : "coach.area.full") };
+  // 첫 돌봄은 첫 포켓몬을 밝힌다. 무대에 없으면(숨김) 나와 있는 첫 마리. 아무도 없으면 기다린다
+  const ids = stage?.petIds() ?? [];
+  const petId = starterPetId && ids.includes(starterPetId) ? starterPetId : ids[0];
+  return petId ? { ...base, kind: "pet", petId } : null;
+}
+
 function playTarget(): HelperWindow {
   const displays = screen.getAllDisplays().map((d) => ({ x: d.bounds.x, y: d.bounds.y, w: d.bounds.width, h: d.bounds.height }));
   const work = screen.getPrimaryDisplay().workArea;
@@ -268,6 +288,7 @@ const openManageWindow = (route?: ManageRoute): void => {
         syncLoginItem();
         syncPlayArea();
       }
+      syncCoach();
       return reply;
     },
     display: () => ({ hidden: userHidden, clickThrough: !!config.clickThrough }),
@@ -328,6 +349,7 @@ function runGameCommand(command: Command): void {
   void commands?.dispatcher.dispatch(command).then((result) => {
     if (!result.ok) notifyGame(t("game.failed", { reason: t(`game.reason.${result.reason}`) }));
     tray?.refresh();
+    syncCoach(); // 밥 주기·놀아주기로 첫 돌봄 튜토리얼이 끝났을 수 있다
   });
 }
 
@@ -387,6 +409,7 @@ function stateTick(): void {
       worker.refresh();
       notifier?.tick(); // 부화 준비·진화 가능·업적 미수령을 배너 줄에 세운다 (src/notify)
       syncPlayArea(); // 다른 프로세스의 관리 창에서 바꾼 놀이공간도 따라간다
+      syncCoach();
       const points = Math.floor(worker.save()?.points.balance ?? 0);
       if (points !== lastMenuPoints) {
         lastMenuPoints = points;
@@ -478,6 +501,13 @@ async function main(): Promise<void> {
     onReady: () => {
       stage?.releaseHeld(); // 렌더러가 새로 떴다 — 들고 있던 포인터도 사라졌다
       stage?.resend();
+      stageWin?.resendCoach();
+    },
+    // 튜토리얼 말풍선의 버튼 — `다음`·`확인` 은 완료, ✕ 는 스킵
+    onCoachAction: ({ id, action }) => {
+      void commands?.dispatcher
+        .dispatch({ cmd: action === "done" ? "tutorial.done" : "tutorial.skip", target: id, args: { steps: 1 }, from: "pet" })
+        .then(() => syncCoach());
     },
     onHit: (id) => stage?.hit(id),
     onPointer: (msg) => stage?.pointer(msg),
@@ -575,7 +605,9 @@ async function main(): Promise<void> {
   });
   party.onRole((w) => commands?.setWriter(w));
   commands.setWriter(party.isWriter());
-  party.onChange(() => void refreshParty());
+  party.onChange(() => {
+    void refreshParty().then(syncCoach); // 무대에 나온 마리가 바뀌면 첫 돌봄이 밝힐 마리도 바뀐다
+  });
 
   await refreshParty();
   if (quitting) return;
@@ -618,6 +650,7 @@ async function main(): Promise<void> {
   applyClickThrough(!!config.clickThrough, false);
   syncLoginItem();
   syncPlayArea();
+  syncCoach();
   bootReady = true;
   lifetime.check(); // 창이 생겼으니 pid 파일에 ready 를 적는다 — pokebuddy 명령이 이걸 보고 기다림을 끝낸다
 

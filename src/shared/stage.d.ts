@@ -77,6 +77,24 @@ export interface PointerMsg {
   y: number;
 }
 
+// 바탕화면 튜토리얼 코치마크 — 첫 돌봄(포켓몬 둘레를 비우고 어둡게), 놀이공간(놀이공간 테두리). 모두 한 단계다
+// Figma `Tutorial / First Care` `397:8552`, `Tutorial / Playground` `397:8596`. 문구는 메인이 i18n 에서 채운다
+export interface CoachView {
+  id: string; // 튜토리얼 id — first-care · playground
+  kind: "pet" | "area";
+  step: string; // "튜토리얼 · 첫 돌봄 1 / 1"
+  title: string;
+  body: string;
+  button: string; // 다음 · 확인
+  petId?: string; // kind pet — 밝힐 마리
+  areaLabel?: string; // kind area — "지금 · 화면 전체"
+}
+export interface CoachAction {
+  id: string;
+  action: "done" | "skip"; // 버튼은 완료, ✕ 는 스킵
+}
+// 말풍선 위라는 히트 답은 문자열 "coach" 다 — 마리 id(p숫자·세션 펫 이름)와 겹치지 않는다. 선언 파일이라 상수를 두지 못한다
+
 // 첫 포켓몬 선택 창 — Figma `First Run / Starter Selected` `402:9417`, `Starter Empty` `402:9579`
 export interface PickerItem {
   slug: string;
@@ -99,6 +117,8 @@ export type StageChannel =
   | "stage:hover" // M→R  HoverQuery
   | "stage:click-through" // M→R  boolean
   | "stage:cry" // M→R  울음소리 data URI (audio/ogg)
+  | "stage:coach" // M→R  CoachView | null
+  | "stage:coach-action" // R→M  CoachAction
   | "stage:ready" // R→M  없음
   | "stage:hit" // R→M  HitReply
   | "stage:pointer" // R→M  PointerMsg
@@ -116,6 +136,8 @@ export interface StageBridge {
   onHover(cb: (q: HoverQuery) => void): void;
   onClickThrough(cb: (on: boolean) => void): void;
   onCry(cb: (uri: string) => void): void; // 울음소리 한 번 — 놀아주기가 성공했을 때
+  onCoach(cb: (coach: CoachView | null) => void): void; // 바탕화면 튜토리얼 — null 이면 지운다
+  coachAction(action: CoachAction): void;
   hit(id: HitReply): void;
   pointer(msg: PointerMsg): void;
   log(entry: Record<string, unknown>): void;

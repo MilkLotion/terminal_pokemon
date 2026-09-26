@@ -940,12 +940,12 @@ function draw(): void {
 // Figma `Tutorial / Shop` `399:8590` · `Hatch` `399:8901` · `Party` `399:9159`. 모두 한 단계다(2026-09-26 사용자 결정).
 // 대상 둘레 8px 을 비우고 네 장의 배경막으로 덮는다. 대상은 그대로 누를 수 있다. 말풍선은 대상 바로 아래(넘치면 위).
 // 무엇을 보여 줄지는 스냅샷 `tutorial` 이 정한다(src/tutorial/core.ts). 그 탭에 있을 때만 그린다 — 화면을 강제로 바꾸지 않는다.
-// 문구는 Figma 를 따르되 지금 앱 조작에 맞춰 두 곳을 고쳤다: 부화(알 카드의 쓰다듬기·노래 버튼), 파티(상세의 화면 표시)
+// 문구는 Figma 그대로다 (2026-09-26 사용자 결정 "figma대로 진행")
 
 const TUTORIAL_TEXT: Record<string, { name: string; tab: TabId; title: string; body: string }> = {
   shop: { name: "상점", tab: "shop", title: "랜덤알로 새 포켓몬을 만나 보세요", body: "시작 포인트로 하나 살 수 있어요. 카드를 누르면 구매 창이 열려요." },
-  hatch: { name: "부화", tab: "box", title: "알을 돌보면 더 빨리 준비돼요", body: "쓰다듬기나 노래로 알을 돌봐 주세요. 준비가 끝나면 열기를 눌러야 부화해요." },
-  party: { name: "파티", tab: "party", title: "새 포켓몬은 숨긴 상태로 들어와요", body: "칸을 눌러 상세에서 화면 표시를 켜면 바탕화면에 나타나요. 초상의 몬스터볼은 숨김 표시예요." },
+  hatch: { name: "부화", tab: "box", title: "알을 돌보면 더 빨리 준비돼요", body: "알을 눌러 쓰다듬거나 노래를 들려주세요. 준비가 끝나면 열기를 눌러야 부화해요." },
+  party: { name: "파티", tab: "party", title: "새 포켓몬은 숨긴 상태로 들어와요", body: "칸을 눌러 상세에서 꺼내기를 누르면 바탕화면에 나타나요. 초상의 몬스터볼은 숨김 표시예요." },
 };
 const COACH = { pad: 8, gap: 12, width: 280, margin: 8 };
 

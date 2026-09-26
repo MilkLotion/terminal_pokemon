@@ -64,11 +64,95 @@
       #debug[hidden] {
         display: none;
       }
+      /* 튜토리얼 코치마크 (Figma `Tutorial / First Care` `397:8552`, `Tutorial / Playground` `397:8596`).
+         막과 테두리는 보기만 한다 — 클릭은 아래로 통과한다. 말풍선만 클릭을 받는다(stage.ts overCoach). 색은 관리 창 변수와 같은 값이다 */
+      #coach {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+      }
+      #coach[hidden] {
+        display: none;
+      }
+      .coach-dim {
+        position: fixed;
+        background: rgba(26, 51, 48, 0.45);
+      }
+      .coach-area {
+        position: fixed;
+        inset: 6px;
+        border: 2px solid #0f766e;
+        border-radius: 4px;
+      }
+      .coach-area-label {
+        position: absolute;
+        left: 12px;
+        top: 10px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(26, 51, 48, 0.72);
+        color: #ffffff;
+        font: 12px var(--font-body);
+      }
+      .coach-bubble {
+        position: fixed;
+        width: 280px;
+        box-sizing: border-box;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+        font: 12px var(--font-body);
+        color: #4a6663;
+        word-break: keep-all;
+        pointer-events: auto;
+      }
+      .coach-bubble .head {
+        display: flex;
+        align-items: center;
+      }
+      .coach-bubble .step {
+        flex: 1;
+      }
+      .coach-bubble .title {
+        font-weight: 700;
+        color: #1a3330;
+      }
+      .coach-bubble .foot {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .coach-bubble button {
+        appearance: none;
+        font: inherit;
+        cursor: pointer;
+      }
+      .coach-bubble .x {
+        width: 16px;
+        height: 16px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #4a6663;
+      }
+      .coach-bubble .go {
+        height: 32px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 8px;
+        background: #0f766e;
+        color: #ffffff;
+        font-weight: 700;
+      }
     </style>
   </head>
   <body>
     <canvas id="stage"></canvas>
     <pre id="debug" hidden></pre>
+    <div id="coach" hidden></div>
     <script type="module" src="../../dist/renderer/stage.js"></script>
   </body>
 </html>

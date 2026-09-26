@@ -26,7 +26,7 @@ export type TutorialSurface = "manage" | "stage"; // 관리 창 · 바탕화면
 interface TutorialRule {
   id: string;
   surface: TutorialSurface;
-  enabled: boolean; // 바탕화면 튜토리얼은 무대 창의 코치마크가 생기면 켠다 — 그 전에 넣으면 관리 창 튜토리얼이 그 뒤에서 막힌다
+  enabled: boolean; // 끄면 줄에 넣지 않는다. 바탕화면 2종은 무대 코치마크(src/renderer/stage.ts)가 생긴 2026-09-26 에 켰다
   start: (save: SaveV3) => boolean; // 시작 조건
   already: (save: SaveV3) => boolean; // 목표 행동을 이미 했는가
 }
@@ -36,7 +36,7 @@ const otherPet = (save: SaveV3) => save.pets.find((p) => p.id !== save.starterPe
 
 // 스펙 표의 순서 그대로. 같은 순간에 생긴 조건은 이 순서로 보여 준다
 export const TUTORIALS: readonly TutorialRule[] = [
-  { id: "first-care", surface: "stage", enabled: false, start: (s) => s.starterPetId != null, already: (s) => s.totals.fed + s.totals.played > 0 },
+  { id: "first-care", surface: "stage", enabled: true, start: (s) => s.starterPetId != null, already: (s) => s.totals.fed + s.totals.played > 0 },
   { id: "shop", surface: "manage", enabled: true, start: (s) => s.starterPetId != null, already: (s) => s.eggSeq > 0 || otherPet(s) != null },
   { id: "hatch", surface: "manage", enabled: true, start: hasRandomEgg, already: (s) => !hasRandomEgg(s) },
   {
@@ -50,7 +50,7 @@ export const TUTORIALS: readonly TutorialRule[] = [
       return pet != null && s.party.slots.some((slot) => slot.petId === pet.id && slot.hidden !== true);
     },
   },
-  { id: "playground", surface: "stage", enabled: false, start: (s) => ["skipped", "done"].includes(s.tutorials["first-care"]?.state ?? "none"), already: (s) => s.settings.playArea.mode === "region" },
+  { id: "playground", surface: "stage", enabled: true, start: (s) => ["skipped", "done"].includes(s.tutorials["first-care"]?.state ?? "none"), already: (s) => s.settings.playArea.mode === "region" },
 ];
 
 const ruleOf = (id: string): TutorialRule | undefined => TUTORIALS.find((t) => t.id === id);

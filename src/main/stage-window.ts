@@ -6,7 +6,7 @@
 // 400ms 폴링마다 부르면 mac 에서 깜빡일 수 있다
 import fs from "node:fs";
 import { BrowserWindow, Menu, ipcMain, screen, type MenuItemConstructorOptions } from "electron";
-import type { HitReply, LookSheets, PointerMsg, StageChannel, StageFrame, StageInit } from "../shared/stage";
+import type { CoachAction, CoachView, HitReply, LookSheets, PointerMsg, StageChannel, StageFrame, StageInit } from "../shared/stage";
 import type { Mode } from "../shared/types";
 import { sameRect, type Rect, type Size } from "./layout";
 import { windowIcon } from "./paths";
@@ -19,6 +19,8 @@ const CH = {
   hover: "stage:hover",
   clickThrough: "stage:click-through",
   cry: "stage:cry",
+  coach: "stage:coach",
+  coachAction: "stage:coach-action",
   ready: "stage:ready",
   hit: "stage:hit",
   pointer: "stage:pointer",
@@ -39,6 +41,7 @@ export interface StageWindowOptions {
   onPointer(msg: PointerMsg): void;
   onGone(): void; // 렌더러가 죽었다 — 들고 있던 마리를 놓는다
   onHidden(): void; // 창을 숨겼다 — pointerup 이 오지 않으니 들고 있던 마리를 놓는다
+  onCoachAction?(action: CoachAction): void; // 바탕화면 튜토리얼 말풍선의 버튼
 }
 
 export interface StageWindow {
@@ -56,6 +59,8 @@ export interface StageWindow {
   sendFrame(frame: StageFrame): void;
   sendClickThrough(on: boolean): void;
   sendCry(uri: string): void; // 울음소리 한 번
+  sendCoach(coach: CoachView | null): void; // 바탕화면 튜토리얼 — 같은 값이면 보내지 않는다. 렌더러가 다시 뜨면 resendCoach
+  resendCoach(): void;
   popup(template: MenuItemConstructorOptions[]): void;
   close(): void;
 }
@@ -93,6 +98,8 @@ export function createStageWindow(opts: StageWindowOptions): StageWindow {
   let stageRect: Rect | null = null;
   let level: "float" | "normal" | null = null; // 지금 창 레벨
   let passing: boolean | null = null; // 지금 클릭을 아래 창으로 통과시키는 중인가 — setIgnoreMouseEvents 의 마지막 값
+  let coach: CoachView | null = null; // 마지막으로 보낸 튜토리얼 — 렌더러가 다시 뜨면 다시 보낸다
+  let coachKey = "null";
   let loaded = false; // 문서를 실제로 읽었나 (렌더러가 없으면 false — IPC 를 보내도 받는 이가 없다)
 
   if (mode === "companion") {
@@ -128,7 +135,14 @@ export function createStageWindow(opts: StageWindowOptions): StageWindow {
     if (!mine(e.sender) || !entry || typeof entry !== "object") return;
     log?.({ from: "renderer", ...(entry as Record<string, unknown>) });
   };
+  const onCoachAction = (e: Electron.IpcMainEvent, msg: unknown): void => {
+    if (!mine(e.sender) || !msg || typeof msg !== "object") return;
+    const m = msg as CoachAction;
+    if (typeof m.id !== "string" || (m.action !== "done" && m.action !== "skip")) return;
+    opts.onCoachAction?.({ id: m.id, action: m.action });
+  };
   ipcMain.on(CH.ready, onReady);
+  ipcMain.on(CH.coachAction, onCoachAction);
   ipcMain.on(CH.hit, onHit);
   ipcMain.on(CH.pointer, onPointer);
   ipcMain.on(CH.log, onLog);
@@ -143,6 +157,7 @@ export function createStageWindow(opts: StageWindowOptions): StageWindow {
   win.on("closed", () => {
     win = null;
     ipcMain.removeListener(CH.ready, onReady);
+    ipcMain.removeListener(CH.coachAction, onCoachAction);
     ipcMain.removeListener(CH.hit, onHit);
     ipcMain.removeListener(CH.pointer, onPointer);
     ipcMain.removeListener(CH.log, onLog);
@@ -260,6 +275,14 @@ export function createStageWindow(opts: StageWindowOptions): StageWindow {
     sendFrame: (frame) => send(CH.frame, frame),
     sendClickThrough: (on) => send(CH.clickThrough, on),
     sendCry: (uri) => send(CH.cry, uri),
+    sendCoach(next) {
+      const key = JSON.stringify(next);
+      if (key === coachKey) return;
+      coachKey = key;
+      coach = next;
+      send(CH.coach, next);
+    },
+    resendCoach: () => send(CH.coach, coach),
 
     // 우클릭 — 네이티브 메뉴. 프레임 없는 창이라 렌더러가 그리지 않고 메인이 띄운다
     popup(template) {

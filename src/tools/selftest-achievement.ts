@@ -10,6 +10,7 @@ import type { PetV3, SaveV3 } from "../shared/save-v3";
 import { begin } from "../party/starter";
 import { buy } from "../shop/buy";
 import { open } from "../egg/open";
+import { HANDLERS } from "../tx/handlers";
 import { canShow, currentTutorial, done, queueTutorials, skip } from "../tutorial/core";
 
 const T0 = new Date(2026, 8, 24, 10, 0, 0).getTime();
@@ -160,14 +161,20 @@ function seed(): SaveV3 {
   process.stdout.write("(10) 튜토리얼 상태 기록  ok\n");
 }
 
-// (11) 튜토리얼 대기열 — 첫 선택 → 상점, 랜덤알 구매 → 부화, 새 개체 → 파티. 이미 한 행동은 완료로 넘긴다
+// (11) 튜토리얼 대기열 — 첫 선택 → 첫 돌봄·상점, 첫 돌봄 끝 → 놀이공간, 랜덤알 구매 → 부화, 새 개체 → 파티. 이미 한 행동은 완료로 넘긴다
 {
   const s = empty(T0);
   assert.ok(begin(s, "charmander", T0, () => 0.5).ok);
   assert.equal(s.points.balance, 120, "첫 선택 뒤 시작 포인트 120 — 랜덤알 하나 값");
-  assert.deepStrictEqual(queueTutorials(s, T0), ["shop"], "바탕화면 튜토리얼(첫 돌봄)은 아직 줄에 넣지 않는다");
-  assert.deepStrictEqual(currentTutorial(s), { id: "shop", surface: "manage" });
+  assert.deepStrictEqual(queueTutorials(s, T0), ["first-care", "shop"], "같은 순간이면 첫 돌봄이 상점보다 먼저");
+  assert.deepStrictEqual(currentTutorial(s), { id: "first-care", surface: "stage" });
   assert.deepStrictEqual(queueTutorials(s, T0 + 1), [], "두 번 불러도 다시 넣지 않는다");
+  // 밥 주기 한 번이면 첫 돌봄은 이미 한 행동으로 완료 — 그 뒤 놀이공간이 줄에 든다
+  s.totals.fed += 1;
+  assert.deepStrictEqual(queueTutorials(s, T0 + 1), ["playground"]);
+  assert.equal(s.tutorials["first-care"]?.state, "done");
+  assert.deepStrictEqual(currentTutorial(s), { id: "shop", surface: "manage" }, "먼저 줄에 든 상점이 놀이공간보다 먼저");
+  assert.ok(skip(s, "playground").ok);
 
   assert.ok(buy(s, "random", T0 + 2, () => 0.5).ok);
   assert.deepStrictEqual(queueTutorials(s, T0 + 2), ["hatch"]);
@@ -192,6 +199,7 @@ function seed(): SaveV3 {
   assert.ok(begin(s, "charmander", T0, () => 0.5).ok);
   assert.ok(buy(s, "random", T0, () => 0.5).ok);
   s.eggSeq = 0; // 산 기록이 없는 옛 저장처럼 — 상점이 넘어가지 않게
+  s.totals.fed = 1; // 첫 돌봄은 이미 했다 — 상점과 부화의 순서만 본다
   queueTutorials(s, T0);
   assert.equal(currentTutorial(s)?.id, "shop", "같은 순간이면 상점이 부화보다 먼저");
 
@@ -203,4 +211,16 @@ function seed(): SaveV3 {
   process.stdout.write("(12) 튜토리얼 순서 · 옛 저장  ok\n");
 }
 
-process.stdout.write("selftest-achievement: 통과 (업적 조건·수령·튜토리얼·대기열)\n");
+// (13) 밥 주기·놀아주기 처리기는 누적 횟수를 올린다 — 첫 돌봄 튜토리얼이 "이미 돌봤다"를 이것으로 본다
+{
+  const s = empty(T0);
+  assert.ok(begin(s, "charmander", T0, () => 0.5).ok);
+  s.pets[0]!.fullness = 50;
+  const ctx = { now: T0, rand: () => 0.5 };
+  assert.equal(HANDLERS["feed"]!(s, { petId: s.pets[0]!.id }, ctx).ok, true);
+  assert.equal(HANDLERS["play"]!(s, { petId: s.pets[0]!.id }, ctx).ok, true);
+  assert.deepStrictEqual([s.totals.fed, s.totals.played], [1, 1]);
+  process.stdout.write("(13) 돌봄 누적 횟수  ok\n");
+}
+
+process.stdout.write("selftest-achievement: 통과 (업적 조건·수령·튜토리얼·대기열·돌봄 누적)\n");
