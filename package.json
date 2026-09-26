@@ -29,6 +29,7 @@
     "src/renderer/*.html",
     "assets/logo/out/",
     "assets/fonts/",
+    "assets/items/",
     "lib/",
     "helpers/winbounds",
     "helpers/winbounds.ps1",
