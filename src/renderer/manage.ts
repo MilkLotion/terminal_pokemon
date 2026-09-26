@@ -942,11 +942,40 @@ function draw(): void {
 // 무엇을 보여 줄지는 스냅샷 `tutorial` 이 정한다(src/tutorial/core.ts). 그 탭에 있을 때만 그린다 — 화면을 강제로 바꾸지 않는다.
 // 문구는 Figma 그대로다 (2026-09-26 사용자 결정 "figma대로 진행")
 
-const TUTORIAL_TEXT: Record<string, { name: string; tab: TabId; title: string; body: string }> = {
-  shop: { name: "상점", tab: "shop", title: "랜덤알로 새 포켓몬을 만나 보세요", body: "시작 포인트로 하나 살 수 있어요. 카드를 누르면 구매 창이 열려요." },
-  hatch: { name: "부화", tab: "box", title: "알을 돌보면 더 빨리 준비돼요", body: "알을 눌러 쓰다듬거나 노래를 들려주세요. 준비가 끝나면 열기를 눌러야 부화해요." },
-  party: { name: "파티", tab: "party", title: "새 포켓몬은 숨긴 상태로 들어와요", body: "칸을 눌러 상세에서 꺼내기를 누르면 바탕화면에 나타나요. 초상의 몬스터볼은 숨김 표시예요." },
+// guide* 는 그 탭이 아닌 곳에 있을 때 탭 버튼으로 이어 주는 말풍선이다 (Figma 시안 E `514:1670` · F `514:2182`)
+interface TutorialText {
+  name: string;
+  tab: TabId;
+  title: string;
+  body: string;
+  guideTitle: string;
+  guideBody: string;
+  guideButton: string;
+}
+const TUTORIAL_TEXT: Record<string, TutorialText> = {
+  shop: {
+    name: "상점", tab: "shop", title: "랜덤알로 새 포켓몬을 만나 보세요", body: "시작 포인트로 하나 살 수 있어요. 카드를 누르면 구매 창이 열려요.",
+    guideTitle: "랜덤알로 새 포켓몬을 만나 보세요", guideBody: "상점 탭에서 시작 포인트로 알을 살 수 있어요.", guideButton: "상점으로 가기",
+  },
+  hatch: {
+    name: "부화", tab: "box", title: "알을 돌보면 더 빨리 준비돼요", body: "알을 눌러 쓰다듬거나 노래를 들려주세요. 준비가 끝나면 열기를 눌러야 부화해요.",
+    guideTitle: "알은 박스의 돌보미집에 들어갔어요", guideBody: "박스 탭에서 알을 돌보고 준비가 끝나면 열어요.", guideButton: "박스로 가기",
+  },
+  party: {
+    name: "파티", tab: "party", title: "새 포켓몬은 숨긴 상태로 들어와요", body: "칸을 눌러 상세에서 꺼내기를 누르면 바탕화면에 나타나요. 초상의 몬스터볼은 숨김 표시예요.",
+    guideTitle: "새 포켓몬이 파티에 들어왔어요", guideBody: "파티 탭에서 새 포켓몬을 꺼낼 수 있어요.", guideButton: "파티로 가기",
+  },
 };
+// 업적 안내 — 헤더의 업적 아이콘을 밝힌다 (Figma 시안 G `514:2444`). 어느 탭에서든 보인다
+const ACHIEVEMENT_GUIDE = { title: "보상을 받으면 파티 칸이 하나 열려요", body: "업적창에서 보상 받기를 눌러 주세요.", button: "업적 보기" };
+
+interface CoachSpec {
+  step: string;
+  title: string;
+  body: string;
+  button: string;
+  onGo: () => void;
+}
 const COACH = { pad: 8, gap: 12, width: 280, margin: 8 };
 
 let coachEl: HTMLElement | null = null;
@@ -955,16 +984,40 @@ function drawTutorial(): void {
   coachEl?.remove();
   coachEl = null;
   const id = view?.tutorial ?? null;
-  const text = id ? TUTORIAL_TEXT[id] : undefined;
-  if (id && text && !dialog && !detailPet && tab === text.tab) {
-    const target = bodyEl.querySelector<HTMLElement>(`[data-tut="${id}"]`);
-    if (target) coachEl = coachLayer(id, text, target);
+  if (id && view && !dialog && !detailPet) {
+    const text = TUTORIAL_TEXT[id];
+    if (id === "achievement") {
+      const done = view.achievements.list.find((a) => a.state === "achieved");
+      const target = document.getElementById("open-achievements");
+      if (done && target) {
+        coachEl = coachLayer(id, target, { step: `업적 달성 · ${done.name}`, ...ACHIEVEMENT_GUIDE, onGo: () => open({ kind: "achievements" }) });
+      }
+    } else if (text && tab === text.tab) {
+      const target = bodyEl.querySelector<HTMLElement>(`[data-tut="${id}"]`);
+      if (target) coachEl = coachLayer(id, target, { step: `튜토리얼 · ${text.name} 1 / 1`, title: text.title, body: text.body, button: "다음", onGo: () => void send("tutorial.done", id, { steps: 1 }) });
+    } else if (text) {
+      // 다른 탭에 있다 — 그 탭 버튼으로 이어 준다. 누를 때만 옮긴다
+      const target = tabsEl.children[TABS.findIndex((t) => t.id === text.tab)] as HTMLElement | undefined;
+      if (target) {
+        coachEl = coachLayer(id, target, {
+          step: `튜토리얼 · ${text.name} 1 / 1`,
+          title: text.guideTitle,
+          body: text.guideBody,
+          button: text.guideButton,
+          onGo: () => {
+            tab = text.tab;
+            detailPet = null;
+            draw();
+          },
+        });
+      }
+    }
   }
   // OS 가 그리는 창 단추 자리도 함께 어둡게 한다 — 모달 가림막과 같은 통로
   window.pokebuddyManage.dim(dimmed || coachEl != null);
 }
 
-function coachLayer(id: string, text: { name: string; title: string; body: string }, target: HTMLElement): HTMLElement {
+function coachLayer(id: string, target: HTMLElement, spec: CoachSpec): HTMLElement {
   const layer = el("div", "coach");
   const r = target.getBoundingClientRect();
   const W = window.innerWidth;
@@ -985,9 +1038,9 @@ function coachLayer(id: string, text: { name: string; title: string; body: strin
   const x = button("x", "✕");
   x.setAttribute("aria-label", "튜토리얼 닫기");
   x.addEventListener("click", () => void send("tutorial.skip", id)); // 닫기는 스킵이다
-  head.append(el("span", "step", `튜토리얼 · ${text.name} 1 / 1`), x);
-  const next = actionButton("다음", true, false, () => void send("tutorial.done", id, { steps: 1 }));
-  bubble.append(head, el("div", "title", text.title), el("div", "body", text.body), actions(el("div", "spacer"), next));
+  head.append(el("span", "step", spec.step), x);
+  const next = actionButton(spec.button, true, false, spec.onGo);
+  bubble.append(head, el("div", "title", spec.title), el("div", "body", spec.body), actions(el("div", "spacer"), next));
   layer.appendChild(bubble);
   document.body.appendChild(layer);
   const left = Math.min(Math.max(COACH.margin, r.left), W - COACH.width - COACH.margin);

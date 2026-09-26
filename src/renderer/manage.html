@@ -126,7 +126,7 @@
       .spacer {
         flex: 1;
       }
-      /* 보유 포인트 칩 — 동전 모양 P 와 숫자 */
+      /* 보유 포인트 칩 — 포켓몬 돈(P 에 가로줄 둘) 동전과 숫자. 2026-09-26 사용자 요청으로 글자 P 에서 바꿨다 */
       .point-chip {
         display: flex;
         align-items: center;
@@ -1781,7 +1781,9 @@
       <span class="brand">PokeBuddy</span>
       <span class="spacer"></span>
       <span class="point-chip" title="보유 포인트" aria-label="보유 포인트">
-        <span class="coin" aria-hidden="true">P</span>
+        <span class="coin" aria-hidden="true"
+          ><svg width="10" height="12" viewBox="0 0 10 12"><path d="M2.6 11.2V1h3.1a2.8 2.8 0 0 1 0 5.6H2.6" stroke="currentColor" stroke-width="1.6" fill="none" /><path d="M0.6 7.8h5.6M0.6 9.8h5.6" stroke="currentColor" stroke-width="1.2" /></svg
+        ></span>
         <span class="points" id="points">0</span>
       </span>
     </header>

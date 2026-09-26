@@ -211,6 +211,23 @@ function seed(): SaveV3 {
   process.stdout.write("(12) 튜토리얼 순서 · 옛 저장  ok\n");
 }
 
+// (12b) 업적 안내 — 달성하면 줄에 들고, 한 번 받으면 끝. 새 개체가 박스로 갔으면 파티 튜토리얼은 넘긴다
+{
+  const s = empty(T0);
+  assert.ok(begin(s, "charmander", T0, () => 0.5).ok);
+  s.totals.fed = 1;
+  s.eggSeq = 1; // 상점도 이미 했다
+  s.pets.push({ ...s.pets[0]!, id: "p9" }); // 파티가 가득 차 박스로 간 새 개체 — 파티 칸에 없다
+  s.achievements["show-two"] = { achievedAt: T0, claimedAt: null };
+  queueTutorials(s, T0);
+  assert.equal(s.tutorials.party?.state, "done", "박스로 갔으면 밝힐 칸이 없어 넘긴다");
+  assert.equal(currentTutorial(s)?.id, "achievement");
+  s.achievements["show-two"] = { achievedAt: T0, claimedAt: T0 + 1 };
+  queueTutorials(s, T0 + 1);
+  assert.equal(s.tutorials.achievement?.state, "done", "보상을 받으면 끝");
+  process.stdout.write("(12b) 업적 안내 · 박스로 간 새 개체  ok\n");
+}
+
 // (13) 밥 주기·놀아주기 처리기는 누적 횟수를 올린다 — 첫 돌봄 튜토리얼이 "이미 돌봤다"를 이것으로 본다
 {
   const s = empty(T0);

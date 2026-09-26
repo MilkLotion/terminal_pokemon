@@ -5,7 +5,8 @@
 //
 // 대기열
 //   시작 조건을 채우면 그 시각(queuedAt)을 적는다. 먼저 생긴 것부터 하나씩 보여 준다.
-//   같은 순간이면 첫 돌봄 → 상점 → 부화 → 파티 → 놀이공간 순서다(TUTORIALS 의 순서).
+//   같은 순간이면 첫 돌봄 → 상점 → 부화 → 파티 → 업적 → 놀이공간 순서다(TUTORIALS 의 순서).
+//   관리 창은 튜토리얼의 탭이 아닌 곳에 있으면 그 탭 버튼으로 이어 준다 — 버튼을 누를 때만 옮긴다(2026-09-26 사용자 결정 "자연스럽게 이동")
 //   보여 줄 차례에 목표 행동을 이미 했으면 완료로 기록하고 띄우지 않는다(2026-09-23 결정 "끝낸 단계를 건너뛴다").
 //   대기만 한 튜토리얼은 스킵이 아니다. 앱이 꺼져도 queuedAt 이 남아 다시 켜면 같은 순서로 보인다.
 // 문구와 대상은 화면(src/renderer/manage.ts)이 가진다. 모두 한 단계다(2026-09-26 사용자 결정 "제안대로 진행").
@@ -44,11 +45,22 @@ export const TUTORIALS: readonly TutorialRule[] = [
     surface: "manage",
     enabled: true,
     start: (s) => otherPet(s) != null,
-    // 새 개체를 이미 꺼냈다 — 숨김이 풀린 파티 칸에 있다
+    // 새 개체를 이미 꺼냈다(숨김이 풀린 파티 칸) — 또는 파티가 가득 차 박스로 갔다. 박스면 밝힐 칸이 없어 줄이 막히므로 넘긴다
     already: (s) => {
       const pet = otherPet(s);
-      return pet != null && s.party.slots.some((slot) => slot.petId === pet.id && slot.hidden !== true);
+      if (!pet) return false;
+      const slot = s.party.slots.find((x) => x.petId === pet.id);
+      return !slot || slot.hidden !== true;
     },
+  },
+  // 업적 — 달성하고 아직 받지 않은 업적이 생기면 헤더의 업적 아이콘으로 이어 준다. 한 번이라도 받으면 끝이다.
+  // 2026-09-22 에 업적 튜토리얼을 뺐다가 2026-09-26 사용자 결정("업적도 … 자연스럽게 유도하도록")으로 되살렸다
+  {
+    id: "achievement",
+    surface: "manage",
+    enabled: true,
+    start: (s) => Object.values(s.achievements).some((a) => a.achievedAt != null),
+    already: (s) => Object.values(s.achievements).some((a) => a.claimedAt != null),
   },
   { id: "playground", surface: "stage", enabled: true, start: (s) => ["skipped", "done"].includes(s.tutorials["first-care"]?.state ?? "none"), already: (s) => s.settings.playArea.mode === "region" },
 ];
