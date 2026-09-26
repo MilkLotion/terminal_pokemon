@@ -3,7 +3,7 @@
 // 1000종이 넘는 목록에 상세를 모두 싣지 않는다. 칸을 누를 때 한 종만 만든다.
 // 입수 경로는 코드가 실제로 쓰는 규칙을 따른다
 //   첫 선택 후보   data/unlocks.json 의 starter
-//   랜덤알         해금한 종 가운데 진화 전용 종(해금 규칙이 evolve)과 상점에서 파는 종을 뺀 종이 후보다 (src/shop/buy.ts randomPool)
+//   랜덤알         해금한 종 가운데 랜덤알에서 나올 수 있는 종이 후보다 (src/shop/catalog.ts inRandomEgg)
 //   알 행동 조건   data/egg-conditions.json — 해금과 무관하게 조건으로 나온다
 //   태고의돌       data/eggs.json 의 화석 목록
 //   진화           data/evo.json 을 거꾸로 — 앞 단계 종에서 진화한다
@@ -17,7 +17,7 @@ import type { DexOptions } from "../dex/data";
 import { conditionOf, textOf } from "../egg/conditions.js";
 import { getLang, petName, typeName } from "../main/text.js";
 import { loadJson } from "../dex/data.js";
-import { eggName, eggPool, speciesPrice } from "../shop/catalog.js";
+import { eggName, eggPool, inRandomEgg, speciesPrice } from "../shop/catalog.js";
 import type { DexDetail } from "../shared/manage";
 import type { SaveV3 } from "../shared/save-v3";
 import { nameOfItem } from "./lists.js";
@@ -51,9 +51,7 @@ export function dexDetail(save: SaveV3, slug: string, opts?: DexOptions): DexDet
   if (unlockRules(opts)[slug]?.starter) methods.push("첫 선택 후보");
   const prev = prevOf(slug, opts);
   if (prev) methods.push(`${petName(prev)}에서 진화`);
-  const rule = unlockRules(opts)[slug];
-  const inRandom = !(rule?.evolve && !rule?.starter) && rule?.shop === undefined;
-  if (unlocked && inRandom) methods.push(eggName("random", opts) ?? "랜덤알");
+  if (unlocked && inRandomEgg(slug, opts)) methods.push(eggName("random", opts) ?? "랜덤알");
   if (eggPool("ancient-stone", opts)?.includes(slug)) methods.push(eggName("ancient-stone", opts) ?? "태고의돌");
   const condition = conditionOf(slug, opts);
   if (condition) methods.push("알 행동 조건");

@@ -9,6 +9,7 @@
 // 기존 S4 의 src/shop/catalog.ts 와 별개다. 그쪽은 v2 경로가 계속 쓴다.
 import { isMetaKey, loadJson, type DexOptions } from "../dex/data.js";
 import { SHOP_V3_RULES } from "../save/rules.js";
+import { unlockRules } from "../dex/unlocks.js";
 
 export type ProductKind = "egg" | "tool" | "party-slot" | "species";
 
@@ -80,6 +81,21 @@ export function eggName(kind: string, opts?: DexOptions): string | null {
 export function eggPool(kind: string, opts?: DexOptions): string[] | null {
   const raw = loadJson<Record<string, { pool?: unknown }>>("eggs.json", opts)[kind]?.pool;
   return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === "string") : null;
+}
+
+// 랜덤알에서 나올 수 있는 종인가 — 해금 여부는 부르는 쪽이 본다 (docs/specs/s5.md "랜덤알", "알 행동 조건")
+//   해금 규칙이 없는 종        뺀다. 전설·환상·울트라비스트는 규칙이 없다 — 입수 경로를 따로 정한다.
+//                              옛 규칙으로 이미 해금된 저장도 여기서 걸러진다
+//   진화 전용 종               뺀다. 해금 규칙이 진화(evolve)인 종이다(리자드·라이츄). 첫 선택 후보(starter)는 남는다(피카츄)
+//   상점에서 파는 종           뺀다. 값을 치르고 산다(잠만보)
+//   고정 후보 알의 종          뺀다. 화석은 태고의돌로만 얻는다
+export function inRandomEgg(slug: string, opts?: DexOptions): boolean {
+  const rule = unlockRules(opts)[slug];
+  if (!rule) return false;
+  if (rule.evolve && !rule.starter) return false;
+  if (rule.shop !== undefined) return false;
+  const table = loadJson<Record<string, { pool?: unknown }>>("eggs.json", opts);
+  return !Object.entries(table).some(([kind, row]) => !isMetaKey(kind) && Array.isArray(row?.pool) && row.pool.includes(slug));
 }
 
 // 상품 하나를 찾는다. 알 · 도구 · 종 순서로 본다

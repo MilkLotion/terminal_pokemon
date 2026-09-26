@@ -15,7 +15,8 @@
 //   3. 손으로 적은 것 MANUAL — 같은 슬러그의 생성 규칙을 **대체**한다 (합치면 AND 가 되기 때문)
 //      예: 잠만보는 먹심으로의 진화가 아니라 상점 800, 럭키는 핑복 진화가 아니라 14일 스트릭
 //   4. 진화 전 첫 단계 종(evolves_from 없음) 가운데 위에서 규칙을 받지 않은 종   { "base": true } — 처음부터 해금 (2026-09-25 사용자 결정)
-//      전설·환상(is_legendary · is_mythical)은 넣지 않는다 — 입수 경로를 따로 정한다
+//      전설·환상(is_legendary · is_mythical)과 울트라비스트(ULTRA_BEASTS)는 넣지 않는다 — 입수 경로를 따로 정한다.
+//      울트라비스트는 PokeAPI 에 표시가 없어 목록으로 둔다. 알에서 얻을 수 없는 종이다 (docs/specs/s5.md "알 행동 조건")
 //   그 밖의 종은 넣지 않는다 (아직 해금 길 없음)
 // 순서: 스타터 → 진화 대상(슬러그순) → 손으로 적은 것(스타터·진화 대상이 아닌 것만 뒤에)
 import fs from "node:fs";
@@ -40,14 +41,17 @@ export const MANUAL: Readonly<Record<string, UnlockRule>> = {
   chansey: { streak: { days: 14 } },
 };
 
+// 울트라비스트 — 진화 전 첫 단계만. 베베놈의 진화형 아고용은 진화 규칙이 남지만 베베놈을 얻을 길이 없어 함께 막힌다
+export const ULTRA_BEASTS: readonly string[] = ["nihilego", "buzzwole", "pheromosa", "xurkitree", "celesteela", "kartana", "guzzlord", "poipole", "stakataka", "blacephalon"];
+
 type EvolveRule = NonNullable<UnlockRule["evolve"]>;
 
-// 아기 포켓몬 슬러그 집합과 기본형(진화 전 첫 단계, 전설·환상 제외) 목록 (종 식별자 = 도감 슬러그)
+// 아기 포켓몬 슬러그 집합과 기본형(진화 전 첫 단계, 전설·환상·울트라비스트 제외) 목록 (종 식별자 = 도감 슬러그)
 async function fetchSpecies(): Promise<{ babies: Set<string>; bases: string[] }> {
   const rows = await csv("pokemon_species.csv", ["identifier", "is_baby", "evolves_from_species_id", "is_legendary", "is_mythical"]);
   return {
     babies: new Set(rows.filter((r) => r.is_baby === "1").map((r) => r.identifier)),
-    bases: rows.filter((r) => !r.evolves_from_species_id && r.is_legendary !== "1" && r.is_mythical !== "1").map((r) => r.identifier),
+    bases: rows.filter((r) => !r.evolves_from_species_id && r.is_legendary !== "1" && r.is_mythical !== "1" && !ULTRA_BEASTS.includes(r.identifier)).map((r) => r.identifier),
   };
 }
 

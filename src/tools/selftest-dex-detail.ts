@@ -64,6 +64,14 @@ function seed(): SaveV3 {
   process.stdout.write("(4) 미해금 · 태고의돌  ok\n");
 }
 
+// (4b) 해금한 화석 종도 랜덤알은 붙지 않는다 — 화석은 태고의돌로만 얻는다
+{
+  const s = seed();
+  s.dex.unlocked.push("omanyte");
+  assert.equal(dexDetail(s, "omanyte")?.methods, "태고의돌");
+  process.stdout.write("(4b) 해금한 화석 · 태고의돌만  ok\n");
+}
+
 // (5) 알 행동 조건 종 — 발견 전은 힌트, 발견 뒤는 조건 문구
 {
   const s = seed();

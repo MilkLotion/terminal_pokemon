@@ -9,12 +9,11 @@
 import { putPet } from "../box/slots.js";
 import type { DexOptions } from "../dex/data";
 import { randomNature } from "../dex/natures.js";
-import { unlockRules } from "../dex/unlocks.js";
 import { newPet, nextPetId, recordDex } from "../party/create.js";
 import type { Rand } from "../egg/hatch";
 import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
 import type { EggV3, SaveV3 } from "../shared/save-v3";
-import { eggPool, find, slotPrice } from "./catalog.js";
+import { eggPool, find, inRandomEgg, slotPrice } from "./catalog.js";
 
 export type BuyFailure =
   | "no-product" // 그런 상품이 없다
@@ -59,13 +58,9 @@ function placeNew(save: SaveV3, petId: string): { slotIndex?: number; toBox: boo
   return { toBox: true };
 }
 
-// 랜덤알 후보 — 해금한 종 가운데 진화 전용 종을 뺀다 (docs/specs/s5.md "랜덤알 … 진화 전용 종은 제외한다").
-// 진화 전용 종은 해금 규칙이 진화(evolve)인 종이다(리자드·라이츄). 첫 선택 후보(starter)는 진화 규칙이 없어 남는다(피카츄).
-// 단일 포켓몬 제외도 스펙에 있지만 어떤 종이 단일인지 정한 데이터가 아직 없다
+// 랜덤알 후보 — 해금한 종 가운데 랜덤알에서 나올 수 있는 종 (규칙은 src/shop/catalog.ts inRandomEgg)
 export function randomPool(save: SaveV3, opts?: DexOptions): string[] {
-  const rules = unlockRules(opts);
-  // 진화 전용 종과 상점에서 파는 종은 뺀다 — 파는 종은 값을 치르고 산다
-  const pool = save.dex.unlocked.filter((slug) => !(rules[slug]?.evolve && !rules[slug]?.starter) && rules[slug]?.shop === undefined);
+  const pool = save.dex.unlocked.filter((slug) => inRandomEgg(slug, opts));
   return pool.length ? pool : [...save.dex.unlocked];
 }
 

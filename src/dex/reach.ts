@@ -1,7 +1,7 @@
 // 해금 사슬 도달 검사 — 모든 종이 실제로 얻어질 수 있는지 규칙을 따라가며 넓힌다 (docs/work/s5-design-system-v2/feedback.md SR-06)
 //
 // 얻는 길(획득)과 해금을 나눠 본다. 시작은 첫 선택 후보 전부다(누구를 골라도 다른 후보는 해금돼 있다).
-//   랜덤알       해금한 종 가운데 진화 전용 종과 상점 종을 뺀 종을 얻는다 (src/shop/buy.ts randomPool)
+//   랜덤알       해금한 종 가운데 랜덤알에서 나올 수 있는 종을 얻는다 (src/shop/catalog.ts inRandomEgg)
 //   태고의돌     화석 목록을 얻는다 (data/eggs.json)
 //   알 행동 조건 조건으로 나오는 종을 얻는다 (data/egg-conditions.json — 해금과 무관)
 //   진화 규칙    `from` 종을 얻었으면 대상 종을 해금하고, 진화로 얻는다. 도구 진화의 도구는 상점에 있다 (SHOP_V3_RULES.evoItemPrice)
@@ -10,7 +10,7 @@
 // 결과는 순수하다. 저장을 바꾸지 않는다
 import type { DexOptions } from "./data";
 import { unlockRules } from "./unlocks.js";
-import { eggPool } from "../shop/catalog.js";
+import { eggPool, inRandomEgg } from "../shop/catalog.js";
 import { loadJson } from "./data.js";
 
 export interface Reach {
@@ -26,7 +26,6 @@ export function reach(opts?: DexOptions): Reach {
   const conditions = loadJson<{ species?: Record<string, string> }>("egg-conditions.json", opts).species ?? {};
   const fossils = eggPool("ancient-stone", opts) ?? [];
   const entries = Object.entries(rules).filter(([slug]) => !slug.startsWith("_"));
-  const evolveOnly = (slug: string): boolean => !!rules[slug]?.evolve && !rules[slug]?.starter;
 
   const unlocked = new Set<string>(entries.filter(([, r]) => r.starter).map(([s]) => s));
   const obtainable = new Set<string>();
@@ -35,7 +34,7 @@ export function reach(opts?: DexOptions): Reach {
   let grew = true;
   while (grew) {
     grew = false;
-    for (const s of unlocked) if (!evolveOnly(s)) grew = add(obtainable, s) || grew; // 랜덤알
+    for (const s of unlocked) if (inRandomEgg(s, opts)) grew = add(obtainable, s) || grew; // 랜덤알
     for (const s of fossils) grew = add(obtainable, s) || grew;
     for (const s of Object.keys(conditions)) grew = add(obtainable, s) || grew;
     for (const [slug, r] of entries) {
