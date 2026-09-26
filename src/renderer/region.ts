@@ -18,7 +18,7 @@ const cancel = need("cancel", HTMLButtonElement);
 const apply = need("apply", HTMLButtonElement);
 
 const api = window.pokebuddyRegion;
-let min = { w: 240, h: 160 };
+let min = { area: 240 * 160, side: 80 }; // 메인이 init 으로 준다 (src/state/settings.ts REGION_MIN)
 let rect: RegionRect | null = null;
 let from: { x: number; y: number } | null = null; // 드래그를 시작한 점
 
@@ -38,9 +38,11 @@ function paint(): void {
   regionEl.style.width = `${r.w}px`;
   regionEl.style.height = `${r.h}px`;
   sizeEl.textContent = `${Math.round(r.w)} × ${Math.round(r.h)}`;
-  const enough = r.w >= min.w && r.h >= min.h;
-  apply.disabled = !enough;
-  message.textContent = enough ? MESSAGE : `${min.w} × ${min.h} 보다 크게 그리세요`;
+  // 넓이로 본다 — 폭·높이 비율은 자유다. 한 변이 너무 얇으면 포켓몬이 들어가지 않는다
+  const thin = r.w < min.side || r.h < min.side;
+  const small = r.w * r.h < min.area;
+  apply.disabled = thin || small;
+  message.textContent = thin ? `폭과 높이를 ${min.side} 이상으로 그리세요` : small ? "조금 더 넓게 그리세요" : MESSAGE;
   // 영역이 작으면 미리보기 문구가 넘친다 — 넓을 때만 보인다
   hintEl.hidden = r.w < 360 || r.h < 80;
 }
@@ -51,10 +53,21 @@ api.onInit((init: RegionInit) => {
   paint();
 });
 
+// 모서리 네모를 끌면 크기를 바꾼다 — 반대쪽 모서리를 시작점으로 두고 새로 그릴 때와 같은 드래그를 잇는다
+function anchorOf(handle: Element, r: RegionRect): { x: number; y: number } {
+  const left = handle.classList.contains("nw") || handle.classList.contains("sw");
+  const top = handle.classList.contains("nw") || handle.classList.contains("ne");
+  return { x: left ? r.x + r.w : r.x, y: top ? r.y + r.h : r.y };
+}
+
 document.addEventListener("pointerdown", (e) => {
   if (e.button !== 0 || toolbar.contains(e.target as Node)) return;
-  from = { x: e.clientX, y: e.clientY };
-  rect = { x: e.clientX, y: e.clientY, w: 0, h: 0 };
+  const handle = (e.target as Element).closest(".handle");
+  if (handle && rect) from = anchorOf(handle, rect);
+  else {
+    from = { x: e.clientX, y: e.clientY };
+    rect = { x: e.clientX, y: e.clientY, w: 0, h: 0 };
+  }
   document.body.setPointerCapture(e.pointerId);
   paint();
 });

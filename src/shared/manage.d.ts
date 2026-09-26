@@ -244,7 +244,7 @@ export interface RegionRect {
 
 export interface RegionInit {
   current: RegionRect | null; // 지금 영역 (이 화면과 겹칠 때만)
-  min: { w: number; h: number }; // 최소 크기 — 이보다 작으면 적용할 수 없다
+  min: { area: number; side: number }; // 최소 넓이와 한 변 — 이보다 작으면 적용할 수 없다 (src/state/settings.ts REGION_MIN)
 }
 
 // region:init 은 메인 → 렌더러, region:done 은 렌더러 → 메인 (null 이면 취소)

@@ -25,8 +25,13 @@ export const SETTING_CHOICES = {
 
 const KEYS: readonly SettingKey[] = ["language", "startOnLogin", "sound", "sleepAfterMin", "playArea", "playRegion"];
 
-// 놀이공간 영역의 최소 크기 (화면 좌표 DIP). 스펙 미확정이라 2026-09-25 구현에서 정했다 (docs/work/game-runtime/record.md "놀이공간·설정의 설계")
-export const REGION_MIN = { w: 240, h: 160 } as const;
+// 놀이공간 영역의 최소 크기 (화면 좌표 DIP). 스펙 미확정이라 구현에서 정했다 (docs/work/game-runtime/record.md "놀이공간·설정의 설계")
+//   area  넓이 — 240 × 160 과 같은 넓이. 폭·높이 비율은 자유다(아래로 길게, 옆으로 길게) — 2026-09-26 사용자 요청
+//   side  한 변 — 기본 크기(2) 포켓몬 한 마리가 들어가는 길이. 이보다 얇으면 움직일 자리가 없다
+export const REGION_MIN = { area: 240 * 160, side: 80 } as const;
+
+// 영역 크기가 최소를 넘는가 — 메인과 영역 그리기 창이 같은 규칙을 쓴다
+export const regionFits = (w: number, h: number, min: { area: number; side: number } = REGION_MIN): boolean => w >= min.side && h >= min.side && w * h >= min.area;
 
 // 영역 값 검사 — 유한한 수 넷, 최소 크기 이상. 정수로 반올림해 돌려준다
 export function regionOf(value: unknown): { x: number; y: number; w: number; h: number } | null {
@@ -34,7 +39,7 @@ export function regionOf(value: unknown): { x: number; y: number; w: number; h: 
   const { x, y, w, h } = value as Record<string, unknown>;
   if (![x, y, w, h].every((n) => typeof n === "number" && Number.isFinite(n))) return null;
   const rect = { x: Math.round(x as number), y: Math.round(y as number), w: Math.round(w as number), h: Math.round(h as number) };
-  return rect.w >= REGION_MIN.w && rect.h >= REGION_MIN.h ? rect : null;
+  return regionFits(rect.w, rect.h) ? rect : null;
 }
 
 export const isSettingKey = (v: unknown): v is SettingKey => typeof v === "string" && KEYS.includes(v as SettingKey);

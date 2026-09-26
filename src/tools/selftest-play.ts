@@ -55,8 +55,14 @@ const T0 = new Date(2026, 8, 25, 10, 0, 0).getTime();
   const s = empty(T0);
   assert.deepStrictEqual(setSetting(s, "playRegion", { x: 10.4, y: 20.6, w: 800, h: 400 }), { ok: true, key: "playRegion", value: { x: 10, y: 21, w: 800, h: 400 } });
   assert.deepStrictEqual(s.settings.playArea, { mode: "region", rect: { x: 10, y: 21, w: 800, h: 400 } });
-  assert.equal(setSetting(s, "playRegion", { x: 0, y: 0, w: REGION_MIN.w - 1, h: 400 }).reason, "bad-value", "최소 크기보다 작다");
+  assert.equal(setSetting(s, "playRegion", { x: 0, y: 0, w: 200, h: 150 }).reason, "bad-value", "넓이가 모자라다");
+  assert.equal(setSetting(s, "playRegion", { x: 0, y: 0, w: REGION_MIN.side - 1, h: 1000 }).reason, "bad-value", "한 변이 너무 얇다");
+  // 넓이만 넘으면 비율은 자유다 — 아래로 길게, 옆으로 길게 (2026-09-26 사용자 요청)
+  assert.ok(setSetting(s, "playRegion", { x: 0, y: 0, w: 120, h: 900 }).ok, "세로로 긴 영역");
+  assert.ok(setSetting(s, "playRegion", { x: 0, y: 0, w: 1920, h: 80 }).ok, "가로로 긴 띠");
   assert.equal(setSetting(s, "playRegion", { x: 0, y: 0, w: 800 }).reason, "bad-value", "값이 모자라다");
+  assert.equal(setSetting(s, "playRegion", { x: 10, y: 21, w: 800, h: 400 }).ok, true);
+  assert.equal(setSetting(s, "playRegion", { x: 0, y: 0, w: 800 }).reason, "bad-value");
   assert.equal(s.settings.playArea.rect?.w, 800, "거부하면 이전 영역을 유지한다");
   setSetting(s, "playArea", "full");
   assert.deepStrictEqual(s.settings.playArea, { mode: "full", rect: { x: 10, y: 21, w: 800, h: 400 } });

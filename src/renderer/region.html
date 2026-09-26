@@ -58,22 +58,33 @@
         height: 10px;
         border: 2px solid var(--primary);
         background: var(--surface);
+        pointer-events: auto; /* 모서리를 끌어 크기를 바꾼다 — 영역 자체는 클릭을 통과시킨다 */
+      }
+      /* 네모는 작다 — 잡는 자리는 둘레로 넓힌다 */
+      .handle::before {
+        content: "";
+        position: absolute;
+        inset: -8px;
       }
       .handle.nw {
         left: -6px;
         top: -6px;
+        cursor: nwse-resize;
       }
       .handle.ne {
         right: -6px;
         top: -6px;
+        cursor: nesw-resize;
       }
       .handle.sw {
         left: -6px;
         bottom: -6px;
+        cursor: nesw-resize;
       }
       .handle.se {
         right: -6px;
         bottom: -6px;
+        cursor: nwse-resize;
       }
       #size {
         position: absolute;

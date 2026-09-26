@@ -4,7 +4,7 @@
 // 적용하면 화면 좌표의 사각형을, 취소하거나 창을 닫으면 null 을 돌려준다. 저장은 부른 쪽이 한다 — 여기서는 그리기만 한다
 import { BrowserWindow, ipcMain, screen } from "electron";
 import type { RegionChannel, RegionInit, RegionRect } from "../shared/manage";
-import { REGION_MIN } from "../state/settings.js";
+import { REGION_MIN, regionFits } from "../state/settings.js";
 import { windowIcon } from "./paths.js";
 
 const CH = {
@@ -76,7 +76,7 @@ export function drawRegion(opts: RegionOptions): Promise<RegionRect | null> {
       const y = Math.max(0, Math.min(rect.y, b.height));
       const w = Math.min(rect.x + rect.w, b.width) - x;
       const h = Math.min(rect.y + rect.h, b.height) - y;
-      if (w < REGION_MIN.w || h < REGION_MIN.h) return finish(null);
+      if (!regionFits(w, h)) return finish(null);
       finish({ x: Math.round(b.x + x), y: Math.round(b.y + y), w: Math.round(w), h: Math.round(h) });
     };
     ipcMain.on(CH.done, onDone);
