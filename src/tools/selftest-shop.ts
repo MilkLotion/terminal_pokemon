@@ -27,7 +27,7 @@ function seed(points: number): SaveV3 {
   assert.equal(toolPrice("normal-potion"), 0, "돌아오는 약은 0P");
   assert.equal(toolPrice("basic-food"), null, "기본먹이는 팔지 않는다");
   assert.equal(toolPrice("thunder-stone"), SHOP_V3_RULES.evoItemPrice, "진화용 도구는 공통 가격");
-  assert.equal(toolPrice("bond-cord"), SHOP_V3_RULES.evoItemPrice, "유대의끈도 같다");
+  assert.equal(toolPrice("bond-cord"), SHOP_V3_RULES.evoItemPrice, "연결의끈도 같다");
   assert.equal(slotPrice(0), 300);
   assert.equal(slotPrice(1), 600);
   assert.equal(slotPrice(2), null, "두 칸까지만 판다");
