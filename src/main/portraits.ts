@@ -9,7 +9,7 @@
 // 관리 창·선택 창의 CSP 는 img-src data: 만 허용한다. 그래서 파일 경로가 아니라 data URI 로 준다
 import fs from "node:fs";
 import path from "node:path";
-import { profile } from "../dex/species.js";
+import { profile, slugs } from "../dex/species.js";
 
 interface FetchModule {
   cached(file: string, url: string, validate?: (buf: Buffer) => boolean): Promise<{ buf: Buffer } | null>;
@@ -44,6 +44,9 @@ const isPng = (buf: Buffer): boolean => buf.length > 8 && buf[0] === 0x89 && buf
 export interface Portraits {
   get(asks: PortraitAsk[]): Promise<Record<string, string | null>>;
   icons(keys: string[]): Promise<Record<string, string | null>>; // 도구·알 그림 — iconUrl 의 열쇠
+  // 디스크에 이미 있는 그림 전부 — 초상 열쇠(slug · slug:shiny)와 도구·알 열쇠. 네트워크는 쓰지 않는다
+  // 관리 창이 첫 화면 전에 한 번 받아 둔다. 상점·상세에 들어갈 때 그림이 하나씩 차오르지 않게 하려는 것이다
+  all(): Promise<Record<string, string>>;
 }
 
 // dir 은 사용자 캐시, bundled 는 앱에 들어 있는 그림 폴더(없어도 된다). 두 폴더의 파일 이름은 같다
@@ -91,6 +94,38 @@ export function createPortraits(dir: string, bundled?: string): Portraits {
     return uri;
   }
 
+  // 디스크에서만 읽는다 — 앱에 든 그림, 캐시 순서. 없으면 null. 비동기다 — 창을 처음 열 때 메인이 멈추지 않게
+  async function diskUri(rel: string): Promise<string | null> {
+    const file = path.join(dir, rel);
+    const known = memo.get(file);
+    if (known) return known;
+    for (const root of bundled ? [bundled, dir] : [dir]) {
+      try {
+        const buf = await fs.promises.readFile(path.join(root, rel));
+        if (!isPng(buf)) continue;
+        const uri = `data:image/png;base64,${buf.toString("base64")}`;
+        memo.set(file, uri);
+        return uri;
+      } catch {
+        // 이 폴더에 없는 그림
+      }
+    }
+    return null;
+  }
+
+  // 폴더 안 파일 이름 — 없는 폴더는 빈 목록
+  const names = (sub: string): string[] => {
+    const out = new Set<string>();
+    for (const root of bundled ? [bundled, dir] : [dir]) {
+      try {
+        for (const n of fs.readdirSync(path.join(root, sub))) if (n.endsWith(".png")) out.add(n);
+      } catch {
+        // 폴더 없음
+      }
+    }
+    return [...out];
+  };
+
   const one = (dex: number, shiny: boolean): Promise<string | null> => {
     const d = String(dex).padStart(4, "0");
     return fileUri(shiny ? `${d}-shiny.png` : `${d}.png`, portraitUrl(dex, shiny));
@@ -117,6 +152,32 @@ export function createPortraits(dir: string, bundled?: string): Portraits {
         keys.map(async (key) => {
           const url = iconUrl(key);
           out[key] = url ? await fileUri(key === "egg" ? "egg.png" : `items/${key.slice(5)}.png`, url) : null;
+        }),
+      );
+      return out;
+    },
+    async all() {
+      const out: Record<string, string> = {};
+      const files = new Set(names(""));
+      const read = (rel: string): Promise<string | null> => (files.has(rel) ? diskUri(rel) : Promise.resolve(null));
+      await Promise.all(
+        slugs().map(async (slug) => {
+          const dex = profile(slug).dex;
+          if (!dex) return;
+          const d = String(dex).padStart(4, "0");
+          const plain = await read(`${d}.png`);
+          if (!plain) return;
+          out[slug] = plain;
+          // 이로치 그림이 없으면 보통 그림 — get 과 같은 규칙
+          out[`${slug}:shiny`] = (await read(`${d}-shiny.png`)) ?? plain;
+        }),
+      );
+      const egg = await read("egg.png");
+      if (egg) out.egg = egg;
+      await Promise.all(
+        names("items").map(async (n) => {
+          const uri = await diskUri(`items/${n}`);
+          if (uri) out[`item:${n.slice(0, -4)}`] = uri;
         }),
       );
       return out;

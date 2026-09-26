@@ -9,6 +9,7 @@ import { WINDOW_V3_RULES } from "../save/rules.js";
 import { createGame, type GameV3 } from "./game.js";
 import { PATHS, windowIcon } from "./paths.js";
 import { createPortraits, type PortraitAsk, type Portraits } from "./portraits.js";
+import fs from "node:fs";
 import path from "node:path";
 
 const CH = {
@@ -22,6 +23,7 @@ const CH = {
   dim: "manage:dim",
   portraits: "manage:portraits",
   icons: "manage:icons",
+  art: "manage:art",
 } satisfies Record<string, ManageChannel>;
 
 // 창 조작 단추가 앉는 자리. 색은 헤더와 같아야 이어져 보인다 (`--surface` 와 `--muted`)
@@ -80,19 +82,30 @@ function wire(game: GameV3, send: (req: ManageRequest) => Promise<ManageReply>):
   });
   // 초상 — 요청 모양을 검사하고 한 번에 너무 많이 받지 않는다 (도감 한 화면 분량)
   let portraits: Portraits | null = null;
+  // 앱 안 그림 폴더 — 설치본은 sprites/, 개발 중에는 scripts/fetch-sprites.cjs 가 받아 둔 .cache/sprites/
+  const bundled = (): string => {
+    const packed = path.join(PATHS.project, "sprites");
+    return fs.existsSync(packed) ? packed : path.join(PATHS.project, ".cache", "sprites");
+  };
   ipcMain.handle(CH.portraits, async (e, asks: unknown) => {
     if (!mine(e) || !Array.isArray(asks)) return {};
     const list = asks
       .filter((a): a is PortraitAsk => a != null && typeof a === "object" && typeof (a as PortraitAsk).slug === "string")
       .slice(0, 300)
       .map((a) => ({ slug: a.slug, shiny: a.shiny === true }));
-    portraits ??= createPortraits(path.join(PATHS.home, "sprites"), path.join(PATHS.project, "sprites"));
+    portraits ??= createPortraits(path.join(PATHS.home, "sprites"), bundled());
     return portraits.get(list);
   });
   ipcMain.handle(CH.icons, async (e, keys: unknown) => {
     if (!mine(e) || !Array.isArray(keys)) return {};
-    portraits ??= createPortraits(path.join(PATHS.home, "sprites"), path.join(PATHS.project, "sprites"));
+    portraits ??= createPortraits(path.join(PATHS.home, "sprites"), bundled());
     return portraits.icons(keys.filter((k): k is string => typeof k === "string").slice(0, 200));
+  });
+  // 디스크에 있는 그림 전부 — 관리 창이 첫 화면 전에 한 번 부른다
+  ipcMain.handle(CH.art, (e) => {
+    if (!mine(e)) return {};
+    portraits ??= createPortraits(path.join(PATHS.home, "sprites"), bundled());
+    return portraits.all();
   });
   ipcMain.on(CH.dim, (e, on: unknown) => {
     if (!win || win.isDestroyed() || e.sender !== win.webContents) return;

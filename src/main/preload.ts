@@ -75,6 +75,7 @@ const MANAGE = {
   dim: "manage:dim",
   portraits: "manage:portraits",
   icons: "manage:icons",
+  art: "manage:art",
 } satisfies Record<string, ManageChannel>;
 
 const manage: ManageBridge = {
@@ -88,6 +89,7 @@ const manage: ManageBridge = {
   dim: (on) => ipcRenderer.send(MANAGE.dim, on),
   portraits: (asks) => ipcRenderer.invoke(MANAGE.portraits, asks) as Promise<Record<string, string | null>>,
   icons: (keys) => ipcRenderer.invoke(MANAGE.icons, keys) as Promise<Record<string, string | null>>,
+  art: () => ipcRenderer.invoke(MANAGE.art) as Promise<Record<string, string>>,
 };
 
 contextBridge.exposeInMainWorld("pokebuddyManage", manage);

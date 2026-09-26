@@ -747,7 +747,7 @@ PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이다. 
 
 ### 관리 창의 초상
 
-관리 창과 첫 포켓몬 선택 창의 원형 초상은 [PokeAPI sprites](https://github.com/PokeAPI/sprites) 의 기본 그림(`sprites/pokemon/<도감>.png`, 96 × 96)이다. 이로치는 `sprites/pokemon/shiny/<도감>.png` 를 쓰고, 없으면 보통 그림을 쓴다. 저장소는 CC0 이고 그림 저작권은 The Pokémon Company 에 있다. 둘레 여백은 잘라 원을 채운다. 설치 파일에는 초상 2050장(보통·이로치)과 도구·알 그림이 미리 들어 있다(앱 안 `sprites/`). 저장소 실행과 npm 판은 처음 볼 때 받아 `~/.claude/pokebuddy/sprites/` 에 캐시한다. 받지 못하면 빈 원이 남는다. 미해금 도감 칸은 그림을 보이지 않는다(`src/main/portraits.ts`).
+관리 창과 첫 포켓몬 선택 창의 원형 초상은 [PokeAPI sprites](https://github.com/PokeAPI/sprites) 의 기본 그림(`sprites/pokemon/<도감>.png`, 96 × 96)이다. 이로치는 `sprites/pokemon/shiny/<도감>.png` 를 쓰고, 없으면 보통 그림을 쓴다. 저장소는 CC0 이고 그림 저작권은 The Pokémon Company 에 있다. 둘레 여백은 잘라 원을 채운다. 설치 파일에는 초상 2050장(보통·이로치)과 도구·알 그림이 미리 들어 있다(앱 안 `sprites/`). 관리 창은 열 때 디스크에 있는 그림을 한 번에 모두 읽은 뒤 첫 화면을 그린다. 그래서 상점·상세에 들어가면 그림이 바로 보인다. 저장소 실행과 npm 판은 처음 볼 때 받아 `~/.claude/pokebuddy/sprites/` 에 캐시한다. 저장소 실행은 `scripts/fetch-sprites.cjs` 가 받아 둔 `.cache/sprites/` 도 앱 안 그림으로 쓴다. 받지 못하면 빈 원이 남는다. 미해금 도감 칸은 그림을 보이지 않는다(`src/main/portraits.ts`).
 
 ### 도구·알 그림, 도감 설명, 울음소리
 

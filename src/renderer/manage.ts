@@ -226,8 +226,9 @@ function head(title: string, sub: string): HTMLElement {
 }
 
 // ── 초상 ───────────────────────────────────────────────────────────────────────
-// PMD 초상을 메인에서 data URI 로 받아 원 안에 채운다 (src/main/portraits.ts). 받기 전·못 받으면 빈 원 그대로다.
-// 도감은 1000 칸이 넘어 보이는 칸만 청한다(lazy). 파티·박스처럼 칸이 적은 곳은 바로 청한다.
+// 초상을 메인에서 data URI 로 받아 원 안에 채운다 (src/main/portraits.ts). 받기 전·못 받으면 빈 원 그대로다.
+// 창을 열 때 디스크에 있는 그림 전부를 먼저 받는다(loadArt). 그래서 상점·상세에 들어가자마자 그림이 모두 보인다.
+// 디스크에 없는 그림만 칸을 그린 뒤 청한다. 도감은 1000 칸이 넘어 보이는 칸만 청한다(lazy).
 // 보이는 칸은 그린 뒤와 스크롤할 때 위치를 재서 고른다 — IntersectionObserver 는 창이 가려져 있으면 반응하지 않았다.
 // 받은 것은 창이 떠 있는 동안 기억한다
 
@@ -241,6 +242,7 @@ function paintPortrait(host: HTMLElement, uri: string, cls = "art"): void {
   const img = document.createElement("img");
   img.className = cls;
   img.alt = "";
+  img.decoding = "sync"; // 칸과 그림이 한 프레임에 같이 보이게 한다
   img.src = uri;
   host.prepend(img);
   host.classList.add("has-art");
@@ -1626,8 +1628,27 @@ function goTo(route: ManageRoute): void {
   }
 }
 
+// 디스크에 있는 그림을 전부 받아 캐시에 채운다. 받은 그림은 미리 디코딩해 둔다 —
+// 같은 주소의 그림은 문서가 이미 가진 그림이 되어, 칸을 그리는 순간 바로 보인다
+const warmed: HTMLImageElement[] = [];
+async function loadArt(): Promise<void> {
+  let got: Record<string, string> = {};
+  try {
+    got = await window.pokebuddyManage.art();
+  } catch {
+    return; // 그림 없이도 창은 돈다 — 칸을 그린 뒤 하나씩 청하는 길이 남아 있다
+  }
+  for (const [key, uri] of Object.entries(got)) (key === "egg" || key.startsWith("item:") ? iconCache : portraitCache).set(key, uri);
+  for (const uri of new Set(Object.values(got))) {
+    const img = new Image();
+    img.src = uri;
+    warmed.push(img);
+    void img.decode().catch(() => undefined);
+  }
+}
+
 // 첫 화면을 그린 뒤에 옮긴다 — 창을 새로 열면서 온 목적지는 스냅샷보다 먼저 올 수 있다
-const firstDraw = refresh();
+const firstDraw = loadArt().then(refresh);
 window.pokebuddyManage.onRoute((route) => void firstDraw.then(() => refresh()).then(() => goTo(route)));
 // 시간이 흐르면 만복도·쿨타임·알 준비가 바뀐다. 창이 떠 있는 동안 주기적으로 다시 읽는다
 setInterval(() => void refresh().then(drawDialog), 5000);
