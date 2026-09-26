@@ -623,6 +623,17 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 - `scripts/build-exe.cjs`·`package.json` `dist:win`: 그림을 넣지 않는다. `scripts/fetch-sprites.cjs` 는 저장소 실행용으로만 남겼다.
 - 검수: 빈 캐시 → 2062장 15.5초, 다시 실행 → 0.05초(요청 없음). 새 설치 파일 101.1MB, 앱 안 그림 파일은 앱 로고 8개뿐(`assets/logo/out`). 설치하지 않은 실행 파일을 임시 HOME 으로 띄워 첫 선택 창을 확인했다(그림 포함 판에서).
 
+**공개 릴리스** (사용자 지시 "이어서 진행")
+- `main` 을 푸시했다(`43bd20e..d76e0ee`, 25 커밋). GitHub Release `v0.3.0`(태그 → `d76e0ee`)에 그림 없는 `pokebuddy-Setup-0.3.0.exe`(101.1MB)를 올렸다. 초안·시험판이 아니다. 릴리스 노트에 서명 없음, 첫 실행 그림 받기, 그림 저작권·PMD CC BY-NC·Galmuri OFL 을 적었다.
+- 올리기 전 실행 파일을 임시 HOME 으로 띄워 첫 선택 창과 20초 안에 그림 2063개 받기를 확인했다. 사용자의 설치본 프로세스(`AppData\Local\Programs\pokebuddy`)는 건드리지 않았다.
+
+**경험사탕·민트 그림** (폰트 세션 인계 — 사용자 결정 "경험사탕·민트 그림을 실행 때 받아오게 연결")
+- 출처: PokeAPI 에 없어(404) msikma/pokesprite 에서 받는다(코드 MIT, 그림 © Nintendo·Creatures·GAME FREAK, 32×32). 폰트 세션이 주소를 조사해 넘겼다. 15개 주소를 받아 모두 200·PNG 임을 확인했다.
+- `src/main/portraits.ts` `itemUrl`: 경험사탕 `exp-candy/<크기>.png`, 민트 21종은 올려 주는 능력치별 6장(`mint/attack` 등, 성실민트는 `neutral`), 진화 도구 4종(`galarica-wreath`·`sweet-apple`·`tart-apple`·`cracked-pot`)은 `evo-item/`. 나머지는 PokeAPI. 미리 받기와 필요할 때 받기(`iconUrl`)가 같은 주소를 쓴다.
+- `missing.json` 을 파일 이름이 아니라 주소로 적게 바꿨다 — 전에 404 로 적힌 경험사탕·민트를 새 주소로 다시 묻게 하려는 것이다.
+- 검수: 빈 캐시 미리 받기 2092장·없음 15(폰트 세션이 그릴 가상 도구와 pokesprite 에도 없는 진화 도구)·실패 0. 상점 도구 분류에서 경험사탕 5종·민트 그림을 확인했다. README 라이선스 절에 출처를 더했다.
+- 남은 것(폰트 세션): 기본먹이·프리미엄먹이·장난감·약 2종·빈 CD·유대의끈·알 5종·태고의돌 도트 그림. pokesprite 에 없는 진화 도구 8종(PokéRogue 에만 있고 CC BY-NC-SA 4.0 표기)은 판단 대기.
+
 **창 높이**
 - `src/save/rules.ts` `WINDOW_V3_RULES.height` 780 → 682. 파티 탭의 마지막 칸이 창 위에서 650 에 끝나고 본문 아래 여백이 32 다. 개발용 실행기로 재서 본문 스크롤 높이와 보이는 높이가 602 로 같음을 확인했다.
 - 문서: `design.md` 화면 크기 행, `specs/s5.md` 관리 창 크기 문장. Figma 창 끝 규칙(메모)도 682 로 바꿨다.

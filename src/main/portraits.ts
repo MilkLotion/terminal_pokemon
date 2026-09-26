@@ -43,11 +43,35 @@ export const portraitKey = (a: PortraitAsk): string => (a.shiny ? `${a.slug}:shi
 // 받을 주소 — 도감 번호 그대로(앞의 0 없음)
 export const portraitUrl = (dex: number, shiny: boolean): string => (shiny ? `${BASE}/shiny/${dex}.png` : `${BASE}/${dex}.png`);
 
+// PokeAPI 에 없는 도구 그림 — msikma/pokesprite (코드 MIT, 그림 © Nintendo·Creatures·GAME FREAK). 32×32 로 PokeAPI 30×30 과 모양이 같다.
+// 2026-09-26 폰트 세션이 조사해 넘겼다(사용자 결정). 민트는 원작처럼 올려 주는 능력치별 그림 6장을 성격에 나눠 쓴다
+const POKESPRITE = "https://raw.githubusercontent.com/msikma/pokesprite/master/items";
+const MINT_STAT: Readonly<Record<string, string>> = {
+  lonely: "attack", brave: "attack", adamant: "attack", naughty: "attack",
+  bold: "defense", relaxed: "defense", impish: "defense", lax: "defense",
+  modest: "special-attack", mild: "special-attack", quiet: "special-attack", rash: "special-attack",
+  calm: "special-defense", gentle: "special-defense", sassy: "special-defense", careful: "special-defense",
+  timid: "speed", hasty: "speed", jolly: "speed", naive: "speed",
+  serious: "neutral",
+};
+const POKESPRITE_EVO = new Set(["galarica-wreath", "sweet-apple", "tart-apple", "cracked-pot"]);
+
+// 도구 하나의 그림 주소 — 경험사탕·민트·일부 진화 도구는 pokesprite, 나머지는 PokeAPI
+export function itemUrl(id: string): string {
+  const candy = /^exp-candy-(xs|s|m|l|xl)$/.exec(id);
+  if (candy) return `${POKESPRITE}/exp-candy/${candy[1]}.png`;
+  const mint = /^([a-z]+)-mint$/.exec(id);
+  const stat = mint ? MINT_STAT[mint[1] ?? ""] : undefined;
+  if (stat) return `${POKESPRITE}/mint/${stat}.png`;
+  if (POKESPRITE_EVO.has(id)) return `${POKESPRITE}/evo-item/${id}.png`;
+  return `${SPRITES}/items/${id}.png`;
+}
+
 // 도구·알 그림의 열쇠 → 받을 주소. 열쇠는 "egg" 또는 "item:<식별자>" 다. 모르는 열쇠는 null
 export function iconUrl(key: string): string | null {
   if (key === "egg") return `${BASE}/egg.png`;
   const m = /^item:([a-z0-9-]+)$/.exec(key);
-  return m ? `${SPRITES}/items/${m[1]}.png` : null;
+  return m ? itemUrl(m[1] ?? "") : null;
 }
 
 const isPng = (buf: Buffer): boolean => buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
@@ -177,9 +201,10 @@ export function createPortraits(dir: string, bundled?: string): Portraits {
         jobs.push({ rel: `${d}.png`, url: portraitUrl(dex, false) }, { rel: `${d}-shiny.png`, url: portraitUrl(dex, true) });
       }
       jobs.push({ rel: "egg.png", url: `${BASE}/egg.png` });
-      for (const id of itemIds()) jobs.push({ rel: `items/${id}.png`, url: `${SPRITES}/items/${id}.png` });
+      for (const id of itemIds()) jobs.push({ rel: `items/${id}.png`, url: itemUrl(id) });
       const count = { got: 0, had: 0, missing: 0, failed: 0 };
-      // 그림이 없다고(404) 확인한 것 — 켤 때마다 다시 묻지 않게 캐시 폴더에 적어 둔다
+      // 그림이 없다고(404) 확인한 주소 — 켤 때마다 다시 묻지 않게 캐시 폴더에 적어 둔다.
+      // 파일 이름이 아니라 주소로 적는다 — 받을 곳을 바꾸면(경험사탕·민트 → pokesprite) 새 주소로 다시 묻는다
       const missingFile = path.join(dir, "missing.json");
       let known: string[] = [];
       try {
@@ -198,14 +223,14 @@ export function createPortraits(dir: string, bundled?: string): Portraits {
           if (!job) break;
           const file = path.join(dir, job.rel);
           if (fs.existsSync(file) || (bundled && fs.existsSync(path.join(bundled, job.rel)))) count.had++;
-          else if (absent.has(job.rel)) count.missing++;
+          else if (absent.has(job.url)) count.missing++;
           else {
             try {
               const got = await cached(file, job.url, isPng);
               if (got) count.got++;
               else {
                 count.missing++; // 404 — 그림이 없는 도구 등
-                absent.add(job.rel);
+                absent.add(job.url);
               }
             } catch {
               count.failed++; // 네트워크 — 다음 실행에서 다시 받는다
