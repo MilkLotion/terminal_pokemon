@@ -632,7 +632,8 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 - `src/main/portraits.ts` `itemUrl`: 경험사탕 `exp-candy/<크기>.png`, 민트 21종은 올려 주는 능력치별 6장(`mint/attack` 등, 성실민트는 `neutral`), 진화 도구 4종(`galarica-wreath`·`sweet-apple`·`tart-apple`·`cracked-pot`)은 `evo-item/`. 나머지는 PokeAPI. 미리 받기와 필요할 때 받기(`iconUrl`)가 같은 주소를 쓴다.
 - `missing.json` 을 파일 이름이 아니라 주소로 적게 바꿨다 — 전에 404 로 적힌 경험사탕·민트를 새 주소로 다시 묻게 하려는 것이다.
 - 검수: 빈 캐시 미리 받기 2092장·없음 15(폰트 세션이 그릴 가상 도구와 pokesprite 에도 없는 진화 도구)·실패 0. 상점 도구 분류에서 경험사탕 5종·민트 그림을 확인했다. README 라이선스 절에 출처를 더했다.
-- 남은 것(폰트 세션): 기본먹이·프리미엄먹이·장난감·약 2종·빈 CD·유대의끈·알 5종·태고의돌 도트 그림. pokesprite 에 없는 진화 도구 8종(PokéRogue 에만 있고 CC BY-NC-SA 4.0 표기)은 판단 대기.
+- 빈 CD: 사용자 결정(폰트 세션 전달, "빈기술머신으로 사용할게 그냥")으로 PokeAPI `items/tm-normal.png` 를 쓴다. 캐시 이름은 `items/blank-cd.png` 그대로다. 도구 이름을 "빈 기술머신"으로 바꿀지는 사용자 확인 중이다.
+- 남은 것(폰트 세션): 기본먹이·프리미엄먹이·장난감·약 2종·유대의끈·알 5종·태고의돌 도트 그림. pokesprite 에 없는 진화 도구 8종(PokéRogue 에만 있고 CC BY-NC-SA 4.0 표기)은 판단 대기.
 
 **창 높이**
 - `src/save/rules.ts` `WINDOW_V3_RULES.height` 780 → 682. 파티 탭의 마지막 칸이 창 위에서 650 에 끝나고 본문 아래 여백이 32 다. 개발용 실행기로 재서 본문 스크롤 높이와 보이는 높이가 602 로 같음을 확인했다.
@@ -677,6 +678,7 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 - `src/renderer/manage.ts` `drawTutorial`: 튜토리얼의 탭에 있으면 기존 코치마크, 아니면 그 탭 버튼을 밝히는 안내(`guideTitle`·`guideBody`·`guideButton`). 버튼을 누르면 그 탭으로 옮긴다. 업적 튜토리얼은 헤더의 `#open-achievements` 를 밝히고 `업적 보기` 로 업적창을 연다. 말풍선 층은 `CoachSpec` 하나로 모았다.
 - `src/tutorial/core.ts`: 업적 튜토리얼 `achievement`(시작 = 달성한 업적이 있음, 끝 = 한 번이라도 받음). 파티 튜토리얼은 새 개체가 파티 칸에 없으면(박스로 감) 넘긴다 — 밝힐 칸이 없어 뒤의 업적 안내까지 막히기 때문이다.
 - `src/renderer/manage.html`: 포인트 칩 동전을 글자 P 에서 포켓 달러 SVG(P 와 가로줄 둘)로.
+- 정정(2026-09-26 사용자: "돈모양은 그냥 기존 P로 하고, 좀 어울리게 다시 수정해봐"): 포켓 달러를 되돌렸다. 앱과 같은 글꼴 파일로 그린 시험 페이지에 후보 여섯(지금·글자 키우기·안쪽 테두리·둥근 사각·원 없음·금화)을 두 배로 찍어 보였고, 사용자가 B 를 골랐다("b로 해봐"). 동전 글자를 Galmuri9 10px → Galmuri11 12px 굵게, 쏠림을 1px 보정. 어색함의 원인은 작은 원 안의 가늘고 쏠린 도트 글자였다. Figma 시안 E·F·G 의 포켓 달러 벡터는 지웠고, App Header 의 동전 글자는 Galmuri 를 쓸 수 있는 폰트 세션에 반영을 부탁했다.
 - 검수: `selftest-achievement` (12b) 업적 안내 시작·끝, 박스로 간 새 개체. 개발용 실행기 복사본 — 파티 탭의 상점 탭 안내 → `상점으로 가기` → 상점 코치마크, 업적 아이콘 안내 → `업적 보기` → 업적창. `npm run selftest` 전체 통과. 시안 F(알 구매 뒤 박스 안내)는 구매 창이 닫힌 뒤 부화 튜토리얼이 차례가 되면 같은 방식으로 뜬다.
 
 **C 작업 — 바탕화면 튜토리얼 2종** (Figma `Tutorial / First Care` `397:8552`, `Tutorial / Playground` `397:8596`)
