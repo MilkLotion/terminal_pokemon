@@ -1142,6 +1142,11 @@
         object-fit: cover;
         object-view-box: inset(25%);
       }
+      /* 태고의돌은 우리가 그린 30×30 그림이라 여백을 자르지 않는다 (위 규칙은 원작 알 그림의 넓은 여백용) */
+      .egg .shell[data-icon="item:ancient-stone"] .icon-art {
+        object-fit: contain;
+        object-view-box: none;
+      }
       .egg .acts {
         display: flex;
         gap: 4px;

@@ -343,6 +343,7 @@ const EGG_SOURCE = ["#5a5241", "#ffffff", "#cdbd83", "#181818", "#fff6de", "#9cc
 const eggTinted = new Map<string, string | null>(); // 알 종류 → 색을 바꾼 data URI (null 이면 만드는 중)
 
 function eggIcon(kind: string, cls: string): HTMLElement {
+  if (kind === "ancient-stone") return iconOf("item:ancient-stone", cls); // 태고의돌은 알이 아니라 돌 — 우리가 그린 그림 (assets/items)
   const palette = view?.eggPalettes[kind];
   if (!palette || palette.length !== EGG_SOURCE.length) return iconOf("egg", cls);
   const host = el("div", cls);
@@ -882,7 +883,7 @@ function drawDex(v: Snapshot): void {
 // 상점 줄의 그림 — 포켓몬 상품은 초상, 랜덤알은 알, 도구는 도구 그림. 칸 늘리기처럼 그림이 없는 상품은 빈 칸
 function shopThumb(item: ShopItemView): HTMLElement {
   if (item.category === "pokemon") return portraitOf(item.id, false, "thumb round");
-  if (item.category === "egg") return item.id === "ancient-stone" ? iconOf(null, "thumb") : eggIcon(item.id, "thumb"); // 태고의돌은 그림이 없다(도트 그림 준비 중)
+  if (item.category === "egg") return eggIcon(item.id, "thumb");
   if (item.category === "slot") return iconOf(null, "thumb");
   return iconOf(`item:${item.id}`, "thumb");
 }

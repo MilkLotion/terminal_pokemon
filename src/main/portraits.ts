@@ -13,6 +13,22 @@ import fs from "node:fs";
 import path from "node:path";
 import { profile, slugs } from "../dex/species.js";
 import { loadJson, isMetaKey } from "../dex/data.js";
+import { PATHS } from "./paths.js";
+
+// 우리가 그린 도구 그림 — 원작에 없는 가상 도구(먹이·장난감·약·연결의끈)와 태고의돌. 저장소에 있고 설치본에도 들어간다.
+// 네트워크보다 먼저 본다. 만드는 곳은 scripts/build-item-art.cjs, 기록은 docs/work/item-art/record.md (2026-09-27 폰트 세션)
+const OWN_ITEMS = path.join(PATHS.project, "assets", "items");
+const ownItem = (id: string): string | null => {
+  const file = path.join(OWN_ITEMS, `${id}.png`);
+  return /^[a-z0-9-]+$/.test(id) && fs.existsSync(file) ? file : null;
+};
+const ownIds = (): string[] => {
+  try {
+    return fs.readdirSync(OWN_ITEMS).filter((n) => n.endsWith(".png")).map((n) => n.slice(0, -4));
+  } catch {
+    return [];
+  }
+};
 
 // 도구 식별자 — 가방·상점 도구와 진화용 도구 (data/items.json · data/evo-items.json)
 function itemIds(): string[] {
@@ -165,6 +181,21 @@ export function createPortraits(dir: string, bundled?: string): Portraits {
     return [...out];
   };
 
+  // 앱 안 우리 그림 하나 — memo 를 함께 쓴다
+  async function ownUri(file: string): Promise<string | null> {
+    const known = memo.get(file);
+    if (known) return known;
+    try {
+      const buf = await fs.promises.readFile(file);
+      if (!isPng(buf)) return null;
+      const uri = `data:image/png;base64,${buf.toString("base64")}`;
+      memo.set(file, uri);
+      return uri;
+    } catch {
+      return null;
+    }
+  }
+
   const one = (dex: number, shiny: boolean): Promise<string | null> => {
     const d = String(dex).padStart(4, "0");
     return fileUri(shiny ? `${d}-shiny.png` : `${d}.png`, portraitUrl(dex, shiny));
@@ -189,6 +220,11 @@ export function createPortraits(dir: string, bundled?: string): Portraits {
       const out: Record<string, string | null> = {};
       await Promise.all(
         keys.map(async (key) => {
+          const own = key.startsWith("item:") ? ownItem(key.slice(5)) : null;
+          if (own) {
+            out[key] = await ownUri(own);
+            return;
+          }
           const url = iconUrl(key);
           out[key] = url ? await fileUri(key === "egg" ? "egg.png" : `items/${key.slice(5)}.png`, url) : null;
         }),
@@ -203,7 +239,7 @@ export function createPortraits(dir: string, bundled?: string): Portraits {
         jobs.push({ rel: `${d}.png`, url: portraitUrl(dex, false) }, { rel: `${d}-shiny.png`, url: portraitUrl(dex, true) });
       }
       jobs.push({ rel: "egg.png", url: `${BASE}/egg.png` });
-      for (const id of itemIds()) jobs.push({ rel: `items/${id}.png`, url: itemUrl(id) });
+      for (const id of itemIds()) if (!ownItem(id)) jobs.push({ rel: `items/${id}.png`, url: itemUrl(id) }); // 우리 그림이 있는 도구는 받지 않는다
       const count = { got: 0, had: 0, missing: 0, failed: 0 };
       // 그림이 없다고(404) 확인한 주소 — 켤 때마다 다시 묻지 않게 캐시 폴더에 적어 둔다.
       // 파일 이름이 아니라 주소로 적는다 — 받을 곳을 바꾸면(경험사탕·민트 → pokesprite) 새 주소로 다시 묻는다
@@ -274,6 +310,14 @@ export function createPortraits(dir: string, bundled?: string): Portraits {
         names("items").map(async (n) => {
           const uri = await diskUri(`items/${n}`);
           if (uri) out[`item:${n.slice(0, -4)}`] = uri;
+        }),
+      );
+      // 우리 그림이 받은 그림보다 먼저다
+      await Promise.all(
+        ownIds().map(async (id) => {
+          const file = ownItem(id);
+          const uri = file ? await ownUri(file) : null;
+          if (uri) out[`item:${id}`] = uri;
         }),
       );
       return out;
