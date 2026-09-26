@@ -49,7 +49,7 @@
     "start": "npm run build && electron .",
     "build:helper": "node scripts/build-helper.js",
     "build:vsix": "node scripts/build-vsix.js",
-    "dist:win": "npm run build && node scripts/fetch-sprites.cjs && node scripts/build-exe.cjs",
+    "dist:win": "npm run build && node scripts/build-exe.cjs",
     "prepack": "npm run build && node scripts/build-helper.js && node scripts/build-vsix.js",
     "postinstall": "node scripts/postinstall.js",
     "prepare": "npm run build",

@@ -21,6 +21,7 @@ import { createSaveParty, type SaveParty } from "./save-party";
 import { createGame, type GameV3 } from "./game";
 import { careItem, petStatus } from "./status";
 import { openManage } from "./manage-window";
+import { createPortraits } from "./portraits";
 import { drawRegion } from "./region-window";
 import { createBannerWindow, type BannerWindow } from "./banner-window";
 import { PATHS, loadConfig, logoFile, preloadFile, rendererFile, saveConfig } from "./paths";
@@ -464,6 +465,16 @@ async function main(): Promise<void> {
     quit: () => app.quit(),
   });
   lifetime.start();
+
+  // 그림 미리 받기 — 설치 파일에 그림이 없다. 빠진 초상·도구·알 그림을 뒤에서 받아 캐시에 둔다(src/main/portraits.ts).
+  // 첫 실행이면 아래 선택 창에서 고르는 동안 받는다. 관리 창은 창을 열 때 캐시를 한 번에 읽는다
+  if (mode === "companion") {
+    const started = Date.now();
+    void createPortraits(path.join(PATHS.home, "sprites"), path.join(PATHS.project, "sprites"))
+      .prefetch()
+      .then((r) => log?.({ prefetch: "done", ms: Date.now() - started, ...r }))
+      .catch((e) => log?.({ prefetch: "failed", message: String(e) }));
+  }
 
   // 첫 실행 — 명령에 스타터를 직접 줬으면 그걸로 바로 시작하고, 아니면 선택 창. reader 면 writer 쪽이 첫 실행을 맡는다
   if (party.needsStarter()) {

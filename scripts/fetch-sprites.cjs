@@ -1,4 +1,6 @@
-// 설치 파일에 넣을 그림을 미리 받는다 — `node scripts/fetch-sprites.cjs` (npm run dist:win 이 먼저 부른다)
+// 저장소 실행에서 쓸 그림을 미리 받는다 — `node scripts/fetch-sprites.cjs` (개발용)
+// 2026-09-26 부터 설치 파일에는 그림을 넣지 않는다. 앱이 처음 켜질 때 받는다 (src/main/portraits.ts prefetch).
+// 관리 창은 앱 안 sprites/ 가 없으면 여기서 받은 .cache/sprites/ 를 앱 안 그림으로 쓴다 (src/main/manage-window.ts)
 //
 // 출처: PokeAPI sprites (https://github.com/PokeAPI/sprites — 저장소 CC0, 그림 저작권은 The Pokémon Company)
 //   초상    sprites/pokemon/<도감>.png · sprites/pokemon/shiny/<도감>.png  (lib/dex.json 의 도감 번호 전부)
@@ -6,7 +8,7 @@
 //   알      sprites/pokemon/egg.png
 // 결과: .cache/sprites/ — 앱의 캐시(~/.claude/pokebuddy/sprites/)와 같은 이름이다 (src/main/portraits.ts)
 //   <4자리>.png · <4자리>-shiny.png · items/<식별자>.png · egg.png
-// 이미 받은 파일은 건너뛴다. 저장소에는 넣지 않는다(.gitignore) — 설치 파일을 만들 때 앱 안 sprites/ 로 복사한다 (scripts/build-exe.cjs)
+// 이미 받은 파일은 건너뛴다. 저장소에는 넣지 않는다(.gitignore)
 const fs = require("node:fs");
 const path = require("node:path");
 

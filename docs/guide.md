@@ -743,7 +743,7 @@ PMD 공격 동작은 게임에서 한 번 쓰는 0.3초 안팎의 동작이다. 
 
 ### 관리 창의 초상
 
-관리 창과 첫 포켓몬 선택 창의 원형 초상은 [PokeAPI sprites](https://github.com/PokeAPI/sprites) 의 기본 그림(`sprites/pokemon/<도감>.png`, 96 × 96)이다. 이로치는 `sprites/pokemon/shiny/<도감>.png` 를 쓰고, 없으면 보통 그림을 쓴다. 저장소는 CC0 이고 그림 저작권은 The Pokémon Company 에 있다. 둘레 여백은 잘라 원을 채운다. 설치 파일에는 초상 2050장(보통·이로치)과 도구·알 그림이 미리 들어 있다(앱 안 `sprites/`). 관리 창은 열 때 디스크에 있는 그림을 한 번에 모두 읽은 뒤 첫 화면을 그린다. 그래서 상점·상세에 들어가면 그림이 바로 보인다. 저장소 실행과 npm 판은 처음 볼 때 받아 `~/.claude/pokebuddy/sprites/` 에 캐시한다. 저장소 실행은 `scripts/fetch-sprites.cjs` 가 받아 둔 `.cache/sprites/` 도 앱 안 그림으로 쓴다. 받지 못하면 빈 원이 남는다. 미해금 도감 칸은 그림을 보이지 않는다(`src/main/portraits.ts`).
+관리 창과 첫 포켓몬 선택 창의 원형 초상은 [PokeAPI sprites](https://github.com/PokeAPI/sprites) 의 기본 그림(`sprites/pokemon/<도감>.png`, 96 × 96)이다. 이로치는 `sprites/pokemon/shiny/<도감>.png` 를 쓰고, 없으면 보통 그림을 쓴다. 저장소는 CC0 이고 그림 저작권은 The Pokémon Company 에 있다. 둘레 여백은 잘라 원을 채운다. 설치 파일에는 그림을 넣지 않는다. 저작권 때문에 공개 릴리스로 재배포하지 않는다. 동반자가 켜질 때 빠진 초상(보통·이로치)·도구·알 그림을 뒤에서 모두 받아 `~/.claude/pokebuddy/sprites/` 에 캐시한다. 첫 실행이면 첫 포켓몬을 고르는 동안 받는다. 약 2천 장, 2MB 이고 이 개발 PC 에서 15초 안팎이었다. 그림이 없는 도구(404)는 `missing.json` 에 적어 다시 묻지 않는다. 관리 창은 열 때 디스크에 있는 그림을 한 번에 모두 읽은 뒤 첫 화면을 그린다. 그래서 상점·상세에 들어가면 그림이 바로 보인다. 저장소 실행은 `scripts/fetch-sprites.cjs` 가 받아 둔 `.cache/sprites/` 도 앱 안 그림으로 쓴다. 받지 못하면 빈 원이 남는다. 미해금 도감 칸은 그림을 보이지 않는다(`src/main/portraits.ts`).
 
 ### 도구·알 그림, 도감 설명, 울음소리
 
@@ -828,7 +828,7 @@ npm run dist:win    # release/pokebuddy-Setup-<버전>.exe
 
 - `scripts/build-exe.cjs` 가 실행에 필요한 파일(`package.json` 의 `files`)만 `release/app/` 에 모은다. 그다음 `electron-builder` 로 묶는다.
 - 처음 만들 때 Electron 과 NSIS 를 내려받는다. 인터넷이 필요하다.
-- 만들기 전에 `scripts/fetch-sprites.cjs` 가 PokeAPI 초상·도구·알 그림을 `.cache/sprites/`(git 제외, 약 2MB)에 받는다. 이미 받은 파일은 건너뛴다. 설치 파일에는 앱 안 `sprites/` 로 들어간다.
+- 설치 파일에는 포켓몬 그림을 넣지 않는다. 앱이 처음 켜질 때 받는다. `scripts/fetch-sprites.cjs` 는 저장소 실행용으로 `.cache/sprites/`(git 제외)에 받는다.
 - 코드 서명을 하지 않는다. 설치 확인은 `release/win-unpacked/pokebuddy.exe` 를 먼저 띄워 본 뒤 설치 파일로 한다.
 
 ### 로고
