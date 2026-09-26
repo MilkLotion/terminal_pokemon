@@ -150,4 +150,6 @@ pokebuddy companion stop      # 동반자 내리기
 
 PMD 스프라이트는 [PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab) 기여자들의 작품이며 **CC BY-NC 4.0** 이다.
 저장소에 넣지 않고 실행할 때 사용자 컴퓨터로 받아 캐시만 한다. 펫별 저작자는 `pokebuddy status <펫>` 으로 확인한다.
+
+화면 글꼴은 [Galmuri](https://github.com/quiple/galmuri)(© Lee Minseo)이며 **SIL Open Font License 1.1** 이다. 전문은 [assets/fonts/OFL.txt](assets/fonts/OFL.txt).
 포켓몬 권리는 Nintendo · Game Freak · Creatures Inc. 에 있으며, 개인 · 비상업 팬 용도로만 쓴다.

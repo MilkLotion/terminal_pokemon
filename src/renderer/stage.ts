@@ -143,12 +143,19 @@ function paint() {
   if (debugOn) renderDebug();
 }
 
+// 말풍선 글꼴 — stage.html 의 @font-face. 캔버스는 글꼴이 오기 전에 그리면 기본 글꼴로 그리고 폭도 틀리게 잰다.
+// 그래서 미리 불러 두고, 도착하면 한 번 다시 그린다
+const BUBBLE_FONT = '12px "Galmuri11", "Malgun Gothic", sans-serif';
+void document.fonts.load(BUBBLE_FONT).then(() => {
+  dirty = true;
+});
+
 // 말풍선 — Figma `Speech Bubble` `338:733`: 흰 바탕, 1px 테두리, 반경 12, 좌우 10·위아래 6, 12px 글, 아래 왼쪽 꼬리.
 // 몸 가운데 위에 두고, 무대 밖으로 나가지 않게 가둔다
 function drawBubble(text: string, r: { x: number; y: number; w: number; h: number }) {
   ctx.save();
   ctx.scale(dpr, dpr);
-  ctx.font = '12px "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif';
+  ctx.font = BUBBLE_FONT;
   const w = Math.ceil(ctx.measureText(text).width) + 20;
   const h = 28;
   const tailX = 13;
@@ -177,7 +184,7 @@ function drawBubble(text: string, r: { x: number; y: number; w: number; h: numbe
   ctx.stroke();
   ctx.fillStyle = "#1a3330";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, x + 10.5, y + h / 2 + 0.5);
+  ctx.fillText(text, x + 10, y + h / 2);
   ctx.restore();
 }
 

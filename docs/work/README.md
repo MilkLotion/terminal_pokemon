@@ -14,5 +14,6 @@
 | S5 명칭 출처 정정 | [계획](s5-terminology/plan.md), [검수](s5-terminology/review.md) |
 | 문서 구조와 작성 절차 | [기록](docs-organization/record.md) |
 | S5 게임 런타임 구현 (2026-09-24~) | [기록](game-runtime/record.md) |
+| 화면 글꼴 Galmuri와 Figma 정리 (2026-09-26) | [기록](ui-pixel-style/record.md) |
 
 과거 작업은 당시 검사 범위의 근거다. 작업 이름이나 파일 존재 여부로 현재 상태를 판단하지 않는다.

@@ -2,9 +2,36 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src data:" />
     <title>pokebuddy</title>
     <style>
+      /* 글꼴 — Galmuri (SIL OFL 1.1, assets/fonts/OFL.txt). 도트 글꼴이라 정해진 크기에서만 선명하다.
+         Galmuri11 은 12·24px, Galmuri14 는 15px, Galmuri9 는 10px 로만 쓴다 (docs/work/ui-pixel-style/record.md) */
+      @font-face {
+        font-family: "Galmuri11";
+        src: url("../../assets/fonts/Galmuri11.woff2") format("woff2");
+        font-weight: 400;
+      }
+      @font-face {
+        font-family: "Galmuri11";
+        src: url("../../assets/fonts/Galmuri11-Bold.woff2") format("woff2");
+        font-weight: 700;
+      }
+      @font-face {
+        font-family: "Galmuri14";
+        src: url("../../assets/fonts/Galmuri14.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Galmuri9";
+        src: url("../../assets/fonts/Galmuri9.woff2") format("woff2");
+      }
+      :root {
+        --font-body: "Galmuri11", "Malgun Gothic", sans-serif;
+        --font-small: "Galmuri9", "Galmuri11", "Malgun Gothic", sans-serif;
+        --font-large: "Galmuri14", "Galmuri11", "Malgun Gothic", sans-serif;
+        /* 굵은 파일이 없는 Galmuri14·9 를 가짜로 굵게 만들면 도트가 뭉개진다 */
+        font-synthesis: none;
+      }
       /* 관리 창 — 값은 화면 스냅샷이 준다 (manage.ts). 색은 Figma `PB / Color` 변수와 같다 */
       :root {
         --canvas: #f1f2ee;
@@ -34,7 +61,7 @@
       body {
         background: var(--canvas);
         color: var(--ink);
-        font: 13px/1.5 "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+        font: 12px/1.5 var(--font-body);
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -93,6 +120,7 @@
       }
       .brand {
         font-size: 15px;
+        font-family: var(--font-large);
         font-weight: 600;
       }
       .spacer {
@@ -114,13 +142,14 @@
         background: var(--primary);
         color: var(--inverse);
         font-size: 10px;
+        font-family: var(--font-small);
         font-weight: 600;
         display: flex;
         align-items: center;
         justify-content: center;
       }
       .points {
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
       }
 
@@ -193,7 +222,8 @@
       }
       .head h1 {
         margin: 0;
-        font-size: 20px;
+        font-size: 24px;
+        font-family: var(--font-body);
       }
       .head .sub {
         color: var(--muted);
@@ -210,16 +240,29 @@
         background: var(--surface);
         border: 1px solid var(--line);
         border-radius: var(--radius);
-        padding: 16px;
+        padding: 18px 12px;
         min-height: 160px;
         display: flex;
         /* 빈 칸·잠긴 칸과 높이를 맞추느라 남는 세로 공간은 위아래로 나눈다 (Figma Party / Approved UI) */
         align-items: center;
-        gap: 14px;
+        gap: 12px;
         text-align: left;
         font: inherit;
         color: inherit;
         cursor: pointer;
+      }
+      /* 파티 칸 초상 — Figma 초상 96 */
+      .slot > .portrait {
+        width: 96px;
+        height: 96px;
+      }
+      /* 파티 칸 이름 — 레벨 옆 한 줄. 길면 말줄임 */
+      .slot .top .name {
+        margin: 0;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .slot.blank {
         align-items: center;
@@ -227,15 +270,14 @@
         flex-direction: column;
         gap: 6px;
         color: var(--muted);
-        background: none;
-        border-style: dashed;
       }
       .slot.blank strong {
         color: var(--ink);
-        font-size: 13px;
+        font-size: 12px;
       }
       .slot.blank small {
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
       }
       .slot.locked {
         cursor: default;
@@ -251,7 +293,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
       }
       /* 초상 그림 — PokeAPI 기본 그림(96 × 96). 둘레 여백이 커서 가운데를 잘라 원을 채운다 */
@@ -283,13 +326,16 @@
       }
       .top {
         display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
       }
       .name {
         font-size: 15px;
+        font-family: var(--font-large);
         font-weight: 600;
         margin: 2px 0 6px;
       }
@@ -302,6 +348,7 @@
       }
       .tag {
         font-size: 10px;
+        font-family: var(--font-small);
         padding: 2px 7px;
         border-radius: 999px;
         background: var(--subtle);
@@ -313,14 +360,13 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 52px;
-        height: 22px;
+        height: 18px;
         padding: 0 8px;
         border-radius: 999px;
         background: var(--subtle);
         color: var(--ink);
-        font-size: 11px;
-        font-weight: 600;
+        font-size: 10px;
+        font-family: var(--font-small);
         white-space: nowrap;
       }
       .value.types {
@@ -417,7 +463,7 @@
         background: none;
         color: var(--primary);
         font: inherit;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
         cursor: pointer;
       }
@@ -448,7 +494,8 @@
         height: 112px;
       }
       .pet-side .name {
-        font-size: 22px;
+        font-size: 24px;
+        font-family: var(--font-body);
         line-height: 28px;
         font-weight: 700;
       }
@@ -501,7 +548,8 @@
         border-radius: 999px;
         background: var(--accent-bg);
         color: var(--primary);
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
         font-weight: 600;
       }
       /* 오른쪽 — 돌봄·성장·표시·관리 */
@@ -513,7 +561,7 @@
         gap: 12px;
       }
       .pet-main .section-label {
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
       }
       .pet-main .care-row,
@@ -539,7 +587,7 @@
         background: var(--surface);
         color: var(--ink);
         font: inherit;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
         cursor: pointer;
       }
@@ -593,7 +641,7 @@
         gap: 2px;
       }
       .list-row .title {
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
       }
       .list-row .desc {
@@ -601,7 +649,8 @@
         color: var(--muted);
       }
       .list-row .chev {
-        font-size: 18px;
+        font-size: 15px;
+        font-family: var(--font-large);
         color: var(--muted);
       }
       .chip-ready {
@@ -610,7 +659,8 @@
         border-radius: 999px;
         background: var(--accent-bg);
         color: var(--primary);
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
         font-weight: 600;
       }
       /* 켬·끔 스위치 — Figma `Toggle` `299:3593` (36 × 20) */
@@ -681,6 +731,7 @@
         display: flex;
         justify-content: space-between;
         font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
       }
       .track {
@@ -724,7 +775,8 @@
       }
       .dialog h2 {
         margin: 0 0 4px;
-        font-size: 17px;
+        font-size: 15px;
+        font-family: var(--font-large);
       }
       .dialog .sub {
         color: var(--muted);
@@ -867,21 +919,10 @@
         color: var(--disabled);
         cursor: default;
       }
-      /* 고른 행 — 왼쪽 막대와 옅은 배경. 테두리 색으로 강조하지 않는다 */
+      /* 고른 행 — 옅은 배경만. 선택 막대·테두리 색으로 강조하지 않는다 */
       .row-card[aria-pressed="true"] {
         position: relative;
         background: var(--accent-bg);
-      }
-      .row-card[aria-pressed="true"]::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 3px;
-        height: 20px;
-        border-radius: 0 3px 3px 0;
-        background: var(--primary);
       }
       /* 성격 변경 — 왼쪽 지금, 가운데 민트, 오른쪽 바꾼 후. 두 카드는 높이가 같다 (Figma Detail / Nature Change) */
       .compare {
@@ -902,7 +943,7 @@
         padding: 12px;
         border: 1px solid var(--line);
         border-radius: 10px;
-        font-size: 13px;
+        font-size: 12px;
       }
       .nat-card .portrait {
         width: 56px;
@@ -913,7 +954,8 @@
       }
       .nat-card .note,
       .mint-mid {
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
       }
       .mint-mid {
@@ -938,7 +980,7 @@
         border-radius: 8px;
         background: var(--surface);
         font: inherit;
-        font-size: 13px;
+        font-size: 12px;
         color: inherit;
         cursor: pointer;
       }
@@ -947,6 +989,7 @@
       }
       .select-btn .chev {
         font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
       }
       /* 목록이 열린 동안은 대화상자가 목록을 자르지 않는다 — 목록은 대화상자 밖으로 겹쳐 뜬다 */
@@ -980,14 +1023,15 @@
         border-radius: 4px;
         background: none;
         font: inherit;
-        font-size: 13px;
+        font-size: 12px;
         color: inherit;
         text-align: left;
         white-space: nowrap;
         cursor: pointer;
       }
       .select-opt .hint {
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
       }
       .select-opt:disabled,
@@ -998,26 +1042,16 @@
       .select-opt[aria-pressed="true"] {
         background: var(--accent-bg);
       }
-      .select-opt[aria-pressed="true"]::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 3px;
-        height: 20px;
-        border-radius: 0 3px 3px 0;
-        background: var(--primary);
-      }
       .info-box {
         margin-top: 12px;
         padding: 10px 12px;
         border-radius: 10px;
         background: var(--canvas);
-        font-size: 13px;
+        font-size: 12px;
       }
       .info-box .note {
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
         margin-top: 2px;
       }
@@ -1027,19 +1061,26 @@
       }
       .row-card .title {
         font-weight: 600;
-        font-size: 13px;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .row-card .note {
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .row-card .price {
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
         white-space: nowrap;
       }
       .row-card .count {
-        font-size: 13px;
+        font-size: 12px;
         color: var(--muted);
         white-space: nowrap;
       }
@@ -1059,10 +1100,12 @@
         margin-bottom: 10px;
       }
       .daycare .title strong {
-        font-size: 14px;
+        font-size: 15px;
+        font-family: var(--font-large);
       }
       .daycare .title span {
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
       }
       .eggs {
@@ -1076,7 +1119,8 @@
         border-radius: 10px;
         border: 1px solid var(--line);
         text-align: center;
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
       }
       .egg .shell {
         width: 30px;
@@ -1108,6 +1152,7 @@
         appearance: none;
         font: inherit;
         font-size: 10px;
+        font-family: var(--font-small);
         padding: 3px 0;
         border-radius: 6px;
         border: 1px solid var(--line);
@@ -1148,7 +1193,8 @@
         font-weight: 600;
       }
       .pager .used {
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
       }
       /* 검색 칸 — Field 와 같은 높이·테두리 (Figma Field 377:303) */
@@ -1177,7 +1223,7 @@
       .search-row .search {
         flex: 1;
       }
-      /* 박스 검색으로 찾아간 칸 — 왼쪽 막대와 옅은 배경 */
+      /* 박스 검색으로 찾아간 칸 — 옅은 배경 */
       .cell[aria-pressed="true"] {
         position: relative;
         background: var(--accent-bg);
@@ -1185,17 +1231,6 @@
       /* 배경과 같은 색이라 초상 자리가 사라지지 않게 */
       .cell[aria-pressed="true"] .dot {
         background: var(--surface);
-      }
-      .cell[aria-pressed="true"]::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 3px;
-        height: 20px;
-        border-radius: 0 3px 3px 0;
-        background: var(--primary);
       }
       .box-grid {
         display: grid;
@@ -1215,6 +1250,7 @@
         justify-content: center;
         gap: 2px;
         font-size: 10px;
+        font-family: var(--font-small);
         cursor: pointer;
         padding: 2px;
       }
@@ -1254,25 +1290,15 @@
         padding: 10px 6px;
         text-align: center;
         font: inherit;
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
         color: inherit;
         cursor: pointer;
       }
-      /* 고른 칸 — 왼쪽 막대와 옅은 배경. 색 테두리로 강조하지 않는다 */
+      /* 고른 칸 — 옅은 배경만. 선택 막대·색 테두리로 강조하지 않는다 */
       .dex-cell[aria-pressed="true"],
       .dex-cell.locked[aria-pressed="true"] {
         background: var(--accent-bg);
-      }
-      .dex-cell[aria-pressed="true"]::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 3px;
-        height: 20px;
-        border-radius: 0 3px 3px 0;
-        background: var(--primary);
       }
       /* 도감 상세 패널 — 격자 아래 (Figma Dex / Base) */
       .dex-detail .flavor {
@@ -1298,7 +1324,7 @@
         gap: 10px;
       }
       .dex-detail .head strong {
-        font-size: 13px;
+        font-size: 12px;
       }
       .dex-detail .meta {
         color: var(--muted);
@@ -1318,6 +1344,7 @@
       }
       .dex-cell .no {
         font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
       }
       .dex-cell .dot {
@@ -1410,11 +1437,13 @@
       }
       .hint {
         color: var(--muted);
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
       }
       .setting .hint {
         color: var(--muted);
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
       }
       /* 조작이 넓은 줄 — 이름 아래에 조작을 깐다 */
       .setting.stack {
@@ -1520,11 +1549,13 @@
       }
       .achievement .hint {
         color: var(--muted);
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
       }
       .achievement .done {
         flex: none;
-        font-size: 11px;
+        font-size: 10px;
+        font-family: var(--font-small);
         color: var(--muted);
       }
 
@@ -1593,7 +1624,7 @@
       }
       .topic h3 {
         margin: 0 0 4px;
-        font-size: 13px;
+        font-size: 12px;
       }
       .topic p {
         margin: 0 0 4px;

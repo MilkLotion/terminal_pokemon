@@ -357,11 +357,11 @@ function petCard(pet: PetView): HTMLElement {
   }
   card.appendChild(portrait);
 
+  // 레벨과 이름을 한 줄에 — Figma `Party Slot Card` 123:149. 다음 레벨까지는 칸의 title 로 옮겼다
   const info = el("div", "info");
   const top = el("div", "top");
-  top.append(el("span", undefined, `Lv.${pet.level}`), el("span", undefined, `다음 레벨까지 ${pet.percentToNext}%`));
+  top.append(el("span", undefined, `Lv.${pet.level}`), el("div", "name", pet.name));
   info.appendChild(top);
-  info.appendChild(el("div", "name", pet.name));
 
   const tags = el("div", "tags");
   pet.types.forEach((name, i) => tags.appendChild(typeBadge(name, pet.typeIds[i])));
@@ -375,7 +375,7 @@ function petCard(pet: PetView): HTMLElement {
 
   card.appendChild(info);
   card.addEventListener("click", () => openPet(pet.id));
-  card.title = `${pet.name} · ${ZONE_WORD[pet.zone] ?? pet.zone}`;
+  card.title = `${pet.name} · ${ZONE_WORD[pet.zone] ?? pet.zone} · 다음 레벨까지 ${pet.percentToNext}%`;
   return card;
 }
 

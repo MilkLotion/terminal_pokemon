@@ -2,9 +2,36 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src data:" />
     <title>pokebuddy</title>
     <style>
+      /* 글꼴 — Galmuri (SIL OFL 1.1, assets/fonts/OFL.txt). 도트 글꼴이라 정해진 크기에서만 선명하다.
+         Galmuri11 은 12·24px, Galmuri14 는 15px, Galmuri9 는 10px 로만 쓴다 (docs/work/ui-pixel-style/record.md) */
+      @font-face {
+        font-family: "Galmuri11";
+        src: url("../../assets/fonts/Galmuri11.woff2") format("woff2");
+        font-weight: 400;
+      }
+      @font-face {
+        font-family: "Galmuri11";
+        src: url("../../assets/fonts/Galmuri11-Bold.woff2") format("woff2");
+        font-weight: 700;
+      }
+      @font-face {
+        font-family: "Galmuri14";
+        src: url("../../assets/fonts/Galmuri14.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Galmuri9";
+        src: url("../../assets/fonts/Galmuri9.woff2") format("woff2");
+      }
+      :root {
+        --font-body: "Galmuri11", "Malgun Gothic", sans-serif;
+        --font-small: "Galmuri9", "Galmuri11", "Malgun Gothic", sans-serif;
+        --font-large: "Galmuri14", "Galmuri11", "Malgun Gothic", sans-serif;
+        /* 굵은 파일이 없는 Galmuri14·9 를 가짜로 굵게 만들면 도트가 뭉개진다 */
+        font-synthesis: none;
+      }
       /* 첫 포켓몬 선택 — Figma `First Run / Starter Selected` `402:9417`, `Starter Empty` `402:9579`.
          색은 관리 창과 같은 `PB / Color` 변수다. 문구·이름은 메인이 언어에 맞춰 넘긴다 (picker.ts) */
       :root {
@@ -33,7 +60,7 @@
         padding: 24px 20px 20px;
         background: var(--canvas);
         color: var(--ink);
-        font: 13px/1.5 "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+        font: 12px/1.5 var(--font-body);
         overflow: hidden;
         -webkit-user-select: none;
         user-select: none;
@@ -45,7 +72,8 @@
       }
       h1 {
         margin: 0;
-        font-size: 20px;
+        font-size: 24px;
+        font-family: var(--font-body);
         line-height: normal;
         font-weight: 500;
       }
@@ -94,20 +122,9 @@
         outline: 2px solid var(--primary);
         outline-offset: 2px;
       }
-      /* 고른 카드 — 왼쪽 막대(blade)와 옅은 배경. 색 테두리로 강조하지 않는다 */
+      /* 고른 카드 — 옅은 배경만. 선택 막대·색 테두리로 강조하지 않는다 */
       .card[aria-pressed="true"] {
         background: var(--accent-bg);
-      }
-      .card[aria-pressed="true"]::before {
-        content: "";
-        position: absolute;
-        left: -1px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 3px;
-        height: 20px;
-        border-radius: 0 2px 2px 0;
-        background: var(--primary);
       }
       /* 초상 자리 — 관리 창과 같은 원. 그림은 아직 넣지 않는다 */
       .portrait {
@@ -144,6 +161,9 @@
         font-size: 12px;
         line-height: normal;
         font-weight: 500;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
         white-space: nowrap;
       }
       footer {
@@ -160,7 +180,8 @@
         gap: 2px;
       }
       #chosen-name {
-        font-size: 14px;
+        font-size: 15px;
+        font-family: var(--font-large);
         line-height: normal;
         font-weight: 500;
       }
@@ -182,7 +203,7 @@
         background: var(--primary);
         color: var(--inverse);
         font: inherit;
-        font-size: 13px;
+        font-size: 12px;
         line-height: 18px;
         font-weight: 600;
         cursor: pointer;
