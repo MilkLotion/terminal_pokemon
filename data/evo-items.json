@@ -1,7 +1,7 @@
 {
   "auspicious-armor": {"ko":"축복받은갑옷","en":"Auspicious Armor","targets":["armarouge"]},
   "black-augurite": {"ko":"검은휘석","en":"Black Augurite","targets":["kleavor"]},
-  "blank-cd": {"ko":"빈 CD","en":"Blank CD","targets":["ambipom","annihilape","dudunsparce","farigiraf","grapploct","hydrapple","lickilicky","mamoswine","mr-mime","naganadel","overqwil","sudowoodo","tangrowth","tsareena","yanmega"]},
+  "blank-cd": {"ko":"빈 기술머신","en":"Blank TM","targets":["ambipom","annihilape","dudunsparce","farigiraf","grapploct","hydrapple","lickilicky","mamoswine","mr-mime","naganadel","overqwil","sudowoodo","tangrowth","tsareena","yanmega"]},
   "bond-cord": {"ko":"유대의끈","en":"Bond Cord","targets":["accelgor","alakazam","aromatisse","conkeldurr","dusknoir","electivire","escavalier","gengar","gigalith","golem","gorebyss","gourgeist","huntail","kingdra","machamp","magmortar","milotic","politoed","porygon-z","porygon2","rhyperior","scizor","slurpuff","steelix","trevenant"]},
   "cracked-pot": {"ko":"깨진포트","en":"Cracked Pot","targets":["polteageist"]},
   "dawn-stone": {"ko":"각성의돌","en":"Dawn Stone","targets":["froslass","gallade"]},

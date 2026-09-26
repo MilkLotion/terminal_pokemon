@@ -632,7 +632,7 @@ SSOT: `docs/specs/s5.md` 의 화면 구조와 저장, `docs/specs/modules.md` �
 - `src/main/portraits.ts` `itemUrl`: 경험사탕 `exp-candy/<크기>.png`, 민트 21종은 올려 주는 능력치별 6장(`mint/attack` 등, 성실민트는 `neutral`), 진화 도구 4종(`galarica-wreath`·`sweet-apple`·`tart-apple`·`cracked-pot`)은 `evo-item/`. 나머지는 PokeAPI. 미리 받기와 필요할 때 받기(`iconUrl`)가 같은 주소를 쓴다.
 - `missing.json` 을 파일 이름이 아니라 주소로 적게 바꿨다 — 전에 404 로 적힌 경험사탕·민트를 새 주소로 다시 묻게 하려는 것이다.
 - 검수: 빈 캐시 미리 받기 2092장·없음 15(폰트 세션이 그릴 가상 도구와 pokesprite 에도 없는 진화 도구)·실패 0. 상점 도구 분류에서 경험사탕 5종·민트 그림을 확인했다. README 라이선스 절에 출처를 더했다.
-- 빈 CD: 사용자 결정(폰트 세션 전달, "빈기술머신으로 사용할게 그냥")으로 PokeAPI `items/tm-normal.png` 를 쓴다. 캐시 이름은 `items/blank-cd.png` 그대로다. 도구 이름을 "빈 기술머신"으로 바꿀지는 사용자 확인 중이다.
+- 빈 CD: 사용자 결정(폰트 세션 전달, "빈기술머신으로 사용할게 그냥")으로 PokeAPI `items/tm-normal.png` 를 쓴다. 캐시 이름은 `items/blank-cd.png` 그대로다. 이름도 사용자 결정(폰트 세션 전달, "1. 변경.")으로 "빈 기술머신"(영어 Blank TM)으로 바꿨다 — `data/evo-items.json`, 생성 도구 `src/tools/build-evo-items.ts`, `specs/s5.md` 진화 조건 표. 저장과 명령이 쓰는 도구 id 는 `blank-cd` 그대로다(옛 저장의 가방이 깨지지 않게).
 - 남은 것(폰트 세션): 기본먹이·프리미엄먹이·장난감·약 2종·유대의끈·알 5종·태고의돌 도트 그림. pokesprite 에 없는 진화 도구 8종(PokéRogue 에만 있고 CC BY-NC-SA 4.0 표기)은 판단 대기.
 
 **창 높이**

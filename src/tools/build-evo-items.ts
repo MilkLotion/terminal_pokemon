@@ -9,7 +9,7 @@
 //
 // 결과: { "<item>": { "ko": "…", "en": "…", "targets": ["<slug>", …] } }
 //   - data/evo.json 의 `need.kind === "item"` 에 실제로 쓰인 도구만 담는다
-//   - bond-cord(유대의끈)·blank-cd(빈 CD)는 우리 도구라 이름을 여기서 준다
+//   - bond-cord(유대의끈)·blank-cd(빈 기술머신)는 우리 도구라 이름을 여기서 준다. 빈 기술머신은 2026-09-26 "빈 CD"에서 바꿨다(사용자 결정)
 //   - 상점의 진화 탭이 이 목록을 그대로 보여준다 (docs/specs/s5.md "진화 계약")
 import fs from "node:fs";
 import path from "node:path";
@@ -24,7 +24,7 @@ const LANG = { ko: "3", en: "9" } as const;
 // 우리가 만든 도구 — 원작에 없으므로 이름을 직접 준다
 export const OWN_ITEMS: Readonly<Record<string, { ko: string; en: string }>> = {
   [BOND_CORD]: { ko: "유대의끈", en: "Bond Cord" },
-  [BLANK_CD]: { ko: "빈 CD", en: "Blank CD" },
+  [BLANK_CD]: { ko: "빈 기술머신", en: "Blank TM" },
 };
 
 interface EvoItem {

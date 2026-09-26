@@ -64,7 +64,7 @@ export function itemUrl(id: string): string {
   const stat = mint ? MINT_STAT[mint[1] ?? ""] : undefined;
   if (stat) return `${POKESPRITE}/mint/${stat}.png`;
   if (POKESPRITE_EVO.has(id)) return `${POKESPRITE}/evo-item/${id}.png`;
-  // 빈 CD(기술 진화를 대신하는 도구)는 원작 기술머신 그림을 쓴다 — 2026-09-26 사용자 결정 "빈기술머신으로 사용할게 그냥"
+  // 빈 기술머신(기술 진화를 대신하는 도구, id 는 옛 이름 blank-cd)은 원작 기술머신 그림을 쓴다 — 2026-09-26 사용자 결정 "빈기술머신으로 사용할게 그냥"
   if (id === "blank-cd") return `${SPRITES}/items/tm-normal.png`;
   return `${SPRITES}/items/${id}.png`;
 }
