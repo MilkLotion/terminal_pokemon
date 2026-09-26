@@ -375,6 +375,7 @@ function petCard(pet: PetView): HTMLElement {
 
   card.appendChild(info);
   card.addEventListener("click", () => openPet(pet.id));
+  if (pet.hidden) card.dataset.tut = "party"; // 파티 튜토리얼은 숨긴 칸 가운데 첫 칸을 밝힌다
   const state = `${ZONE_WORD[pet.zone] ?? pet.zone} · 다음 레벨까지 ${pet.percentToNext}%`;
   if (pet.forms && pet.forms.length > 1) {
     // 공유 sid 계열 — 마우스를 올리면 박스와 같은 모습 툴팁. 두 툴팁이 겹치지 않게 title 대신 툴팁 머리 줄에 상태를 적는다
@@ -647,6 +648,7 @@ function drawBox(v: Snapshot): void {
   bodyEl.appendChild(head("박스", `보관 ${kept}마리 · 박스 ${v.boxes.length}개`));
 
   const daycare = el("div", "daycare");
+  daycare.dataset.tut = "hatch"; // 부화 튜토리얼이 밝히는 곳
   const title = el("div", "title");
   title.append(el("strong", undefined, "돌보미집"), el("span", undefined, `알 ${v.eggs.used} / ${v.eggs.size}`));
   daycare.appendChild(title);
@@ -843,6 +845,7 @@ function shopRow(item: ShopItemView): HTMLElement {
   card.append(body, el("div", "price", point(item.price)));
   // 살 수 없어도 누를 수 있다. 이유는 구매 창이 보여 준다
   card.addEventListener("click", () => open({ kind: "buy", productId: item.id, qty: 1 }));
+  if (item.id === "random") card.dataset.tut = "shop"; // 상점 튜토리얼이 밝히는 곳
   return card;
 }
 
@@ -920,6 +923,7 @@ function draw(): void {
   if (detail) {
     drawPetPage(detail);
     restoreSearchFocus();
+    drawTutorial();
     return;
   }
   detailPet = null;
@@ -929,7 +933,78 @@ function draw(): void {
   else if (tab === "shop") drawShop(view);
   else drawBag(view);
   restoreSearchFocus();
+  drawTutorial();
 }
+
+// ── 튜토리얼 코치마크 ───────────────────────────────────────────────────────────
+// Figma `Tutorial / Shop` `399:8590` · `Hatch` `399:8901` · `Party` `399:9159`. 모두 한 단계다(2026-09-26 사용자 결정).
+// 대상 둘레 8px 을 비우고 네 장의 배경막으로 덮는다. 대상은 그대로 누를 수 있다. 말풍선은 대상 바로 아래(넘치면 위).
+// 무엇을 보여 줄지는 스냅샷 `tutorial` 이 정한다(src/tutorial/core.ts). 그 탭에 있을 때만 그린다 — 화면을 강제로 바꾸지 않는다.
+// 문구는 Figma 를 따르되 지금 앱 조작에 맞춰 두 곳을 고쳤다: 부화(알 카드의 쓰다듬기·노래 버튼), 파티(상세의 화면 표시)
+
+const TUTORIAL_TEXT: Record<string, { name: string; tab: TabId; title: string; body: string }> = {
+  shop: { name: "상점", tab: "shop", title: "랜덤알로 새 포켓몬을 만나 보세요", body: "시작 포인트로 하나 살 수 있어요. 카드를 누르면 구매 창이 열려요." },
+  hatch: { name: "부화", tab: "box", title: "알을 돌보면 더 빨리 준비돼요", body: "쓰다듬기나 노래로 알을 돌봐 주세요. 준비가 끝나면 열기를 눌러야 부화해요." },
+  party: { name: "파티", tab: "party", title: "새 포켓몬은 숨긴 상태로 들어와요", body: "칸을 눌러 상세에서 화면 표시를 켜면 바탕화면에 나타나요. 초상의 몬스터볼은 숨김 표시예요." },
+};
+const COACH = { pad: 8, gap: 12, width: 280, margin: 8 };
+
+let coachEl: HTMLElement | null = null;
+
+function drawTutorial(): void {
+  coachEl?.remove();
+  coachEl = null;
+  const id = view?.tutorial ?? null;
+  const text = id ? TUTORIAL_TEXT[id] : undefined;
+  if (id && text && !dialog && !detailPet && tab === text.tab) {
+    const target = bodyEl.querySelector<HTMLElement>(`[data-tut="${id}"]`);
+    if (target) coachEl = coachLayer(id, text, target);
+  }
+  // OS 가 그리는 창 단추 자리도 함께 어둡게 한다 — 모달 가림막과 같은 통로
+  window.pokebuddyManage.dim(dimmed || coachEl != null);
+}
+
+function coachLayer(id: string, text: { name: string; title: string; body: string }, target: HTMLElement): HTMLElement {
+  const layer = el("div", "coach");
+  const r = target.getBoundingClientRect();
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const hole = { l: Math.max(0, r.left - COACH.pad), t: Math.max(0, r.top - COACH.pad), r: Math.min(W, r.right + COACH.pad), b: Math.min(H, r.bottom + COACH.pad) };
+  for (const [x, y, w, h] of [
+    [0, 0, W, hole.t],
+    [0, hole.b, W, H - hole.b],
+    [0, hole.t, hole.l, hole.b - hole.t],
+    [hole.r, hole.t, W - hole.r, hole.b - hole.t],
+  ] as const) {
+    const dim = el("div", "coach-dim");
+    Object.assign(dim.style, { left: `${x}px`, top: `${y}px`, width: `${Math.max(0, w)}px`, height: `${Math.max(0, h)}px` });
+    layer.appendChild(dim);
+  }
+  const bubble = el("div", "coach-bubble");
+  const head = el("div", "head");
+  const x = button("x", "✕");
+  x.setAttribute("aria-label", "튜토리얼 닫기");
+  x.addEventListener("click", () => void send("tutorial.skip", id)); // 닫기는 스킵이다
+  head.append(el("span", "step", `튜토리얼 · ${text.name} 1 / 1`), x);
+  const next = actionButton("다음", true, false, () => void send("tutorial.done", id, { steps: 1 }));
+  bubble.append(head, el("div", "title", text.title), el("div", "body", text.body), actions(el("div", "spacer"), next));
+  layer.appendChild(bubble);
+  document.body.appendChild(layer);
+  const left = Math.min(Math.max(COACH.margin, r.left), W - COACH.width - COACH.margin);
+  const below = hole.b + COACH.gap;
+  const top = below + bubble.offsetHeight > H - COACH.margin ? hole.t - COACH.gap - bubble.offsetHeight : below;
+  bubble.style.left = `${Math.round(left)}px`;
+  bubble.style.top = `${Math.round(Math.max(COACH.margin, top))}px`;
+  return layer;
+}
+
+// 본문이 스크롤되거나 창 크기가 바뀌면 자리를 다시 잰다
+bodyEl.addEventListener("scroll", () => {
+  if (coachEl) drawTutorial();
+});
+window.addEventListener("resize", () => {
+  if (coachEl) drawTutorial();
+});
 
 // ── 모달 · 공통 ────────────────────────────────────────────────────────────────
 
@@ -1594,7 +1669,7 @@ function setScrim(on: boolean): void {
   scrimEl.classList.toggle("open", on);
   if (on === dimmed) return;
   dimmed = on;
-  window.pokebuddyManage.dim(on);
+  drawTutorial(); // 모달이 열리면 코치마크를 감추고, 닫히면 다시 그린다. 창 단추 자리 어둡게 하기도 여기서 맞춘다
 }
 
 function drawDialog(): void {
