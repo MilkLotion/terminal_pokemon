@@ -14,7 +14,8 @@ import { natures as natureTable } from "../dex/natures.js";
 import { eggName } from "../shop/catalog.js";
 import { zoneOf } from "../state/time.js";
 import { moodWord, natureName, petName, typeName } from "../main/text.js";
-import type { AchievementView, BagItemView, BoxView, EggView, EvolutionView, NatureOption, PetView, SlotView, Snapshot } from "../shared/manage";
+import type { AchievementView, BagItemView, BoxView, EggView, EvolutionView, FormView, NatureOption, PetView, SlotView, Snapshot } from "../shared/manage";
+import { formsOf } from "../dex/forms.js";
 import { candidates, dayPartOf } from "../dex/evolve.js";
 import type { DayPart } from "../shared/types";
 import { isEvoItem, nameOfItem, shopList } from "./lists.js";
@@ -52,6 +53,13 @@ function evolutionsOf(save: SaveV3, pet: PetV3, dayPart: DayPart): EvolutionView
   }));
 }
 
+// 공유 sid 계열이면 고를 수 있는 종 — 박스 칸이 단체사진과 툴팁으로 보인다
+function formsView(pet: PetV3): { forms?: FormView[] } {
+  const list = formsOf(pet);
+  if (list.length < 2) return {};
+  return { forms: list.map((slug) => ({ species: slug, name: petName(slug), types: profile(slug).types.map((t) => typeName(t)), typeIds: [...profile(slug).types] })) };
+}
+
 export function petView(save: SaveV3, pet: PetV3, hidden: boolean, dayPart: DayPart = dayPartOf(Date.now())): PetView {
   const rate = growthOf(pet.species);
   const { percent } = progressTo(rate, pet.exp);
@@ -80,6 +88,7 @@ export function petView(save: SaveV3, pet: PetV3, hidden: boolean, dayPart: DayP
     longPlay: pet.buffs.some((b) => b.kind === "long-play" && b.remainMs > 0),
     buffs: pet.buffs.map((b) => ({ kind: b.kind, remainMin: min(b.remainMs) })),
     evolutions: evolutionsOf(save, pet, dayPart),
+    ...formsView(pet),
   };
 }
 

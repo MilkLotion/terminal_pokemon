@@ -188,4 +188,19 @@ function seed(): SaveV3 {
   process.stdout.write("(11) 진화 후보와 조건 문구  ok\n");
 }
 
-process.stdout.write("selftest-snapshot: 통과 (이름·구간·단위·칸·알·가방·도감·진화 후보)\n");
+// (12) 공유 sid 계열 — 박스 칸의 단체사진·툴팁이 쓰는 모습 목록. 일반 개체에는 없다
+{
+  const s = empty(T0);
+  s.pets.push(pet({ id: "p1", species: "solgaleo", level: 60, evolved: ["cosmog", "cosmoem"], stage: 2, forms: ["cosmog", "cosmoem", "solgaleo", "lunala"] }));
+  s.pets.push(pet({ id: "p2", species: "charizard", evolved: ["charmander", "charmeleon"], stage: 2 }));
+  s.boxes[0]!.slots[0] = "p1";
+  s.boxes[0]!.slots[1] = "p2";
+  const v = snapshot(s, undefined, undefined, undefined, T0);
+  const shared = v.boxes[0]?.slots[0];
+  assert.deepStrictEqual(shared?.forms?.map((f) => f.name), ["코스모그", "코스모움", "솔가레오", "루나아라"]);
+  assert.deepStrictEqual(shared?.forms?.[3]?.typeIds, ["psychic", "ghost"], "바꾸기 확인 창의 타입 배지");
+  assert.equal(v.boxes[0]?.slots[1]?.forms, undefined);
+  process.stdout.write("(12) 공유 sid 모습 목록  ok\n");
+}
+
+process.stdout.write("selftest-snapshot: 통과 (이름·구간·단위·칸·알·가방·도감·진화 후보·공유 sid)\n");

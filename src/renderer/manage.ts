@@ -11,6 +11,7 @@ import type {
   DexDetail,
   DexEntry,
   EggView,
+  FormView,
   ManageReply,
   ManageRoute,
   PetView,
@@ -144,7 +145,8 @@ type Dialog =
   | { kind: "achievements" }
   | { kind: "settings"; tab: "general" | "agents" }
   | { kind: "guide" }
-  | { kind: "hatched"; petId?: string; slotIndex?: number; eggId?: string }; // 부화 결과 — 태어난 개체 또는 포켓몬 대신 나온 알
+  | { kind: "hatched"; petId?: string; slotIndex?: number; eggId?: string } // 부화 결과 — 태어난 개체 또는 포켓몬 대신 나온 알
+  | { kind: "form"; petId: string; to: string }; // 공유 sid 계열의 모습 바꾸기 확인
 
 let tab: TabId = "party";
 let view: Snapshot | null = null;
@@ -515,9 +517,118 @@ function matchesDex(row: DexEntry, q: string): boolean {
 
 function boxCell(pet: PetView, onPick: () => void): HTMLButtonElement {
   const cell = button("cell");
-  cell.append(portraitOf(pet.species, pet.shiny, "dot"), el("div", "who", pet.name), el("div", "note", pet.shiny ? `Lv.${pet.level} · 이로치` : `Lv.${pet.level}`));
+  const forms = pet.forms;
+  if (forms && forms.length > 1) {
+    // 공유 sid 계열 — 모습들을 한 장의 단체사진으로, 이름은 계열, 아래 줄은 지금 종 (Figma `Box / Shared Profile` `481:1227`)
+    const level = pet.shiny ? `Lv.${pet.level} · 이로치` : `Lv.${pet.level}`;
+    cell.append(groupPhoto(forms, pet.shiny), el("div", "who", `${forms[0]?.name ?? pet.name} 계열`), el("div", "note", `${level} · ${pet.name}`));
+    cell.addEventListener("mouseenter", () => showFormTip(cell, pet));
+    cell.addEventListener("mouseleave", () => hideFormTipSoon());
+  } else {
+    cell.append(portraitOf(pet.species, pet.shiny, "dot"), el("div", "who", pet.name), el("div", "note", pet.shiny ? `Lv.${pet.level} · 이로치` : `Lv.${pet.level}`));
+  }
   cell.addEventListener("click", onPick);
   return cell;
+}
+
+// ── 공유 sid 계열 ───────────────────────────────────────────────────────────────
+// 박스 칸의 2×2 단체사진과 마우스를 올리면 뜨는 툴팁. 툴팁의 줄을 누르면 바꾸기 확인 창이 뜬다.
+// 파티 카드와 개체 상세는 지금 종 하나만 보인다 (2026-09-26 사용자 결정 "너 제안대로 하자")
+
+function groupPhoto(forms: FormView[], shiny: boolean): HTMLElement {
+  const photo = el("div", "group-photo");
+  for (const f of forms.slice(0, 4)) photo.appendChild(portraitOf(f.species, shiny, "gp-face"));
+  return photo;
+}
+
+let formTip: HTMLElement | null = null;
+let formTipTimer: ReturnType<typeof setTimeout> | null = null;
+
+function hideFormTip(): void {
+  if (formTipTimer) clearTimeout(formTipTimer);
+  formTipTimer = null;
+  formTip?.remove();
+  formTip = null;
+}
+// 칸에서 툴팁으로 커서를 옮기는 사이에 닫히지 않게 잠깐 기다린다
+function hideFormTipSoon(): void {
+  if (formTipTimer) clearTimeout(formTipTimer);
+  formTipTimer = setTimeout(hideFormTip, 150);
+}
+
+function showFormTip(cell: HTMLElement, pet: PetView): void {
+  hideFormTip();
+  const tip = el("div", "form-tip");
+  tip.setAttribute("role", "menu");
+  tip.appendChild(el("div", "tip-head", "모습 바꾸기 · 누르면 바꿔요"));
+  for (const f of pet.forms ?? []) {
+    const now = f.species === pet.species;
+    const row = button("form-row");
+    row.setAttribute("role", "menuitem");
+    if (now) row.setAttribute("aria-current", "true");
+    row.append(portraitOf(f.species, pet.shiny, "gp-face"), el("span", "name", f.name), el("span", "note", now ? "지금" : "바꾸기"));
+    row.disabled = now;
+    row.addEventListener("click", (e) => {
+      e.stopPropagation();
+      hideFormTip();
+      open({ kind: "form", petId: pet.id, to: f.species });
+    });
+    tip.appendChild(row);
+  }
+  tip.addEventListener("mouseenter", () => {
+    if (formTipTimer) clearTimeout(formTipTimer);
+    formTipTimer = null;
+  });
+  tip.addEventListener("mouseleave", hideFormTipSoon);
+  document.body.appendChild(tip);
+  // 칸 바로 아래 가운데. 창 아래로 넘치면 칸 위에 둔다
+  const r = cell.getBoundingClientRect();
+  const w = tip.offsetWidth;
+  const h = tip.offsetHeight;
+  const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
+  const top = r.bottom + 6 + h > window.innerHeight ? r.top - 6 - h : r.bottom + 6;
+  tip.style.left = `${Math.round(left)}px`;
+  tip.style.top = `${Math.round(top)}px`;
+  formTip = tip;
+}
+
+// 받침이 있으면 "으로", 없거나 ㄹ 받침이면 "로" — "루나아라로", "코스모움으로"
+function toParticle(word: string): string {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  if (code < 0 || code > 11171) return "로";
+  const jong = code % 28;
+  return jong === 0 || jong === 8 ? "로" : "으로";
+}
+
+// 모습 바꾸기 확인 — Figma `Box / Shared Form Confirm` `473:15738`
+function drawForm(petId: string, to: string): void {
+  const pet = petOf(petId);
+  const form = pet?.forms?.find((f) => f.species === to);
+  if (!pet || !form) {
+    close();
+    return;
+  }
+  dialogEl.append(...dialogHead(`${form.name}${toParticle(form.name)} 바꿀까요?`, ""));
+  const card = el("div", "nat-card");
+  const tags = el("div", "tags");
+  form.types.forEach((name, i) => tags.appendChild(typeBadge(name, form.typeIds[i])));
+  tags.appendChild(el("span", "note", `Lv.${pet.level} · ${pet.nature}`));
+  card.append(portraitOf(form.species, pet.shiny, "portrait"), el("div", "name", form.name), tags);
+  const row = el("div", "compare");
+  row.appendChild(card);
+  const slot = slotOfPet(pet.id);
+  const info = el("div", "info-box");
+  info.append(
+    el("div", undefined, `지금 ${pet.name} · ${slot != null ? `파티 ${slot + 1}번 칸` : "박스"}`),
+    el("div", "note", "레벨·친밀도·성격은 그대로예요"),
+    el("div", "note", `스탯은 ${form.name} 기준이에요. 같은 칸에서 바뀌어요`),
+  );
+  const go = actionButton("바꾸기", true, false, () => {
+    void send("pet.form", pet.id, { species: to }).then((ok) => {
+      if (ok) close();
+    });
+  });
+  dialogEl.append(row, info, actions(el("div", "spacer"), actionButton("취소", false, false, close), go));
 }
 
 function drawBox(v: Snapshot): void {
@@ -1463,6 +1574,7 @@ const SHAPE: Record<Dialog["kind"], string> = {
   settings: "dialog tall",
   guide: "dialog tall",
   hatched: "dialog",
+  form: "dialog",
 };
 
 // 가림막 — 켜고 끌 때 메인에도 알린다. OS 가 그리는 창 단추 자리는 CSS 가 덮지 못한다
@@ -1494,6 +1606,7 @@ function drawDialog(): void {
   else if (dialog.kind === "achievements") drawAchievements();
   else if (dialog.kind === "settings") drawSettings(dialog.tab);
   else if (dialog.kind === "hatched") drawHatched(dialog.petId, dialog.slotIndex, dialog.eggId);
+  else if (dialog.kind === "form") drawForm(dialog.petId, dialog.to);
   else drawGuide();
 
   if (notice) dialogEl.appendChild(el("div", "notice bad", notice));
@@ -1546,6 +1659,8 @@ const REASON: Record<string, string> = {
   "not-enough-points": "포인트가 모자라요.",
   "daycare-full": "돌보미집이 가득 찼어요.",
   "sold-out": "이 알에서 나올 포켓몬을 모두 모았어요.",
+  "bad-form": "고를 수 없는 모습이에요.",
+  "not-shared": "모습을 바꿀 수 없는 포켓몬이에요.",
   "max-slots": "더 열 수 있는 칸이 없어요.",
   "no-locked-slot": "더 열 수 있는 칸이 없어요.",
   "not-unlocked": "아직 해금하지 않은 종이에요.",

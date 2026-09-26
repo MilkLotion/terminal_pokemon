@@ -46,6 +46,15 @@ export interface PetView {
   longPlay: boolean;
   buffs: ViewBuff[];
   evolutions: EvolutionView[]; // 다음 한 단계의 후보. 최종 단계면 비어 있다
+  forms?: FormView[]; // 공유 sid 계열의 고를 수 있는 종 — 그 밖의 개체에는 없다 (src/dex/forms.ts)
+}
+
+// 공유 sid 계열의 모습 하나 — 박스 칸의 단체사진·툴팁과 바꾸기 확인 창이 쓴다
+export interface FormView {
+  species: string;
+  name: string;
+  types: string[];
+  typeIds: string[];
 }
 
 export interface SlotView {
