@@ -375,7 +375,15 @@ function petCard(pet: PetView): HTMLElement {
 
   card.appendChild(info);
   card.addEventListener("click", () => openPet(pet.id));
-  card.title = `${pet.name} · ${ZONE_WORD[pet.zone] ?? pet.zone} · 다음 레벨까지 ${pet.percentToNext}%`;
+  const state = `${ZONE_WORD[pet.zone] ?? pet.zone} · 다음 레벨까지 ${pet.percentToNext}%`;
+  if (pet.forms && pet.forms.length > 1) {
+    // 공유 sid 계열 — 마우스를 올리면 박스와 같은 모습 툴팁. 두 툴팁이 겹치지 않게 title 대신 툴팁 머리 줄에 상태를 적는다
+    // (Figma `Party / Shared Form Tip` `501:14010`, 2026-09-26 사용자 결정 "제안대로 진행")
+    card.addEventListener("mouseenter", () => showFormTip(card, pet, `${pet.name} · ${state}`));
+    card.addEventListener("mouseleave", () => hideFormTipSoon());
+  } else {
+    card.title = `${pet.name} · ${state}`;
+  }
   return card;
 }
 
@@ -533,7 +541,8 @@ function boxCell(pet: PetView, onPick: () => void): HTMLButtonElement {
 
 // ── 공유 sid 계열 ───────────────────────────────────────────────────────────────
 // 박스 칸의 2×2 단체사진과 마우스를 올리면 뜨는 툴팁. 툴팁의 줄을 누르면 바꾸기 확인 창이 뜬다.
-// 파티 카드와 개체 상세는 지금 종 하나만 보인다 (2026-09-26 사용자 결정 "너 제안대로 하자")
+// 파티 카드와 개체 상세는 지금 종 하나만 보인다 (2026-09-26 사용자 결정 "너 제안대로 하자").
+// 파티에 나간 개체는 박스 칸이 없어 파티 카드에도 같은 툴팁을 단다 (2026-09-26 "제안대로 진행")
 
 function groupPhoto(forms: FormView[], shiny: boolean): HTMLElement {
   const photo = el("div", "group-photo");
@@ -556,10 +565,12 @@ function hideFormTipSoon(): void {
   formTipTimer = setTimeout(hideFormTip, 150);
 }
 
-function showFormTip(cell: HTMLElement, pet: PetView): void {
+// status 는 파티 카드가 title 대신 머리 줄에 두는 상태 문구다
+function showFormTip(cell: HTMLElement, pet: PetView, status?: string): void {
   hideFormTip();
   const tip = el("div", "form-tip");
   tip.setAttribute("role", "menu");
+  if (status) tip.appendChild(el("div", "tip-head", status));
   tip.appendChild(el("div", "tip-head", "모습 바꾸기 · 누르면 바꿔요"));
   for (const f of pet.forms ?? []) {
     const now = f.species === pet.species;
