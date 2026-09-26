@@ -104,7 +104,9 @@ const openHandler: TxHandler = (draft, args, ctx) => {
   if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
   return {
     ok: true,
-    result: { petId: res.petId, species: res.species, shiny: res.shiny, slotIndex: res.slotIndex, toBox: res.toBox, conditionId: res.conditionId },
+    result: res.egg
+      ? { egg: res.egg }
+      : { petId: res.petId, species: res.species, shiny: res.shiny, slotIndex: res.slotIndex, toBox: res.toBox, conditionId: res.conditionId },
   };
 };
 

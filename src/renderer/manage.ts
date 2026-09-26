@@ -668,7 +668,7 @@ function drawDex(v: Snapshot): void {
 // 상점 줄의 그림 — 포켓몬 상품은 초상, 랜덤알은 알, 도구는 도구 그림. 칸 늘리기처럼 그림이 없는 상품은 빈 칸
 function shopThumb(item: ShopItemView): HTMLElement {
   if (item.category === "pokemon") return portraitOf(item.id, false, "thumb round");
-  if (item.category === "egg") return iconOf(item.id === "random" ? "egg" : null, "thumb");
+  if (item.category === "egg") return iconOf(item.id === "ancient-stone" ? null : "egg", "thumb"); // 태고의돌은 PokeAPI 그림이 없다
   if (item.category === "slot") return iconOf(null, "thumb");
   return iconOf(`item:${item.id}`, "thumb");
 }
@@ -1503,6 +1503,7 @@ const REASON: Record<string, string> = {
   "not-pokemon": "그 칸에 개체가 없어요.",
   "not-enough-points": "포인트가 모자라요.",
   "daycare-full": "돌보미집이 가득 찼어요.",
+  "sold-out": "이 알에서 나올 포켓몬을 모두 모았어요.",
   "max-slots": "더 열 수 있는 칸이 없어요.",
   "no-locked-slot": "더 열 수 있는 칸이 없어요.",
   "not-unlocked": "아직 해금하지 않은 종이에요.",

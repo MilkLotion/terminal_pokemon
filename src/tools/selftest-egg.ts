@@ -8,6 +8,10 @@ import { care } from "../egg/care";
 import { matchCondition, speciesOf, textOf } from "../egg/conditions";
 import { decide, pickWeighted, RANK_WEIGHT } from "../egg/hatch";
 import { open } from "../egg/open";
+import { buy } from "../shop/buy";
+import { canGiveEgg, eggPool } from "../shop/catalog";
+import { dexDetail } from "../tx/dex-detail";
+import { shopList } from "../tx/lists";
 import { nextPetId } from "../party/create";
 import { EGG_V3_RULES } from "../save/rules";
 import { empty } from "../save/v3";
@@ -33,6 +37,9 @@ function seed(e: Partial<EggV3> = {}): SaveV3 {
   s.eggs.push(egg(e));
   return s;
 }
+
+// 랜덤알을 열 때 처음 뽑는 값 — 이 값이면 다른 알이 나오지 않는다 (data/eggs.json random.bonus 합 6%)
+const NO_BONUS = 0.99;
 
 // 정해진 값을 차례로 돌려주는 가짜 무작위
 const fixed = (...values: number[]): (() => number) => {
@@ -136,7 +143,7 @@ const fixed = (...values: number[]): (() => number) => {
 // (9) 열기 — 개체가 생기고 빈 파티 칸에 숨김으로 들어간다
 {
   const s = seed({ remainMs: 0, ready: true, actions: { pat: 0, song: 0 } });
-  const res = open(s, "e1", T0, fixed(0, 0.5, 0.5));
+  const res = open(s, "e1", T0, fixed(NO_BONUS, 0, 0.5, 0.5));
   assert.equal(res.ok, true);
   assert.equal(s.pets.length, 1);
   assert.equal(s.pets[0]?.id, "p1");
@@ -154,7 +161,7 @@ const fixed = (...values: number[]): (() => number) => {
 {
   const s = seed({ remainMs: 0, ready: true });
   for (let i = 0; i < s.party.slots.length; i++) s.party.slots[i] = { state: "locked", unlockBy: "shop" };
-  const res = open(s, "e1", T0, fixed(0, 0.5, 0.5));
+  const res = open(s, "e1", T0, fixed(NO_BONUS, 0, 0.5, 0.5));
   assert.equal(res.ok, true);
   assert.equal(res.toBox, true);
   assert.ok(s.boxes[0]?.slots.includes(res.petId ?? ""), "박스 첫 칸으로");
@@ -164,7 +171,7 @@ const fixed = (...values: number[]): (() => number) => {
 // (11) 열기 — 조건으로 나온 종은 발견을 기록한다
 {
   const s = seed({ remainMs: 0, ready: true, actions: { pat: 9, song: 9 } });
-  const res = open(s, "e1", T0, fixed(0, 0.5, 0.5));
+  const res = open(s, "e1", T0, fixed(NO_BONUS, 0, 0.5, 0.5));
   assert.equal(res.ok, true);
   assert.equal(res.conditionId, "both-8");
   assert.equal(s.dex.discovered[res.species ?? ""], "both-8", "발견한 조건을 적는다");
@@ -189,4 +196,74 @@ const fixed = (...values: number[]): (() => number) => {
   process.stdout.write("(13) 개체 식별자 이어 붙이기  ok\n");
 }
 
-process.stdout.write("selftest-egg: 통과 (돌봄·조건·가중치·부화)\n");
+// (14) 랜덤알에서 단일 포켓몬 알이 나온다 — 누적 확률 준전설 1.5 · 울트라비스트 2 · 환상 2 · 전설 0.5 (%)
+{
+  const cases: [number, string, number][] = [
+    [0.01, "sub-legendary", 42],
+    [0.02, "ultra-beast", 10],
+    [0.04, "mythical", 22],
+    [0.057, "legendary", 24],
+  ];
+  for (const [roll, kind, count] of cases) {
+    const s = seed({ remainMs: 0, ready: true });
+    const res = open(s, "e1", T0, fixed(roll));
+    assert.equal(res.ok, true);
+    assert.equal(res.petId, undefined, "포켓몬은 나오지 않는다");
+    assert.deepStrictEqual(res.egg, { id: "e2", kind }, "연 알 자리에 새 알 — 식별자는 겹치지 않는다");
+    assert.equal(s.eggs.length, 1);
+    const next = s.eggs[0];
+    assert.equal(next?.kind, kind);
+    assert.equal(next?.ready, false);
+    assert.equal(next?.remainMs, EGG_V3_RULES.readyMs);
+    assert.equal(next?.candidates.length, count);
+    assert.equal(s.pets.length, 0);
+  }
+  // 태고의돌은 다른 알을 주지 않는다 — 무작위를 쓰지 않고 바로 뽑는다
+  const s = seed({ kind: "ancient-stone", remainMs: 0, ready: true, candidates: ["omanyte"], actions: { pat: 1, song: 0 } });
+  assert.equal(open(s, "e1", T0, fixed(0, 0.5)).species, "omanyte");
+  process.stdout.write("(14) 랜덤알 · 단일 포켓몬 알 확률  ok\n");
+}
+
+// (15) 단일 포켓몬 알 열기 — 이미 얻은 종은 빼고, 행동 조건은 보지 않는다
+{
+  const s = seed({ kind: "ultra-beast", remainMs: 0, ready: true, candidates: ["nihilego", "buzzwole"], actions: { pat: 8, song: 8 } });
+  s.dex.obtained.push("nihilego");
+  const res = open(s, "e1", T0, fixed(0, 0.5));
+  assert.equal(res.species, "buzzwole", "얻은 텅비드는 빠진다");
+  assert.equal(res.conditionId, null, "쓰다듬기·노래 8회여도 조건 종이 아니다");
+  assert.ok(s.dex.obtained.includes("buzzwole"));
+  process.stdout.write("(15) 단일 포켓몬 알 · 얻은 종 제외  ok\n");
+}
+
+// (16) 남은 종이 기다리는 알보다 많을 때만 준다 — 사기와 랜덤알 보너스 모두
+{
+  const ub = eggPool("ultra-beast") ?? [];
+  const s = empty(T0);
+  s.points.balance = 10_000;
+  s.dex.obtained.push(...ub.slice(0, ub.length - 1)); // 한 종만 남았다
+  assert.equal(canGiveEgg(s, "ultra-beast"), true);
+  const first = buy(s, "ultra-beast", T0, fixed(0));
+  assert.equal(first.ok, true);
+  assert.deepStrictEqual(s.eggs[0]?.candidates, [ub[ub.length - 1]], "후보는 남은 한 종");
+  assert.equal(buy(s, "ultra-beast", T0, fixed(0)).reason, "sold-out", "남은 한 종을 기다리는 알이 이미 있다");
+  assert.equal(s.points.balance, 10_000 - 2000, "품절이면 포인트를 쓰지 않는다");
+  assert.equal(shopList(s).find((p) => p.id === "ultra-beast")?.blocked, "모두 모았어요");
+  // 랜덤알 보너스가 울트라비스트를 뽑아도 줄 수 없으면 포켓몬이 나온다
+  s.eggs.push(egg({ id: "e9", remainMs: 0, ready: true, actions: { pat: 1, song: 0 } })); // 어느 행동 조건에도 맞지 않게
+  const res = open(s, "e9", T0, fixed(0.02, 0, 0.5, 0.5));
+  assert.equal(res.egg, undefined);
+  assert.ok(res.species === "charmander" || res.species === "squirtle");
+  process.stdout.write("(16) 단일 포켓몬 알 · 품절  ok\n");
+}
+
+// (17) 상점 가격과 도감 입수 방법
+{
+  const s = empty(T0);
+  const prices = Object.fromEntries(shopList(s).filter((p) => p.category === "egg").map((p) => [p.id, p.price]));
+  assert.deepStrictEqual(prices, { random: 120, "ancient-stone": 200, "sub-legendary": 2000, "ultra-beast": 2000, mythical: 3000, legendary: 5000 });
+  assert.equal(dexDetail(s, "mewtwo")?.methods, "랜덤전설알");
+  assert.equal(dexDetail(s, "kartana")?.methods, "랜덤울트라비스트알");
+  process.stdout.write("(17) 상점 가격 · 도감 입수 방법  ok\n");
+}
+
+process.stdout.write("selftest-egg: 통과 (돌봄·조건·가중치·부화·단일 포켓몬 알)\n");

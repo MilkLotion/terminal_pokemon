@@ -5,7 +5,7 @@
 //   첫 선택 후보   data/unlocks.json 의 starter
 //   랜덤알         해금한 종 가운데 랜덤알에서 나올 수 있는 종이 후보다 (src/shop/catalog.ts inRandomEgg)
 //   알 행동 조건   data/egg-conditions.json — 해금과 무관하게 조건으로 나온다
-//   태고의돌       data/eggs.json 의 화석 목록
+//   종 목록 알     data/eggs.json 의 종 목록 — 태고의돌(화석)과 단일 포켓몬 알(전설·준전설·환상·울트라비스트)
 //   진화           data/evo.json 을 거꾸로 — 앞 단계 종에서 진화한다
 //   상점 구매      data/unlocks.json 의 shop (해금한 종만 산다)
 // 미해금 종은 이름·타입과 진화 줄을 숨긴다. 진화 줄은 다음 종 이름을 드러내기 때문이다.
@@ -17,7 +17,7 @@ import type { DexOptions } from "../dex/data";
 import { conditionOf, textOf } from "../egg/conditions.js";
 import { getLang, petName, typeName } from "../main/text.js";
 import { loadJson } from "../dex/data.js";
-import { eggName, eggPool, inRandomEgg, speciesPrice } from "../shop/catalog.js";
+import { eggName, fixedEggs, inRandomEgg, speciesPrice } from "../shop/catalog.js";
 import type { DexDetail } from "../shared/manage";
 import type { SaveV3 } from "../shared/save-v3";
 import { nameOfItem } from "./lists.js";
@@ -52,7 +52,7 @@ export function dexDetail(save: SaveV3, slug: string, opts?: DexOptions): DexDet
   const prev = prevOf(slug, opts);
   if (prev) methods.push(`${petName(prev)}에서 진화`);
   if (unlocked && inRandomEgg(slug, opts)) methods.push(eggName("random", opts) ?? "랜덤알");
-  if (eggPool("ancient-stone", opts)?.includes(slug)) methods.push(eggName("ancient-stone", opts) ?? "태고의돌");
+  for (const [kind, pool] of fixedEggs(opts)) if (pool.includes(slug)) methods.push(eggName(kind, opts) ?? kind);
   const condition = conditionOf(slug, opts);
   if (condition) methods.push("알 행동 조건");
   const price = speciesPrice(slug, opts);

@@ -43,6 +43,12 @@ class World {
     );
   }
 
+  // 다음 무작위 값들 — 처음부터 차례로 쓴다
+  setRolls(values: number[]): void {
+    this.rolls = values;
+    this.rollAt = 0;
+  }
+
   save(): SaveV3 {
     const { state } = store.read(file, { repair: false });
     assert.ok(state, "저장을 읽는다");
@@ -120,8 +126,9 @@ try {
   assert.equal(w.save().eggs[0]?.ready, true);
   process.stdout.write("(5) SC-04 · 시간이 지나 준비 완료  ok\n");
 
-  // 열기 — 쓰다듬기 3회는 pat-3 조건이라 그 조건의 종이 나온다
-  w.rolls = [0, 0.5, 0.5];
+  // 열기 — 쓰다듬기 3회는 pat-3 조건이라 그 조건의 종이 나온다.
+  // 첫 값은 랜덤알의 다른 알 추첨이다(data/eggs.json random.bonus 합 6%). 0.99 면 나오지 않는다
+  w.setRolls([0.99, 0, 0.5, 0.5]);
   const hatched = w.ok("open1", "egg.open", { eggId });
   const after = w.save();
   assert.equal(after.eggs.length, 0, "알이 사라졌다");

@@ -1,6 +1,8 @@
 // 알 열기 — 규칙은 docs/specs/s5.md "알". 준비가 끝난 알을 사용자가 직접 열 때 부른다.
 //
 // 하는 일은 넷이다. 결과 판정, 개체 생성, 배치, 도감 기록.
+// 랜덤알은 낮은 확률로 포켓몬 대신 단일 포켓몬 알을 준다(data/eggs.json 의 bonus). 그 알은 연 알의 자리에 들어간다.
+// 단일 포켓몬 알은 이미 얻은 종을 빼고 뽑는다. 알 행동 조건은 보지 않는다.
 // 배치는 빈 파티 칸에 숨김으로 넣는다. 칸이 없으면 박스로 보낸다.
 // 조건으로 나온 종은 해금되지 않았을 수 있다. 그때는 해금 기록도 함께 남긴다.
 // 무작위는 받아서 쓴다 — 자체 검사가 결과를 정할 수 있어야 한다.
@@ -8,6 +10,8 @@ import { putPet } from "../box/slots.js";
 import { randomNature } from "../dex/natures.js";
 import type { DexOptions } from "../dex/data";
 import { newPet, nextPetId, recordDex } from "../party/create.js";
+import { canGiveEgg, eggBonus, isSingleEgg } from "../shop/catalog.js";
+import { newEgg } from "../shop/buy.js";
 import type { SaveV3 } from "../shared/save-v3";
 import { decide, type Rand } from "./hatch.js";
 
@@ -22,6 +26,21 @@ export interface OpenResult {
   slotIndex?: number; // 파티에 들어갔으면 칸 번호
   toBox?: boolean; // 파티가 가득 차 박스로 갔다
   conditionId?: string | null; // 조건으로 정해졌으면 그 식별자
+  egg?: { id: string; kind: string }; // 포켓몬 대신 나온 알 — 이때 개체 필드는 비어 있다
+}
+
+// 포켓몬 대신 나올 알 — 없으면 null. 확률 목록이 없는 알은 무작위를 쓰지 않는다.
+// 뽑힌 알을 더 줄 수 없으면(남은 종이 없다) 평소처럼 포켓몬이 나온다
+function bonusEgg(save: SaveV3, kind: string, rand: Rand, opts?: DexOptions): string | null {
+  const table = eggBonus(kind, opts);
+  if (!table.length) return null;
+  const roll = rand();
+  let acc = 0;
+  for (const [next, p] of table) {
+    acc += p;
+    if (roll < acc) return canGiveEgg(save, next, opts) ? next : null;
+  }
+  return null;
 }
 
 export function open(save: SaveV3, eggId: string, now: number, rand: Rand, opts?: DexOptions): OpenResult {
@@ -31,7 +50,16 @@ export function open(save: SaveV3, eggId: string, now: number, rand: Rand, opts?
   if (!egg) return { ok: false, reason: "no-egg" };
   if (!egg.ready) return { ok: false, reason: "not-ready" };
 
-  const result = decide(egg.actions, egg.candidates, rand, opts);
+  const bonus = bonusEgg(save, egg.kind, rand, opts);
+  if (bonus) {
+    const next = newEgg(save, bonus, now, opts); // 연 알이 아직 있어 새 식별자가 겹치지 않는다
+    save.eggs.splice(i, 1, next);
+    return { ok: true, egg: { id: next.id, kind: bonus } };
+  }
+
+  const single = isSingleEgg(egg.kind, opts);
+  const candidates = single ? egg.candidates.filter((s) => !save.dex.obtained.includes(s)) : egg.candidates;
+  const result = decide(egg.actions, candidates, rand, opts, { conditions: !single });
   if (!result) return { ok: false, reason: "no-candidate" };
 
   const id = nextPetId(save);

@@ -2,7 +2,7 @@
 //
 // 얻는 길(획득)과 해금을 나눠 본다. 시작은 첫 선택 후보 전부다(누구를 골라도 다른 후보는 해금돼 있다).
 //   랜덤알       해금한 종 가운데 랜덤알에서 나올 수 있는 종을 얻는다 (src/shop/catalog.ts inRandomEgg)
-//   태고의돌     화석 목록을 얻는다 (data/eggs.json)
+//   종 목록 알   목록의 종을 얻는다 — 태고의돌(화석)과 단일 포켓몬 알 (data/eggs.json)
 //   알 행동 조건 조건으로 나오는 종을 얻는다 (data/egg-conditions.json — 해금과 무관)
 //   진화 규칙    `from` 종을 얻었으면 대상 종을 해금하고, 진화로 얻는다. 도구 진화의 도구는 상점에 있다 (SHOP_V3_RULES.evoItemPrice)
 //   상점 규칙    해금되며 상점에서 산다
@@ -10,7 +10,7 @@
 // 결과는 순수하다. 저장을 바꾸지 않는다
 import type { DexOptions } from "./data";
 import { unlockRules } from "./unlocks.js";
-import { eggPool, inRandomEgg } from "../shop/catalog.js";
+import { fixedEggs, inRandomEgg } from "../shop/catalog.js";
 import { loadJson } from "./data.js";
 
 export interface Reach {
@@ -24,7 +24,7 @@ export interface Reach {
 export function reach(opts?: DexOptions): Reach {
   const rules = unlockRules(opts);
   const conditions = loadJson<{ species?: Record<string, string> }>("egg-conditions.json", opts).species ?? {};
-  const fossils = eggPool("ancient-stone", opts) ?? [];
+  const fixedPool = fixedEggs(opts).flatMap(([, pool]) => pool);
   const entries = Object.entries(rules).filter(([slug]) => !slug.startsWith("_"));
 
   const unlocked = new Set<string>(entries.filter(([, r]) => r.starter).map(([s]) => s));
@@ -35,7 +35,7 @@ export function reach(opts?: DexOptions): Reach {
   while (grew) {
     grew = false;
     for (const s of unlocked) if (inRandomEgg(s, opts)) grew = add(obtainable, s) || grew; // 랜덤알
-    for (const s of fossils) grew = add(obtainable, s) || grew;
+    for (const s of fixedPool) grew = add(obtainable, s) || grew;
     for (const s of Object.keys(conditions)) grew = add(obtainable, s) || grew;
     for (const [slug, r] of entries) {
       if (r.evolve) {
@@ -50,7 +50,7 @@ export function reach(opts?: DexOptions): Reach {
     }
   }
 
-  const known = new Set<string>([...entries.map(([s]) => s), ...fossils, ...Object.keys(conditions)]);
+  const known = new Set<string>([...entries.map(([s]) => s), ...fixedPool, ...Object.keys(conditions)]);
   const withRule = entries.map(([s]) => s);
   return {
     obtainable,

@@ -13,14 +13,15 @@ import { newPet, nextPetId, recordDex } from "../party/create.js";
 import type { Rand } from "../egg/hatch";
 import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
 import type { EggV3, SaveV3 } from "../shared/save-v3";
-import { eggPool, find, inRandomEgg, slotPrice } from "./catalog.js";
+import { canGiveEgg, eggPool, find, inRandomEgg, isSingleEgg, singleLeft, slotPrice } from "./catalog.js";
 
 export type BuyFailure =
   | "no-product" // 그런 상품이 없다
   | "not-enough" // 포인트가 모자라다
   | "daycare-full" // 돌보미집이 가득 찼다
   | "no-locked-slot" // 상점으로 열 칸이 남지 않았다
-  | "not-unlocked"; // 해금하지 않은 종이다
+  | "not-unlocked" // 해금하지 않은 종이다
+  | "sold-out"; // 단일 포켓몬 알인데 남은 종이 없다 (기다리는 같은 알까지 셈)
 
 export interface BuyResult {
   ok: boolean;
@@ -58,6 +59,23 @@ function placeNew(save: SaveV3, petId: string): { slotIndex?: number; toBox: boo
   return { toBox: true };
 }
 
+// 새 알 하나 — 후보는 이 순간에 정해 저장한다 (docs/specs/s5.md "알 결과 저장"). 저장에 넣는 것은 부르는 쪽이다
+//   단일 포켓몬 알   아직 얻지 않은 종
+//   종 목록 알       그 목록
+//   랜덤알           해금한 종 가운데 랜덤알에서 나올 수 있는 종
+export function newEgg(save: SaveV3, kind: string, now: number, opts?: DexOptions): EggV3 {
+  return {
+    id: nextEggId(save),
+    kind,
+    boughtAt: now,
+    remainMs: EGG_V3_RULES.readyMs,
+    ready: false,
+    candidates: isSingleEgg(kind, opts) ? singleLeft(save, kind, opts) : eggPool(kind, opts) ?? randomPool(save, opts),
+    careCooldownMs: 0,
+    actions: { pat: 0, song: 0 },
+  };
+}
+
 // 랜덤알 후보 — 해금한 종 가운데 랜덤알에서 나올 수 있는 종 (규칙은 src/shop/catalog.ts inRandomEgg)
 export function randomPool(save: SaveV3, opts?: DexOptions): string[] {
   const pool = save.dex.unlocked.filter((slug) => inRandomEgg(slug, opts));
@@ -74,6 +92,7 @@ export function buy(save: SaveV3, productId: string, now: number, rand: Rand, op
 
   // 검사 — 값을 바꾸기 전에 모두 본다
   if (product?.kind === "egg" && save.eggs.length >= EGG_V3_RULES.maxEggs) return { ok: false, reason: "daycare-full" };
+  if (product?.kind === "egg" && !canGiveEgg(save, product.ref, opts)) return { ok: false, reason: "sold-out" };
   if (product?.kind === "species" && !save.dex.unlocked.includes(product.ref)) return { ok: false, reason: "not-unlocked" };
 
   save.points.balance -= price;
@@ -86,16 +105,7 @@ export function buy(save: SaveV3, productId: string, now: number, rand: Rand, op
   }
 
   if (product?.kind === "egg") {
-    const egg: EggV3 = {
-      id: nextEggId(save),
-      kind: product.ref,
-      boughtAt: now,
-      remainMs: EGG_V3_RULES.readyMs,
-      ready: false,
-      candidates: eggPool(product.ref, opts) ?? randomPool(save, opts),
-      careCooldownMs: 0,
-      actions: { pat: 0, song: 0 },
-    };
+    const egg = newEgg(save, product.ref, now, opts);
     save.eggs.push(egg);
     return { ...done, eggId: egg.id };
   }

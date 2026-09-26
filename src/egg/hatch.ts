@@ -5,6 +5,7 @@
 //   2. 맞는 조건이 없으면 알에 저장한 후보 범위에서 뽑는다
 //   3. 어느 쪽이든 수집 난이도 가중치로 뽑는다. 1등급이 흔하고 5등급이 귀하다
 //   4. 이로치는 따로 같은 확률로 뽑는다
+// 단일 포켓몬 알은 행동 조건을 보지 않는다(conditions: false). 후보 범위에서만 뽑는다
 // 무작위는 받아서 쓴다 — 자체 검사가 결과를 정할 수 있어야 한다.
 import { loadJson, type DexOptions } from "../dex/data.js";
 import { matchCondition, speciesOf, type EggActions } from "./conditions.js";
@@ -46,8 +47,8 @@ export function pickWeighted(candidates: string[], rand: Rand, opts?: DexOptions
 }
 
 // 알 하나의 결과. 후보가 하나도 없으면 null
-export function decide(actions: EggActions, candidates: string[], rand: Rand, opts?: DexOptions): HatchResult | null {
-  const conditionId = matchCondition(actions, opts);
+export function decide(actions: EggActions, candidates: string[], rand: Rand, opts?: DexOptions, how: { conditions?: boolean } = {}): HatchResult | null {
+  const conditionId = how.conditions === false ? null : matchCondition(actions, opts);
   const byCondition = conditionId ? speciesOf(conditionId, opts) : [];
   const pool = byCondition.length ? byCondition : candidates;
   const species = pickWeighted(pool, rand, opts);

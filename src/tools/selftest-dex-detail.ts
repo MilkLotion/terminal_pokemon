@@ -85,12 +85,14 @@ function seed(): SaveV3 {
   process.stdout.write("(5) 알 행동 조건 · 발견 전후  ok\n");
 }
 
-// (6) 경로가 하나도 없는 미해금 종 — 획득 방법 준비 중
+// (6) 전설 종 — 해금 규칙이 없어도 단일 포켓몬 알이 입수 방법이다 (2026-09-26 사용자 결정).
+// 지금 데이터에는 경로가 없는 종이 없다. 경로가 없으면 "획득 방법 준비 중" 이다(src/tx/dex-detail.ts)
 {
   const d = dexDetail(seed(), "cosmog");
   assert.ok(d);
-  assert.equal(d.methods, "획득 방법 준비 중");
-  process.stdout.write("(6) 획득 방법 준비 중  ok\n");
+  assert.equal(d.state, "locked");
+  assert.equal(d.methods, "랜덤전설알");
+  process.stdout.write("(6) 전설 종 · 랜덤전설알  ok\n");
 }
 
 // (7) 상점 종 — 해금 전에는 "해금 후"를 붙인다. 모르는 종은 null

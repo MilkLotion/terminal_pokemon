@@ -5,7 +5,7 @@
 import { isMetaKey, loadJson, type DexOptions } from "../dex/data.js";
 import { petName } from "../main/text.js";
 import { EGG_V3_RULES, SAVE_V3_RULES } from "../save/rules.js";
-import { eggName, eggPrice, slotPrice, speciesPrice, toolName, toolPrice } from "../shop/catalog.js";
+import { canGiveEgg, eggName, eggNote, eggPrice, slotPrice, speciesPrice, toolName, toolPrice } from "../shop/catalog.js";
 import type { DexEntry, ShopItemView } from "../shared/manage";
 import type { SaveV3 } from "../shared/save-v3";
 
@@ -43,7 +43,7 @@ export function shopList(save: SaveV3, opts?: DexOptions): ShopItemView[] {
     out.push({ ...item, affordable: save.points.balance >= item.price });
   };
 
-  // 알 — 돌보미집이 가득 차면 살 수 없다
+  // 알 — 돌보미집이 가득 차면 살 수 없다. 단일 포켓몬 알은 남은 종이 없으면 살 수 없다
   const daycareFull = save.eggs.length >= EGG_V3_RULES.maxEggs;
   for (const kind of Object.keys(eggs(opts))) {
     if (isMetaKey(kind)) continue;
@@ -52,11 +52,11 @@ export function shopList(save: SaveV3, opts?: DexOptions): ShopItemView[] {
     add({
       id: kind,
       name: eggName(kind, opts) ?? kind,
-      note: kind === "random" ? "해금한 종에서 나온다" : "화석 포켓몬만 나온다",
+      note: eggNote(kind, opts) ?? "",
       price,
       category: "egg",
       affordable: false,
-      blocked: daycareFull ? "돌보미집이 가득 찼어요" : undefined,
+      blocked: !canGiveEgg(save, kind, opts) ? "모두 모았어요" : daycareFull ? "돌보미집이 가득 찼어요" : undefined,
     });
   }
 
