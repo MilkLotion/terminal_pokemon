@@ -16,5 +16,6 @@
 | S5 게임 런타임 구현 (2026-09-24~) | [기록](game-runtime/record.md) |
 | 화면 글꼴 Galmuri와 Figma 정리 (2026-09-26) | [기록](ui-pixel-style/record.md) |
 | 가상 도구 도트 그림 (2026-09-27) | [기록](item-art/record.md) |
+| 친구 교환 설계 (2026-09-26~) | [기록](trade/record.md) |
 
 과거 작업은 당시 검사 범위의 근거다. 작업 이름이나 파일 존재 여부로 현재 상태를 판단하지 않는다.

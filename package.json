@@ -62,6 +62,7 @@
     "logo:build": "npm run build && node scripts/sync-official-logo.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
     "electron": "44.4.0"
   },
   "devDependencies": {
