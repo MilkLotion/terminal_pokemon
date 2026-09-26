@@ -40,6 +40,7 @@ export interface PetV3 {
   since: number;
   stage: number; // 이 개체가 진화한 횟수
   evolved: string[]; // 거쳐 온 종
+  forms?: string[]; // 공유 sid 계열의 고를 수 있는 종 (src/dex/forms.ts). 그 밖의 개체에는 없다
   daily: PetDaily;
 }
 

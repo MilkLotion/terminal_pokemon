@@ -65,7 +65,7 @@
   "corphish": [{"to":"crawdaunt","need":{"kind":"level","level":30}}],
   "corsola": [{"to":"cursola","need":{"kind":"level","level":38}}],
   "corvisquire": [{"to":"corviknight","need":{"kind":"level","level":38}}],
-  "cosmoem": [{"to":"solgaleo","need":{"kind":"level","level":53}},{"to":"lunala","need":{"kind":"level","level":53}}],
+  "cosmoem": [{"to":"solgaleo","need":{"kind":"level","level":53},"when":"day"},{"to":"lunala","need":{"kind":"level","level":53},"when":"night"}],
   "cosmog": [{"to":"cosmoem","need":{"kind":"level","level":43}}],
   "cottonee": [{"to":"whimsicott","need":{"kind":"item","item":"sun-stone"}}],
   "crabrawler": [{"to":"crabominable","need":{"kind":"item","item":"ice-stone"}}],

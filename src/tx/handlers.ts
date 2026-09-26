@@ -8,6 +8,7 @@ import { dayPartOf, evolve } from "../dex/evolve.js";
 import { done as doneTutorial, skip as skipTutorial } from "../tutorial/core.js";
 import { care, isCareAction } from "../egg/care.js";
 import { open } from "../egg/open.js";
+import { setForm } from "../dex/forms.js";
 import { keep, place, swap } from "../party/placement.js";
 import { setHidden, shownCount } from "../party/visibility.js";
 import { feed, play } from "../state/care.js";
@@ -258,3 +259,13 @@ const homeHandler: TxHandler = (draft, args) => {
 
 HANDLERS["starter.pick"] = starterHandler;
 HANDLERS["pet.set"] = homeHandler;
+
+// 공유 sid 계열의 모습 바꾸기 — 고를 수 있는 종으로 지금 종만 바꾼다 (src/dex/forms.ts)
+const formHandler: TxHandler = (draft, args) => {
+  const petId = petIdOf(args);
+  if (!petId) return { ok: false, reason: "bad-args" };
+  const res = setForm(draft, petId, isObj(args) ? args.species : undefined);
+  if (!res.ok) return { ok: false, reason: res.reason ?? "failed" };
+  return { ok: true, result: { petId, from: res.from, to: res.to } };
+};
+HANDLERS["pet.form"] = formHandler;

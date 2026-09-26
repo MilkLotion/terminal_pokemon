@@ -194,6 +194,22 @@ export function createCommands(ctx: CommandContext): Commands {
     return result;
   });
 
+  // 공유 sid 계열의 모습 바꾸기 — 진화처럼 바뀔 종의 그림을 먼저 받아 둔다. 못 받으면 저장을 건드리지 않는다
+  dispatcher.register("pet.form", async (c) => {
+    const id = target(c);
+    if (!id) return { ok: false, reason: "no-pet" };
+    const species = typeof c.args?.species === "string" ? c.args.species : null;
+    const save = ctx.game && ctx.party.isWriter() ? currentSave() : null;
+    const pet = save?.pets.find((row) => row.id === id);
+    if (pet && species && ctx.prepareLook) {
+      const look = appearanceOf({ species, shiny: pet.shiny });
+      if (!(await ctx.prepareLook(look))) return { ok: false, reason: "art-missing", look };
+    }
+    const result = await runSave(c);
+    if (result.ok) await refreshAfter(id);
+    return result;
+  });
+
   // 모습 선택은 제거했다 — 실제 종의 이름과 그림을 보인다 (docs/specs/s5.md "별명 입력과 모습 선택을 제공하지 않는다").
   // 옛 값은 legacy 에 남아 있다. 명령은 CLI 호환으로 남기고 제거됐다고 답한다
   dispatcher.register("pet.look", () => ({ ok: false, reason: "removed" }));

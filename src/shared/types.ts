@@ -173,7 +173,7 @@ export type CommandName =
   | "bag.use"
   | "achievement.claim"
   | "tutorial.skip" | "tutorial.done"
-  | "pet.set" | "pet.look"
+  | "pet.set" | "pet.look" | "pet.form"
   | "starter.pick"
   | "agent.connect" | "agent.disconnect"
   | "settings.set"

@@ -143,7 +143,8 @@ type Dialog =
   | { kind: "pick-slot"; petId: string } // 개체가 정해졌고 넣을 파티 칸을 고른다
   | { kind: "achievements" }
   | { kind: "settings"; tab: "general" | "agents" }
-  | { kind: "guide" };
+  | { kind: "guide" }
+  | { kind: "hatched"; petId?: string; slotIndex?: number; eggId?: string }; // 부화 결과 — 태어난 개체 또는 포켓몬 대신 나온 알
 
 let tab: TabId = "party";
 let view: Snapshot | null = null;
@@ -409,7 +410,7 @@ function eggCard(egg: EggView): HTMLElement {
   if (egg.ready) {
     const row = el("div", "acts");
     const openEgg = button("primary", "열기");
-    openEgg.addEventListener("click", () => void send("egg.open", egg.id));
+    openEgg.addEventListener("click", () => void openEggAndShow(egg.id));
     row.appendChild(openEgg);
     card.appendChild(row);
   }
@@ -422,6 +423,45 @@ function eggCard(egg: EggView): HTMLElement {
   }
   card.appendChild(acts);
   return card;
+}
+
+// 알 열기 — 끝나면 부화 결과 창을 연다 (docs/specs/s5.md "부화 결과 창은 태어난 개체와 들어간 자리를 보여주고 `확인`만 둔다")
+async function openEggAndShow(eggId: string): Promise<void> {
+  if (!(await send("egg.open", eggId))) return;
+  const r = lastReply;
+  if (!r) return;
+  const egg = r.egg as { id?: unknown } | undefined;
+  if (egg && typeof egg.id === "string") open({ kind: "hatched", eggId: egg.id });
+  else if (typeof r.petId === "string") open({ kind: "hatched", petId: r.petId, ...(typeof r.slotIndex === "number" ? { slotIndex: r.slotIndex } : {}) });
+}
+
+// 부화 결과 — Figma `Box / Hatch Result` `389:9488`. 태어난 개체는 종·타입·레벨·성격과 들어간 자리.
+// 랜덤알에서 단일 포켓몬 알이 나오면 같은 창으로 그 알을 알린다 (docs/specs/s5.md 단일 포켓몬 알)
+function drawHatched(petId?: string, slotIndex?: number, eggId?: string): void {
+  const card = el("div", "nat-card");
+  const info = el("div", "info-box");
+  if (eggId) {
+    const egg = view?.eggs.list.find((e) => e.id === eggId);
+    dialogEl.append(...dialogHead("알에서 새 알이 나왔어요", ""));
+    card.append(iconOf("egg", "portrait"), el("div", "name", egg?.name ?? "알"));
+    info.append(el("div", undefined, "돌보미집에 들어갔어요."), el("div", "note", "준비가 끝나면 직접 열어요. 아직 얻지 않은 포켓몬이 나와요."));
+  } else {
+    const pet = petId ? petOf(petId) : undefined;
+    if (!pet) {
+      close();
+      return;
+    }
+    dialogEl.append(...dialogHead("알이 부화했어요", ""));
+    const tags = el("div", "tags");
+    pet.types.forEach((name, i) => tags.appendChild(typeBadge(name, pet.typeIds[i])));
+    tags.appendChild(el("span", "note", `Lv.${pet.level} · ${pet.nature}`));
+    card.append(portraitOf(pet.species, pet.shiny, "portrait", pet.shiny ? "이로치" : ""), el("div", "name", pet.shiny ? `${pet.name} · 이로치` : pet.name), tags);
+    if (slotIndex != null) info.append(el("div", undefined, `파티 ${slotIndex + 1}번 칸에 숨김 상태로 들어갔어요.`), el("div", "note", "꺼내기는 파티에서 합니다."));
+    else info.append(el("div", undefined, "파티가 가득 차 박스에 보관했어요."), el("div", "note", "박스에서 파티에 넣을 수 있어요."));
+  }
+  const row = el("div", "compare");
+  row.appendChild(card);
+  dialogEl.append(row, info, actions(el("div", "spacer"), actionButton("확인", true, false, close))); // Figma 처럼 오른쪽
 }
 
 // ── 검색 ───────────────────────────────────────────────────────────────────────
@@ -1422,6 +1462,7 @@ const SHAPE: Record<Dialog["kind"], string> = {
   achievements: "dialog tall",
   settings: "dialog tall",
   guide: "dialog tall",
+  hatched: "dialog",
 };
 
 // 가림막 — 켜고 끌 때 메인에도 알린다. OS 가 그리는 창 단추 자리는 CSS 가 덮지 못한다
@@ -1452,6 +1493,7 @@ function drawDialog(): void {
   else if (dialog.kind === "pick-slot") drawPickSlot(dialog.petId);
   else if (dialog.kind === "achievements") drawAchievements();
   else if (dialog.kind === "settings") drawSettings(dialog.tab);
+  else if (dialog.kind === "hatched") drawHatched(dialog.petId, dialog.slotIndex, dialog.eggId);
   else drawGuide();
 
   if (notice) dialogEl.appendChild(el("div", "notice bad", notice));
@@ -1540,6 +1582,7 @@ const nextReqId = (cmd: string, target: string): string => `ui:${Date.now()}:${+
 // 답을 기다리는 조작이 있으면 새 조작을 받지 않는다. 빠른 두 번 클릭이 두 번 사거나 두 번 쓰지 않게 한다.
 // 여러 개 사기는 앞 조작의 답을 받은 뒤 다음을 보내므로 막히지 않는다
 let busy = false;
+let lastReply: ManageReply | null = null; // 마지막으로 성공한 조작의 답 — 결과 창이 읽는다
 
 // 성공하면 true. 여러 번 보내는 쪽이 중간에 멈출 수 있게 돌려준다
 async function send(cmd: string, target: string, extra: Record<string, unknown> = {}, opts: { keepOpen?: boolean } = {}): Promise<boolean> {
@@ -1561,6 +1604,7 @@ async function send(cmd: string, target: string, extra: Record<string, unknown> 
     return false;
   }
   notice = "";
+  lastReply = reply;
   if (CLOSES.has(cmd) && !opts.keepOpen) close();
   else drawDialog();
   return true;

@@ -5,6 +5,7 @@
 // 끝에 "통과" 한 줄. 실패하면 어디서 깨졌는지와 함께 종료 코드 1
 import assert from "node:assert";
 import { candidates, canEvolve, dayPartOf, evolve } from "../dex/evolve";
+import { formsOf, setForm } from "../dex/forms";
 import { empty } from "../save/v3";
 import type { PetV3, SaveV3 } from "../shared/save-v3";
 
@@ -152,4 +153,48 @@ function seed(over: Partial<PetV3> = {}, bag: Record<string, number> = {}): Save
   process.stdout.write("(10) 친밀도 조건  ok\n");
 }
 
-process.stdout.write("selftest-evolve: 통과 (레벨·도구·시간대·분기·이로치)\n");
+// (12) 공유 sid — 코스모움은 낮에 솔가레오가 되고 루나아라도 함께 받는다 (docs/specs/s5.md "코스모움에서 진화를 한 번 실행하면")
+{
+  const s = seed({ species: "cosmoem", level: 53, evolved: ["cosmog"], stage: 1 });
+  assert.deepStrictEqual(candidates(s, "p1", "day").filter((c) => c.ready).map((c) => c.to), ["solgaleo"], "낮에는 솔가레오만");
+  assert.deepStrictEqual(candidates(s, "p1", "night").filter((c) => c.ready).map((c) => c.to), ["lunala"], "밤에는 루나아라만");
+  const res = evolve(s, "p1", "day");
+  assert.equal(res.ok, true);
+  const p = s.pets[0];
+  assert.equal(p?.species, "solgaleo");
+  assert.deepStrictEqual([...(p?.forms ?? [])].sort(), ["cosmoem", "cosmog", "lunala", "solgaleo"]);
+  for (const slug of ["solgaleo", "lunala"]) assert.ok(s.dex.obtained.includes(slug), `도감 획득 ${slug}`);
+  assert.equal(s.pets.length, 1, "새 개체를 만들지 않는다");
+  process.stdout.write("(12) 공유 sid · 코스모움 갈래는 둘 다  ok\n");
+}
+
+// (13) 모습 바꾸기 — 고를 수 있는 종만, 진행 상태는 그대로. 가진 종으로 가는 진화는 다시 열리지 않는다
+{
+  const s = seed({ species: "solgaleo", level: 60, affinity: 70, evolved: ["cosmog", "cosmoem"], stage: 2, forms: ["cosmog", "cosmoem", "solgaleo", "lunala"] });
+  s.party.slots[0] = { state: "pokemon", petId: "p1", hidden: false };
+  assert.equal(setForm(s, "p1", "pikachu").reason, "bad-form");
+  assert.equal(setForm(s, "p1", "solgaleo").reason, "already");
+  assert.equal(setForm(s, "p1", "cosmog").ok, true);
+  const p = s.pets[0];
+  assert.equal(p?.species, "cosmog");
+  assert.equal(p?.level, 60);
+  assert.equal(p?.affinity, 70);
+  assert.equal(s.party.slots[0]?.petId, "p1", "같은 파티 칸 그대로");
+  assert.deepStrictEqual(candidates(s, "p1", "day"), [], "코스모움은 이미 가져 진화 후보가 아니다");
+  assert.equal(setForm(s, "p1", "lunala").ok, true);
+  assert.equal(s.pets[0]?.species, "lunala");
+  process.stdout.write("(13) 공유 sid · 모습 바꾸기  ok\n");
+}
+
+// (14) 공유 계열이 아닌 개체 — forms 가 없고 바꿀 수 없다. 저장에 forms 가 없던 공유 개체는 거쳐 온 종으로 만든다
+{
+  const s = seed({ species: "charizard", evolved: ["charmander", "charmeleon"], stage: 2 });
+  assert.deepStrictEqual(formsOf(s.pets[0] as PetV3), []);
+  assert.equal(setForm(s, "p1", "charmander").reason, "not-shared");
+  const old = seed({ species: "silvally", evolved: ["type-null"], stage: 1 });
+  assert.deepStrictEqual(formsOf(old.pets[0] as PetV3), ["type-null", "silvally"]);
+  assert.equal(setForm(old, "p1", "type-null").ok, true);
+  process.stdout.write("(14) 공유 sid · 일반 개체와 옛 저장  ok\n");
+}
+
+process.stdout.write("selftest-evolve: 통과 (레벨·도구·시간대·분기·이로치·공유 sid)\n");

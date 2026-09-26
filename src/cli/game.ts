@@ -3,7 +3,7 @@ import { PATHS } from "../main/paths";
 import { send } from "../save/mailbox";
 import type { Command, CommandName } from "../shared/types";
 
-const allowed: CommandName[] = ["snapshot", "shop.buy", "evolve", "pet.look", "pet.set", "feed", "play", "party.show", "party.hide"];
+const allowed: CommandName[] = ["snapshot", "shop.buy", "evolve", "pet.look", "pet.set", "pet.form", "feed", "play", "party.show", "party.hide"];
 
 export async function game(argv: string[]): Promise<void> {
   const [name = "snapshot", target, ...fields] = argv;

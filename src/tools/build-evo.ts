@@ -28,6 +28,10 @@ import type { DayPart, EvoNeed } from "../shared/types";
 import { DATA_DIR, csv, readDex, runBuild, writeLineJson } from "./pokeapi-csv";
 
 const OUT = path.join(DATA_DIR, "evo.json");
+
+// 사용자 결정으로 정한 시간대 — PokeAPI 에는 게임 버전 조건이라 시간대가 없다.
+// 코스모움은 게임 시간이 낮이면 솔가레오, 밤이면 루나아라가 된다 (docs/specs/s5.md "진화 실행 시 게임 시간의 낮이면")
+export const WHEN_BY_DECISION: Readonly<Record<string, DayPart>> = { solgaleo: "day", lunala: "night" };
 const DAY_PARTS = new Set<string>(["day", "night"] satisfies DayPart[]);
 
 // 우리에 없는 조건을 바꿀 때 쓰는 도구
@@ -147,7 +151,7 @@ export async function build(): Promise<void> {
       continue;
     }
     const step: EvoEdge = { to, need: needOf(sp.id, to) };
-    const when = pickWhen(sp.id);
+    const when = WHEN_BY_DECISION[to] ?? pickWhen(sp.id);
     if (when) step.when = when;
     (out[from] ??= []).push(step);
     edges += 1;

@@ -4,10 +4,12 @@
 // 조건을 둘 이상 채우면 후보를 보여 주고 사용자가 고른다. 하나면 그것으로 간다.
 // 진화해도 같은 개체다. 식별자·친밀도·성격·레벨·경험치·만복도·버프를 그대로 둔다. 종만 바뀐다.
 // 도구 진화는 도구 하나를 쓴다. 진화와 소비는 한 거래로 묶인다.
+// 공유 sid 계열(src/dex/forms.ts)은 이미 가진 종으로 가는 진화를 후보에서 뺀다 — 그 종은 모습 바꾸기로 고른다.
 import type { DayPart, EvoNeed } from "../shared/types";
 import type { SaveV3 } from "../shared/save-v3";
 import { nextOf, type EvoStep } from "./evo.js";
 import type { DexOptions } from "./data";
+import { afterEvolve, formsOf } from "./forms.js";
 
 export type EvolveFailure =
   | "no-pet" // 그런 개체가 없다
@@ -57,7 +59,8 @@ export function checkNeed(save: SaveV3, petId: string, step: EvoStep, dayPart: D
 export function candidates(save: SaveV3, petId: string, dayPart: DayPart, opts?: DexOptions): Candidate[] {
   const pet = save.pets.find((p) => p.id === petId);
   if (!pet) return [];
-  return nextOf(pet.species, opts).map((step) => {
+  const have = formsOf(pet, opts);
+  return nextOf(pet.species, opts).filter((step) => !have.includes(step.to)).map((step) => {
     const { ready, missing } = checkNeed(save, petId, step, dayPart);
     return { to: step.to, need: step.need ?? { kind: "affinity", value: 100 }, when: step.when, ready, missing };
   });
@@ -104,6 +107,7 @@ export function evolve(save: SaveV3, petId: string, dayPart: DayPart, choice?: s
   if (!save.dex.unlocked.includes(picked.to)) save.dex.unlocked.push(picked.to);
   if (!save.dex.obtained.includes(picked.to)) save.dex.obtained.push(picked.to);
   if (pet.shiny && !save.dex.shinyObtained.includes(picked.to)) save.dex.shinyObtained.push(picked.to);
+  afterEvolve(save, pet, from, opts); // 공유 sid 계열이면 이전 종과 갈래의 다른 결과를 고를 종으로 남긴다
 
   return { ok: true, petId, from, to: picked.to, usedItem };
 }

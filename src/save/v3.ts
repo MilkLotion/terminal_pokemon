@@ -141,6 +141,7 @@ export function normalizePet(raw: unknown, date: string): PetV3 | null {
     since: nonNeg(raw.since),
     stage: nonNeg(raw.stage),
     evolved: strings(raw.evolved),
+    ...(Array.isArray(raw.forms) ? { forms: strings(raw.forms) } : {}), // 2026-09-26 에 더했다. 공유 sid 계열만 가진다
     daily: normalizeDaily(raw.daily, date),
   };
 }

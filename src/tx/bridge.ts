@@ -32,6 +32,7 @@ export const V3_COMMANDS: readonly CommandName[] = [
   "tutorial.done",
   "starter.pick",
   "pet.set",
+  "pet.form",
 ];
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
@@ -77,6 +78,8 @@ export function argsOf(command: Command): Record<string, unknown> {
       return { key: target ?? str(a.key), value: a.value };
     case "starter.pick":
       return { species: target ?? str(a.species) };
+    case "pet.form":
+      return { petId: target ?? str(a.petId), species: str(a.species) };
     case "pet.set":
       return { petId: target ?? str(a.petId), home: a.home, ...(a.size !== undefined ? { size: a.size } : {}) };
     default:
